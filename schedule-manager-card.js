@@ -178,102 +178,6 @@ const styles = i$2 `
     color: var(--secondary-text-color);
   }
 
-  .time-block-col {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 0.9em;
-  }
-
-  .payload-preview {
-    font-size: 0.75em;
-    opacity: 0.85;
-    word-break: break-all;
-  }
-
-  .block-remove {
-    flex-shrink: 0;
-    padding: 4px 8px;
-    font-size: 0.8em;
-    cursor: pointer;
-    border-radius: 4px;
-    border: 1px solid var(--divider-color);
-    background: var(--card-background-color);
-    color: var(--primary-text-color);
-  }
-
-  .add-block-form {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 8px;
-    align-items: end;
-  }
-
-  @media (max-width: 450px) {
-    .add-block-form {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .add-block-form label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 0.8em;
-    color: var(--secondary-text-color);
-  }
-
-  .add-block-form input.time-field,
-  .add-block-form input[type='text'],
-  .add-block-form textarea {
-    padding: 6px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--divider-color);
-    background: var(--card-background-color);
-    color: var(--primary-text-color);
-    font-family: inherit;
-  }
-
-  .add-block-form textarea {
-    grid-column: 1 / -1;
-    min-height: 52px;
-    resize: vertical;
-  }
-
-  .add-block-form .full-row {
-    grid-column: 1 / -1;
-  }
-
-  .add-block-form button.add-plage {
-    grid-column: 1 / -1;
-    padding: 8px;
-    border-radius: 4px;
-    border: none;
-    background: var(--primary-color);
-    color: var(--text-primary-color);
-    cursor: pointer;
-  }
-
-  .time-block {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 8px;
-    border: 1px solid var(--divider-color);
-    border-left: 4px solid var(--block-accent, rgba(127, 127, 127, 0.45));
-    border-radius: 4px;
-    margin-bottom: 4px;
-  }
-
-  .active {
-    background-color: var(--primary-color);
-    color: var(--text-primary-color);
-  }
-
   .empty-hint {
     color: var(--secondary-text-color);
     font-size: 0.9em;
@@ -1294,17 +1198,6 @@ function normalizeTimeForHa(t) {
 function haTimeToHHMM(t) {
     return normalizeTimeForHa(t).slice(0, 5);
 }
-function parseTimeToMinutes(t) {
-    const parts = String(t).split(':').map((p) => Number(p));
-    const h = parts[0] ?? 0;
-    const m = parts[1] ?? 0;
-    const s = parts[2] ?? 0;
-    return h * 60 + m + s / 60;
-}
-function nowMinutes() {
-    const d = new Date();
-    return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
-}
 function sortKeysDeep(value) {
     if (value === null || typeof value !== 'object') {
         return value;
@@ -1431,12 +1324,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         const attrs = state?.attributes;
         const raw = attrs?.groups;
         return raw && typeof raw === 'object' ? raw : {};
-    }
-    getCurrentBlockId() {
-        const state = this.hass?.states[this.statusEntityId()];
-        const attrs = state?.attributes;
-        const cur = attrs?.current_time_block;
-        return cur?.id;
     }
     services() {
         return new ScheduleManagerServices(this.hass);
@@ -1645,39 +1532,15 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             ? x `
               <div class="subsection-title">Vue 24 h</div>
               <div class="timeline-hint">
-                Couleurs alignées avec la liste des plages (bande à gauche).
+                Aperçu graphique — ouvrez la configuration pour modifier les plages.
               </div>
               ${this.renderDayTimeline(blocks)}
             `
-            : null}
-        <div class="subsection-title">Plages horaires</div>
-        ${blocks.length === 0
-            ? x `<div class="empty-hint">Aucune plage — ajoutez-en une ci-dessous.</div>`
-            : null}
-        ${blocks.map((block, index) => x `
-            <div
-              class="time-block ${this.isActiveBlock(block) ? 'active' : ''}"
-              style="--block-accent:${blockTimelineFill(block)}"
-            >
-              <div class="time-block-col">
-                <span
-                  ><strong>${block.start_time}</strong> →
-                  <strong>${block.end_time}</strong></span
-                >
-                <span>${block.action_type}</span>
-                <span class="payload-preview"
-                  >${JSON.stringify(block.action_payload ?? {})}</span
-                >
+            : x `
+              <div class="empty-hint">
+                Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.
               </div>
-              <button
-                type="button"
-                class="block-remove"
-                @click=${() => this.removeBlockAt(schedule, index)}
-              >
-                Retirer
-              </button>
-            </div>
-          `)}
+            `}
 
         ${group?.exclusive
             ? x `
@@ -1692,22 +1555,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             : ''}
       </div>
     `;
-    }
-    isActiveBlock(block) {
-        const curId = this.getCurrentBlockId();
-        if (curId && block.id === curId) {
-            return true;
-        }
-        const start = parseTimeToMinutes(block.start_time);
-        const end = parseTimeToMinutes(block.end_time);
-        const now = nowMinutes();
-        if (end > start) {
-            return now >= start && now < end;
-        }
-        if (end < start) {
-            return now >= start || now < end;
-        }
-        return false;
     }
     async toggleSchedule(scheduleId, enabled) {
         try {
@@ -1742,19 +1589,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         catch (e) {
             // eslint-disable-next-line no-console
             console.error('schedule_manager.delete_schedule failed', e);
-        }
-    }
-    async removeBlockAt(schedule, index) {
-        const next = [...(schedule.time_blocks || [])];
-        next.splice(index, 1);
-        try {
-            await this.services().updateSchedule(schedule.id, {
-                time_blocks: this.blocksToPayload(next),
-            });
-        }
-        catch (e) {
-            // eslint-disable-next-line no-console
-            console.error('schedule_manager.update_schedule failed', e);
         }
     }
     openVisualEditor(schedule) {
