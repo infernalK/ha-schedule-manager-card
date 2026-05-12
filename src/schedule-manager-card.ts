@@ -14,7 +14,6 @@ import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
 import { domainsForActionType, entityMatchesDomains } from './entity-domains';
 import {
-  allTimelineResizeHandles,
   blockTimelineFill,
   blocksToTimelineSegments,
   DEFAULT_TIMELINE_SCALE_TICKS,
@@ -29,7 +28,9 @@ import {
   snapMinutesToGrid,
   suggestGapIntervalMinutes,
   TIMELINE_DRAG_SNAP_MINUTES,
+  timelineResizeHandlesForSelection,
   timelineScaleTicksForWidth,
+  timeStringToMinutes,
   type TimelineResizeHandle,
   type TimelineSegment,
 } from './timeline-helpers';
@@ -89,15 +90,6 @@ function entityIdsFromPayload(payload: unknown): string[] {
   return [];
 }
 
-function defaultNewBlock(): TimeBlock {
-  return {
-    start_time: '12:00:00',
-    end_time: '13:00:00',
-    action_type: 'climate.set_preset_mode',
-    action_payload: { preset_mode: 'comfort' },
-  };
-}
-
 /** Ouverture éditeur ou planning vide : une plage couvrant la journée (comportement attendu type scheduler). */
 function defaultFullDayBlock(): TimeBlock {
   return {
@@ -139,25 +131,28 @@ function normalizeTimeForHa(t: string): string {
   }
   const hRaw = parseInt(p[0] ?? '0', 10);
   const mRaw = parseInt(p[1] ?? '0', 10);
+  if (Number.isNaN(hRaw) || Number.isNaN(mRaw)) {
+    return '00:00:00';
+  }
   const secRaw =
     p[2] !== undefined && p[2] !== ''
       ? parseInt(p[2] ?? '0', 10)
       : 0;
-  if (
-    !Number.isNaN(hRaw) &&
-    !Number.isNaN(mRaw) &&
-    hRaw === 24 &&
-    mRaw === 0 &&
-    (secRaw === 0 || Number.isNaN(secRaw))
-  ) {
-    return HA_END_OF_DAY_TIME;
-  }
-  const h = Math.min(23, Math.max(0, hRaw));
-  const m = Math.min(59, Math.max(0, mRaw));
   const sec =
     p[2] !== undefined && p[2] !== ''
-      ? Math.min(59, Math.max(0, secRaw))
+      ? Number.isNaN(secRaw)
+        ? 0
+        : Math.min(59, Math.max(0, secRaw))
       : 0;
+
+  /** `cv.time` n’accepte pas 24:00:00 — tout instant ≥ fin de journée → dernière seconde HA. */
+  const totalMinutes = hRaw * 60 + mRaw + sec / 60;
+  if (totalMinutes >= MINUTES_PER_DAY) {
+    return HA_END_OF_DAY_TIME;
+  }
+
+  const h = Math.min(23, Math.max(0, hRaw));
+  const m = Math.min(59, Math.max(0, mRaw));
   if ([h, m, sec].some((n) => Number.isNaN(n))) {
     return '00:00:00';
   }
@@ -216,6 +211,21 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _editorFriseWidth = 0;
 
   private _editorFriseResizeObserver?: ResizeObserver;
+
+  /** Déplacement horizontal de la plage sélectionnée (durée conservée). */
+  private _segmentDrag:
+    | null
+    | {
+        pointerId: number;
+        blockIdx: number;
+        rail: HTMLElement;
+        slotEl: HTMLElement;
+        startClientX: number;
+        origStartM: number;
+        origEndM: number;
+      } = null;
+
+  private _suppressSlotClick = false;
 
   /** Glisser-déposer sur la frise (pas @state : évite un render à chaque pixel). */
   private _boundaryDrag:
@@ -722,6 +732,12 @@ export class ScheduleManagerCard extends LitElement {
     let blocks = JSON.parse(JSON.stringify(schedule.time_blocks || [])) as TimeBlock[];
     if (!blocks.length) {
       blocks = [defaultFullDayBlock()];
+    } else {
+      blocks = blocks.map((b) => ({
+        ...b,
+        start_time: normalizeTimeForHa(String(b.start_time ?? '')),
+        end_time: normalizeTimeForHa(String(b.end_time ?? '')),
+      }));
     }
     this._visualEdit = {
       scheduleId: schedule.id,
@@ -738,6 +754,7 @@ export class ScheduleManagerCard extends LitElement {
 
   private closeVisualEditor() {
     this.endBoundaryDrag();
+    this.endSegmentDrag();
     this._detachEditorFriseObserver();
     this._editorFriseWidth = 0;
     this._visualEdit = null;
@@ -762,7 +779,130 @@ export class ScheduleManagerCard extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this.endBoundaryDrag();
+    this.endSegmentDrag();
     this._detachEditorFriseObserver();
+  }
+
+  private endSegmentDrag() {
+    window.removeEventListener('pointermove', this._onSegmentDragMove);
+    window.removeEventListener('pointerup', this._onSegmentDragUp);
+    window.removeEventListener('pointercancel', this._onSegmentDragUp);
+    const d = this._segmentDrag;
+    if (d) {
+      try {
+        d.slotEl.releasePointerCapture(d.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+    this._segmentDrag = null;
+  }
+
+  private _onSegmentDragMove = (ev: PointerEvent) => {
+    const d = this._segmentDrag;
+    if (!d || !this._visualEdit || ev.pointerId !== d.pointerId) {
+      return;
+    }
+    const rect = d.rail.getBoundingClientRect();
+    const rawDelta =
+      ((ev.clientX - d.startClientX) / Math.max(1, rect.width)) * MINUTES_PER_DAY;
+    const deltaM = snapMinutesToGrid(Math.round(rawDelta), TIMELINE_DRAG_SNAP_MINUTES);
+    const dur = d.origEndM - d.origStartM;
+    if (dur <= 0) {
+      return;
+    }
+    let newStart = d.origStartM + deltaM;
+    let newEnd = newStart + dur;
+    newStart = snapMinutesToGrid(Math.round(newStart), TIMELINE_DRAG_SNAP_MINUTES);
+    newEnd = newStart + dur;
+    const maxStart = MINUTES_PER_DAY - dur;
+    newStart = Math.max(0, Math.min(maxStart, newStart));
+    newEnd = newStart + dur;
+    if (newEnd > MINUTES_PER_DAY) {
+      newEnd = MINUTES_PER_DAY;
+      newStart = Math.max(0, newEnd - dur);
+    }
+
+    const blocks = [...this._visualEdit.blocks];
+    const cur = blocks[d.blockIdx];
+    if (!cur) {
+      return;
+    }
+    blocks[d.blockIdx] = {
+      ...cur,
+      start_time: minuteToHaTimeForSchedule(newStart),
+      end_time: minuteToHaTimeForSchedule(newEnd),
+    };
+    if (hasOverlappingSameDayBlocks(blocks)) {
+      return;
+    }
+    this._visualEdit = { ...this._visualEdit, blocks };
+    this.requestUpdate();
+  };
+
+  private _onSegmentDragUp = (ev: PointerEvent) => {
+    const d = this._segmentDrag;
+    if (d && ev.pointerId === d.pointerId) {
+      const rect = d.rail.getBoundingClientRect();
+      const rawDelta =
+        ((ev.clientX - d.startClientX) / Math.max(1, rect.width)) * MINUTES_PER_DAY;
+      if (Math.abs(rawDelta) > 4) {
+        this._suppressSlotClick = true;
+      }
+    }
+    this.endSegmentDrag();
+  };
+
+  private onSlotPointerDown(ev: PointerEvent, blockIdx: number) {
+    if (!this._visualEdit || blockIdx !== this._visualEdit.selectedIndex) {
+      return;
+    }
+    if (ev.button !== 0) {
+      return;
+    }
+    const b = this._visualEdit.blocks[blockIdx];
+    if (!b || isOvernightBlock(b)) {
+      return;
+    }
+    const rail = (ev.currentTarget as HTMLElement).closest('.sm-scheduler-track') as HTMLElement | null;
+    if (!rail) {
+      return;
+    }
+    const s0 = timeStringToMinutes(b.start_time);
+    const e0 = timeStringToMinutes(b.end_time);
+    if (e0 <= s0) {
+      return;
+    }
+    this.endBoundaryDrag();
+    this.endSegmentDrag();
+    const slotEl = ev.currentTarget as HTMLElement;
+    this._segmentDrag = {
+      pointerId: ev.pointerId,
+      blockIdx,
+      rail,
+      slotEl,
+      startClientX: ev.clientX,
+      origStartM: s0,
+      origEndM: e0,
+    };
+    try {
+      slotEl.setPointerCapture(ev.pointerId);
+    } catch {
+      /* ignore */
+    }
+    window.addEventListener('pointermove', this._onSegmentDragMove);
+    window.addEventListener('pointerup', this._onSegmentDragUp);
+    window.addEventListener('pointercancel', this._onSegmentDragUp);
+  }
+
+  private onSlotClick(ev: Event, blockIdx: number) {
+    if (this._suppressSlotClick) {
+      this._suppressSlotClick = false;
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
+    this.visualSelectBlock(blockIdx);
   }
 
   private _detachEditorFriseObserver() {
@@ -811,6 +951,7 @@ export class ScheduleManagerCard extends LitElement {
       return;
     }
     this.endBoundaryDrag();
+    this.endSegmentDrag();
     const handle = ev.currentTarget as HTMLElement;
     if (h.kind === 'junction') {
       this._boundaryDrag = {
@@ -988,21 +1129,43 @@ export class ScheduleManagerCard extends LitElement {
       return;
     }
     const gap = suggestGapIntervalMinutes(this._visualEdit.blocks, 60);
-    const nb = gap
-      ? {
-          start_time: minuteToHaTimeForSchedule(gap.start),
-          end_time: minuteToHaTimeForSchedule(gap.end),
-          action_type: 'climate.set_preset_mode',
-          action_payload: { preset_mode: 'comfort' },
-        }
-      : defaultNewBlock();
-    const nextBlocks = [...this._visualEdit.blocks, nb];
-    if (hasOverlappingSameDayBlocks(nextBlocks)) {
-      alert(
-        'Impossible d’ajouter une plage sans chevauchement : libérez du temps sur la journée ou supprimez une plage.'
-      );
-      return;
+    let nb: TimeBlock;
+    let nextBlocks: TimeBlock[];
+    let selectedIndex: number;
+
+    if (gap) {
+      nb = {
+        start_time: minuteToHaTimeForSchedule(gap.start),
+        end_time: minuteToHaTimeForSchedule(gap.end),
+        action_type: 'climate.set_preset_mode',
+        action_payload: { preset_mode: 'comfort' },
+      };
+      nextBlocks = [...this._visualEdit.blocks, nb];
+      selectedIndex = nextBlocks.length - 1;
+      if (hasOverlappingSameDayBlocks(nextBlocks)) {
+        alert(
+          'Impossible d’ajouter cette plage sans chevauchement. Modifiez les horaires existants.'
+        );
+        return;
+      }
+    } else {
+      const d = TIMELINE_DRAG_SNAP_MINUTES;
+      nb = {
+        start_time: '00:00:00',
+        end_time: minuteToHaTimeForSchedule(d),
+        action_type: 'climate.set_preset_mode',
+        action_payload: { preset_mode: 'comfort' },
+      };
+      nextBlocks = [nb, ...this._visualEdit.blocks];
+      selectedIndex = 0;
+      if (hasOverlappingSameDayBlocks(nextBlocks)) {
+        alert(
+          'La journée est déjà entièrement couverte. Supprimez ou raccourcissez une plage avant d’en ajouter une autre.'
+        );
+        return;
+      }
     }
+
     const fp = blockFingerprint(nb);
     for (const b of this._visualEdit.blocks) {
       if (blockFingerprint(b) === fp) {
@@ -1013,7 +1176,7 @@ export class ScheduleManagerCard extends LitElement {
     this._visualEdit = {
       ...this._visualEdit,
       blocks: nextBlocks,
-      selectedIndex: nextBlocks.length - 1,
+      selectedIndex,
     };
     this.syncPayloadStrFromSelection();
     this._visualEntityPickerNonce += 1;
@@ -1305,7 +1468,7 @@ export class ScheduleManagerCard extends LitElement {
   private renderEditorTimeline(blocks: TimeBlock[], selectedIndex: number) {
     const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
     const caps = this.segmentCapIndices(segments);
-    const resizeHandles = allTimelineResizeHandles(blocks);
+    const resizeHandles = timelineResizeHandlesForSelection(blocks, selectedIndex);
     const showNow = segments.length > 0;
     const nowPct = nowPercentOfDay();
     return html`
@@ -1329,8 +1492,11 @@ export class ScheduleManagerCard extends LitElement {
                 <div
                   class="sm-slot ${sel} ${capS} ${capE}"
                   style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
-                  title=${s.label}
-                  @click=${() => this.visualSelectBlock(s.blockIndex)}
+                  title=${s.blockIndex === selectedIndex
+                    ? `${s.label} — glisser pour déplacer la plage`
+                    : s.label}
+                  @pointerdown=${(e: PointerEvent) => this.onSlotPointerDown(e, s.blockIndex)}
+                  @click=${(e: Event) => this.onSlotClick(e, s.blockIndex)}
                 >
                   <span class="sm-slot-label">${s.label}</span>
                 </div>

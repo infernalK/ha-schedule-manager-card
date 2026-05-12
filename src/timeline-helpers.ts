@@ -94,6 +94,11 @@ function parseToMinutes(t: string): number {
   return h * 60 + m + s / 60;
 }
 
+/** Exposé pour le drag de plage / tests (même moteur que la frise). */
+export function timeStringToMinutes(t: string): number {
+  return parseToMinutes(t);
+}
+
 export function segmentLabel(block: TimeBlock): string {
   const p = block.action_payload;
   if (p && typeof p === 'object') {
@@ -441,4 +446,17 @@ export function allTimelineResizeHandles(blocks: TimeBlock[]): TimelineResizeHan
 
   out.sort((a, b) => a.pct - b.pct);
   return out;
+}
+
+/** Poignées uniquement pour la plage sélectionnée (on ne redimensionne pas les autres). */
+export function timelineResizeHandlesForSelection(
+  blocks: TimeBlock[],
+  selectedIndex: number
+): TimelineResizeHandle[] {
+  return allTimelineResizeHandles(blocks).filter((h) => {
+    if (h.kind === 'junction') {
+      return h.leftBlockIndex === selectedIndex || h.rightBlockIndex === selectedIndex;
+    }
+    return h.blockIndex === selectedIndex;
+  });
 }

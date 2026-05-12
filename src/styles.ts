@@ -118,12 +118,13 @@ export const styles = css`
   /* Frise 24 h — même principe que scheduler-card (barre flex 60px + time-bar 18px) */
   .timeline-frise {
     margin: 0 0 16px;
-    padding: 10px 12px;
+    padding: 10px 14px;
     border-radius: 8px;
     background: rgba(127, 127, 127, 0.08);
     border: 1px solid var(--divider-color);
     width: 100%;
     max-width: 100%;
+    min-width: 0;
     box-sizing: border-box;
     overflow: hidden;
   }
@@ -136,6 +137,7 @@ export const styles = css`
   .sm-scheduler-track {
     position: relative;
     width: 100%;
+    min-width: 0;
     box-sizing: border-box;
   }
 
@@ -165,6 +167,16 @@ export const styles = css`
 
   .sm-scheduler-track--editor .sm-slot {
     cursor: pointer;
+  }
+
+  .sm-scheduler-track--editor .sm-slot.is-selected {
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .sm-scheduler-track--editor .sm-slot.is-selected:active {
+    cursor: grabbing;
   }
 
   .sm-slot--cap-start {
@@ -330,6 +342,7 @@ export const styles = css`
   .sm-modal {
     width: min(100%, 520px);
     max-width: calc(100vw - 24px);
+    min-width: 0;
     margin-top: 8px;
     margin-bottom: 24px;
     border-radius: 12px;
@@ -449,6 +462,7 @@ export const styles = css`
 
   .sm-editor-frise {
     margin: 0 16px 12px;
+    min-width: 0;
   }
 
   .sm-color-field {
@@ -520,6 +534,7 @@ export const styles = css`
 
   .sm-modal-body {
     padding: 0 16px 12px;
+    min-width: 0;
   }
 
   .sm-form-label {
