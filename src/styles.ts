@@ -205,13 +205,20 @@ export const styles = css`
     line-height: 1.35;
   }
 
-  /* Frise 24 h */
+  /* Frise 24 h — variante « thermostat » (barre continue, type intégration HA) */
   .timeline-frise {
     margin: 0 0 16px;
     padding: 10px 12px;
     border-radius: 8px;
     background: rgba(127, 127, 127, 0.08);
     border: 1px solid var(--divider-color);
+  }
+
+  .timeline-frise--hvac {
+    padding: 12px 14px 14px;
+    border-radius: 12px;
+    background: rgba(30, 30, 30, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .timeline-rail {
@@ -223,31 +230,62 @@ export const styles = css`
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
   }
 
+  .timeline-rail--continuous {
+    height: 56px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.42) 0%,
+      rgba(0, 0, 0, 0.22) 100%
+    );
+    box-shadow:
+      inset 0 2px 8px rgba(0, 0, 0, 0.45),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
   .timeline-segment {
     position: absolute;
     top: 0;
     height: 100%;
     min-width: 3px;
     box-sizing: border-box;
-    padding: 2px 4px;
+    padding: 2px 6px;
     color: var(--text-primary-color, #fff);
-    border-right: 1px solid rgba(0, 0, 0, 0.15);
+    border-right: 1px solid rgba(0, 0, 0, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
   }
 
+  .timeline-segment--hvac {
+    border-right: 1px solid rgba(255, 255, 255, 0.14);
+    border-left: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .timeline-frise--hvac .timeline-segment.is-selected {
+    z-index: 3;
+    box-shadow:
+      inset 0 0 0 3px rgba(255, 255, 255, 0.95),
+      0 0 0 2px rgba(0, 0, 0, 0.35),
+      0 0 16px rgba(255, 255, 255, 0.25);
+    filter: saturate(1.12) brightness(1.05);
+  }
+
   .timeline-segment-label {
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    line-height: 1.1;
+    line-height: 1.15;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    padding: 0 2px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   }
 
   .timeline-now {
@@ -258,17 +296,68 @@ export const styles = css`
     margin-left: -1px;
     background: var(--accent-color, var(--primary-color));
     opacity: 0.95;
-    z-index: 2;
+    z-index: 5;
     pointer-events: none;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   }
 
-  .timeline-ticks {
+  .timeline-scale {
+    position: relative;
+    height: 26px;
+    margin-top: 8px;
+    margin-bottom: 2px;
+  }
+
+  .timeline-scale-item {
+    position: absolute;
+    bottom: 0;
     display: flex;
-    justify-content: space-between;
-    margin-top: 4px;
-    font-size: 0.68rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .timeline-scale-item--start {
+    transform: translateX(0);
+    align-items: flex-start;
+  }
+
+  .timeline-scale-item--center {
+    transform: translateX(-50%);
+  }
+
+  .timeline-scale-item--end {
+    transform: translateX(-100%);
+    align-items: flex-end;
+  }
+
+  .timeline-scale-mark {
+    width: 1px;
+    height: 9px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.28);
+  }
+
+  .timeline-scale-label {
+    font-size: 0.65rem;
+    font-weight: 500;
     color: var(--secondary-text-color);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+
+  .sm-frise-heading {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 0 2px;
+  }
+
+  .sm-frise-heading-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
   }
 
   /* Entités (formulaire plage) */
@@ -405,13 +494,14 @@ export const styles = css`
   }
 
   .sm-day {
-    min-width: 2.5rem;
-    padding: 6px 8px;
-    border-radius: 8px;
+    min-width: 2.85rem;
+    padding: 10px 10px;
+    border-radius: 10px;
     border: 1px solid var(--divider-color);
     background: transparent;
     color: var(--secondary-text-color);
-    font-size: 0.85em;
+    font-size: 0.95em;
+    font-weight: 500;
     cursor: pointer;
   }
 
@@ -423,26 +513,34 @@ export const styles = css`
   }
 
   .sm-toolbar {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
-    padding: 4px 16px 12px;
-    flex-wrap: wrap;
+    padding: 4px 16px 14px;
+    align-items: stretch;
   }
 
   .sm-tool-btn {
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 12px 14px;
+    border-radius: 10px;
     border: 1px solid var(--divider-color);
     background: var(--card-background-color);
     color: var(--primary-text-color);
-    font-size: 0.85em;
+    font-size: 0.92em;
+    font-weight: 600;
     cursor: pointer;
   }
 
+  .sm-tool-accent {
+    border-color: rgba(33, 150, 243, 0.55);
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--primary-color, #2196f3);
+  }
+
   .sm-tool-btn.danger {
-    border-color: rgba(219, 68, 55, 0.45);
+    border-color: rgba(219, 68, 55, 0.55);
     color: var(--error-color, #ef5350);
+    background: rgba(239, 83, 80, 0.08);
   }
 
   .sm-tool-btn:disabled {
@@ -452,6 +550,72 @@ export const styles = css`
 
   .sm-editor-frise {
     margin: 0 16px 12px;
+  }
+
+  .sm-color-field {
+    margin-bottom: 14px;
+  }
+
+  .sm-color-field-title {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.78em;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-color-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sm-color-native {
+    width: 52px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--divider-color);
+    border-radius: 8px;
+    cursor: pointer;
+    background: var(--card-background-color);
+  }
+
+  .sm-color-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sm-color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    padding: 0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  }
+
+  .sm-color-swatch:hover {
+    transform: scale(1.08);
+  }
+
+  .sm-color-reset {
+    padding: 8px 12px;
+    font-size: 0.8em;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: transparent;
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .sm-color-reset:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .sm-modal-body {
@@ -558,55 +722,53 @@ export const styles = css`
     margin-right: auto;
   }
 
-  .timeline-segment.is-selected {
-    box-shadow:
-      inset 0 0 0 2px rgba(255, 255, 255, 0.95),
-      0 0 0 2px rgba(0, 0, 0, 0.35);
-    z-index: 1;
-    cursor: pointer;
-  }
-
   .sm-editor-rail .timeline-segment {
     cursor: pointer;
   }
 
-  .sm-editor-rail .timeline-segment:hover {
-    filter: brightness(1.12);
+  .sm-editor-rail .timeline-segment:hover:not(.is-selected) {
+    filter: brightness(1.08);
   }
 
   .timeline-boundary-handle {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 14px;
-    margin-left: -7px;
+    top: 50%;
+    width: 30px;
+    height: 30px;
+    margin-top: -15px;
+    margin-left: -15px;
     padding: 0;
     border: none;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
+    background: rgba(245, 248, 252, 0.96);
     box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.35),
-      0 2px 6px rgba(0, 0, 0, 0.25);
+      0 0 0 1px rgba(0, 0, 0, 0.28),
+      0 3px 10px rgba(0, 0, 0, 0.35);
     cursor: ew-resize;
-    z-index: 4;
+    z-index: 6;
     touch-action: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(0, 0, 0, 0.45);
-    font-size: 10px;
+    color: rgba(55, 71, 79, 0.85);
+    font-size: 11px;
+    font-weight: 600;
     line-height: 1;
   }
 
   .timeline-boundary-handle::after {
-    content: '◀▶';
-    letter-spacing: -2px;
+    content: '\2039 \203A';
+    letter-spacing: 0.02em;
     pointer-events: none;
+    font-size: 12px;
   }
 
   .timeline-boundary-handle:hover {
-    background: var(--primary-color, #03a9f4);
+    background: var(--primary-color, #2196f3);
     color: var(--text-primary-color, #fff);
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.35),
+      0 4px 12px rgba(33, 150, 243, 0.55);
   }
 
   .sm-select {

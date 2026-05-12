@@ -13,11 +13,12 @@ import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
 import { domainsForActionType, entityMatchesDomains } from './entity-domains';
 import {
+  blockTimelineFill,
   blocksToTimelineSegments,
-  hueForBlock,
   MINUTES_PER_DAY,
   minutesToHaTime,
   nowPercentOfDay,
+  SCHEDULE_MANAGER_COLOR_KEY,
   touchBoundariesBetweenBlocks,
   type TouchBoundary,
 } from './timeline-helpers';
@@ -28,12 +29,51 @@ const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 
 const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 
+/** Graduations alignées sur la journée (comme le planning clim intégré HA). */
+const TIMELINE_SCALE_TICKS: {
+  pct: number;
+  label: string;
+  align: 'start' | 'center' | 'end';
+}[] = [
+  { pct: 0, label: '00:00', align: 'start' },
+  { pct: 25, label: '06:00', align: 'center' },
+  { pct: 50, label: '12:00', align: 'center' },
+  { pct: 75, label: '18:00', align: 'center' },
+  { pct: 100, label: '24:00', align: 'end' },
+];
+
+/** Pastilles de couleur rapides (+ valeur du sélecteur). */
+const BLOCK_COLOR_PRESETS = [
+  '#2196F3',
+  '#4CAF50',
+  '#FF9800',
+  '#9C27B0',
+  '#00BCD4',
+  '#E91E63',
+  '#795548',
+  '#607D8B',
+] as const;
+
 function payloadWithoutEntityId(payload: unknown): Record<string, unknown> {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return {};
   }
   const rec = { ...(payload as Record<string, unknown>) };
   delete rec.entity_id;
+  return rec;
+}
+
+/** JSON éditable : sans entity_id ni couleur (couleur = champ dédié). */
+function payloadForJsonEditor(payload: unknown): Record<string, unknown> {
+  const rec = payloadWithoutEntityId(payload);
+  delete rec[SCHEDULE_MANAGER_COLOR_KEY];
+  return rec;
+}
+
+/** Empêcher qu’une même couleur fasse doublon avec une autre plage identique en action. */
+function payloadForDuplicateCheck(payload: unknown): Record<string, unknown> {
+  const rec = payloadWithoutEntityId(payload);
+  delete rec[SCHEDULE_MANAGER_COLOR_KEY];
   return rec;
 }
 
@@ -105,19 +145,6 @@ function haTimeToHHMM(t: string): string {
   return normalizeTimeForHa(t).slice(0, 5);
 }
 
-function parseTimeToMinutes(t: string): number {
-  const parts = String(t).split(':').map((p) => Number(p));
-  const h = parts[0] ?? 0;
-  const m = parts[1] ?? 0;
-  const s = parts[2] ?? 0;
-  return h * 60 + m + s / 60;
-}
-
-function nowMinutes(): number {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
-}
-
 function sortKeysDeep(value: unknown): unknown {
   if (value === null || typeof value !== 'object') {
     return value;
@@ -148,7 +175,7 @@ function blockFingerprint(block: {
   const st = normalizeTimeForHa(block.start_time);
   const et = normalizeTimeForHa(block.end_time);
   const at = String(block.action_type).trim();
-  return `${st}|${et}|${at}|${stablePayloadString(block.action_payload)}`;
+  return `${st}|${et}|${at}|${stablePayloadString(payloadForDuplicateCheck(block.action_payload))}`;
 }
 
 @customElement('schedule-manager-card')
@@ -273,13 +300,6 @@ export class ScheduleManagerCard extends LitElement {
     const attrs = state?.attributes as Record<string, unknown> | undefined;
     const raw = attrs?.groups as Record<string, ScheduleGroup> | undefined;
     return raw && typeof raw === 'object' ? raw : {};
-  }
-
-  private getCurrentBlockId(): string | undefined {
-    const state = this.hass?.states[this.statusEntityId()];
-    const attrs = state?.attributes as Record<string, unknown> | undefined;
-    const cur = attrs?.current_time_block as { id?: string } | null | undefined;
-    return cur?.id;
   }
 
   private services(): ScheduleManagerServices {
@@ -418,28 +438,50 @@ export class ScheduleManagerCard extends LitElement {
     `;
   }
 
+  private renderTimelineScale() {
+    return html`
+      <div class="timeline-scale" aria-hidden="true">
+        ${TIMELINE_SCALE_TICKS.map(
+          (t) => html`
+            <div
+              class="timeline-scale-item timeline-scale-item--${t.align}"
+              style="left:${t.pct}%"
+            >
+              <span class="timeline-scale-mark"></span>
+              <span class="timeline-scale-label">${t.label}</span>
+            </div>
+          `
+        )}
+      </div>
+    `;
+  }
+
   private renderDayTimeline(blocks: TimeBlock[]) {
     const segments = blocksToTimelineSegments(blocks);
     const nowPct = nowPercentOfDay();
     return html`
-      <div class="timeline-frise" role="img" aria-label="Plages sur 24 heures">
-        <div class="timeline-rail">
-          ${segments.map(
-            (s) => html`
+      <div
+        class="timeline-frise timeline-frise--hvac"
+        role="img"
+        aria-label="Plages sur 24 heures"
+      >
+        <div class="timeline-rail timeline-rail--continuous">
+          ${segments.map((s) => {
+            const blk = blocks[s.blockIndex];
+            const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            return html`
               <div
-                class="timeline-segment"
-                style="left:${s.leftPct}%;width:${s.widthPct}%;background:hsl(${s.hue}, 52%, 40%)"
+                class="timeline-segment timeline-segment--hvac"
+                style="left:${s.leftPct}%;width:${s.widthPct}%;background:${fill}"
                 title=${s.label}
               >
                 <span class="timeline-segment-label">${s.label}</span>
               </div>
-            `
-          )}
+            `;
+          })}
           <div class="timeline-now" style="left:${nowPct}%"></div>
         </div>
-        <div class="timeline-ticks">
-          <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
-        </div>
+        ${this.renderTimelineScale()}
       </div>
     `;
   }
@@ -496,41 +538,15 @@ export class ScheduleManagerCard extends LitElement {
           ? html`
               <div class="subsection-title">Vue 24 h</div>
               <div class="timeline-hint">
-                Couleurs alignées avec la liste des plages (bande à gauche).
+                Aperçu graphique — ouvrez la configuration pour modifier les plages.
               </div>
               ${this.renderDayTimeline(blocks)}
             `
-          : null}
-        <div class="subsection-title">Plages horaires</div>
-        ${blocks.length === 0
-          ? html`<div class="empty-hint">Aucune plage — ajoutez-en une ci-dessous.</div>`
-          : null}
-        ${blocks.map(
-          (block, index) => html`
-            <div
-              class="time-block ${this.isActiveBlock(block) ? 'active' : ''}"
-              style="--block-accent:hsl(${hueForBlock(block)} 52% 40%)"
-            >
-              <div class="time-block-col">
-                <span
-                  ><strong>${block.start_time}</strong> →
-                  <strong>${block.end_time}</strong></span
-                >
-                <span>${block.action_type}</span>
-                <span class="payload-preview"
-                  >${JSON.stringify(block.action_payload ?? {})}</span
-                >
+          : html`
+              <div class="empty-hint">
+                Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.
               </div>
-              <button
-                type="button"
-                class="block-remove"
-                @click=${() => this.removeBlockAt(schedule, index)}
-              >
-                Retirer
-              </button>
-            </div>
-          `
-        )}
+            `}
 
         ${group?.exclusive
           ? html`
@@ -545,23 +561,6 @@ export class ScheduleManagerCard extends LitElement {
           : ''}
       </div>
     `;
-  }
-
-  private isActiveBlock(block: TimeBlock): boolean {
-    const curId = this.getCurrentBlockId();
-    if (curId && block.id === curId) {
-      return true;
-    }
-    const start = parseTimeToMinutes(block.start_time);
-    const end = parseTimeToMinutes(block.end_time);
-    const now = nowMinutes();
-    if (end > start) {
-      return now >= start && now < end;
-    }
-    if (end < start) {
-      return now >= start || now < end;
-    }
-    return false;
   }
 
   private async toggleSchedule(scheduleId: string, enabled: boolean) {
@@ -599,19 +598,6 @@ export class ScheduleManagerCard extends LitElement {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('schedule_manager.delete_schedule failed', e);
-    }
-  }
-
-  private async removeBlockAt(schedule: Schedule, index: number) {
-    const next = [...(schedule.time_blocks || [])];
-    next.splice(index, 1);
-    try {
-      await this.services().updateSchedule(schedule.id, {
-        time_blocks: this.blocksToPayload(next),
-      });
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('schedule_manager.update_schedule failed', e);
     }
   }
 
@@ -699,7 +685,7 @@ export class ScheduleManagerCard extends LitElement {
     }
     try {
       this._visualPayloadStr = JSON.stringify(
-        payloadWithoutEntityId(b.action_payload),
+        payloadForJsonEditor(b.action_payload),
         null,
         2
       );
@@ -724,12 +710,21 @@ export class ScheduleManagerCard extends LitElement {
         throw new Error('invalid');
       }
       delete extra.entity_id;
+      delete extra[SCHEDULE_MANAGER_COLOR_KEY];
       const entityIds = entityIdsFromPayload(block.action_payload);
       const action_payload: Record<string, unknown> = { ...extra };
       if (entityIds.length === 1) {
         action_payload.entity_id = entityIds[0];
       } else if (entityIds.length > 1) {
         action_payload.entity_id = [...entityIds];
+      }
+      const prevRec =
+        typeof block.action_payload === 'object' && block.action_payload !== null
+          ? (block.action_payload as Record<string, unknown>)
+          : {};
+      const prevColor = prevRec[SCHEDULE_MANAGER_COLOR_KEY];
+      if (typeof prevColor === 'string') {
+        action_payload[SCHEDULE_MANAGER_COLOR_KEY] = prevColor;
       }
       const nextBlocks = [...this._visualEdit.blocks];
       nextBlocks[sel] = { ...block, action_payload };
@@ -993,31 +988,130 @@ export class ScheduleManagerCard extends LitElement {
     this.syncPayloadStrFromSelection();
   }
 
+  private hasCustomBlockColor(block: TimeBlock): boolean {
+    const p = block.action_payload;
+    if (!p || typeof p !== 'object') {
+      return false;
+    }
+    return typeof (p as Record<string, unknown>)[SCHEDULE_MANAGER_COLOR_KEY] === 'string';
+  }
+
+  private blockColorPickerHex(block: TimeBlock): string {
+    const p = block.action_payload;
+    if (p && typeof p === 'object') {
+      const c = (p as Record<string, unknown>)[SCHEDULE_MANAGER_COLOR_KEY];
+      if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.trim())) {
+        return c.trim();
+      }
+    }
+    return '#2196F3';
+  }
+
+  private visualSetBlockColor(hex: string) {
+    if (!this._visualEdit) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    if (!block) {
+      return;
+    }
+    const base =
+      typeof block.action_payload === 'object' && block.action_payload !== null
+        ? { ...(block.action_payload as Record<string, unknown>) }
+        : {};
+    base[SCHEDULE_MANAGER_COLOR_KEY] = hex;
+    this.visualPatchSelected({ action_payload: base });
+  }
+
+  private visualClearBlockColor() {
+    if (!this._visualEdit) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    if (!block) {
+      return;
+    }
+    const base =
+      typeof block.action_payload === 'object' && block.action_payload !== null
+        ? { ...(block.action_payload as Record<string, unknown>) }
+        : {};
+    delete base[SCHEDULE_MANAGER_COLOR_KEY];
+    this.visualPatchSelected({ action_payload: base });
+  }
+
+  private renderBlockColorControls(block: TimeBlock) {
+    const pickerVal = this.blockColorPickerHex(block);
+    const custom = this.hasCustomBlockColor(block);
+    return html`
+      <div class="sm-form-label sm-color-field">
+        <span class="sm-color-field-title">Couleur sur la frise</span>
+        <div class="sm-color-row">
+          <input
+            type="color"
+            class="sm-color-native"
+            .value=${pickerVal}
+            @input=${(e: Event) =>
+              this.visualSetBlockColor((e.target as HTMLInputElement).value)}
+          />
+          <div class="sm-color-presets" aria-hidden="true">
+            ${BLOCK_COLOR_PRESETS.map(
+              (hex) => html`
+                <button
+                  type="button"
+                  class="sm-color-swatch"
+                  style="background:${hex}"
+                  title=${hex}
+                  aria-label="Appliquer la couleur ${hex}"
+                  @click=${() => this.visualSetBlockColor(hex)}
+                ></button>
+              `
+            )}
+          </div>
+          <button
+            type="button"
+            class="sm-color-reset"
+            ?disabled=${!custom}
+            @click=${() => this.visualClearBlockColor()}
+          >
+            Défaut
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
   private renderEditorTimeline(blocks: TimeBlock[], selectedIndex: number) {
     const segments = blocksToTimelineSegments(blocks);
     const boundaries = touchBoundariesBetweenBlocks(blocks);
     const nowPct = nowPercentOfDay();
     return html`
       <div
-        class="timeline-frise sm-editor-frise"
+        class="timeline-frise sm-editor-frise timeline-frise--hvac"
         role="group"
         aria-label="Plages sur 24 heures — cliquer pour sélectionner, poignées pour ajuster"
       >
-        <div class="timeline-rail sm-editor-rail">
-          ${segments.map(
-            (s) => html`
+        <div class="sm-frise-heading">
+          <span class="sm-frise-heading-label">Heure</span>
+        </div>
+        <div class="timeline-rail sm-editor-rail timeline-rail--continuous">
+          ${segments.map((s) => {
+            const blk = blocks[s.blockIndex];
+            const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            return html`
               <div
-                class="timeline-segment ${s.blockIndex === selectedIndex
+                class="timeline-segment timeline-segment--hvac ${s.blockIndex === selectedIndex
                   ? 'is-selected'
                   : ''}"
-                style="left:${s.leftPct}%;width:${s.widthPct}%;background:hsl(${s.hue}, 52%, 40%)"
+                style="left:${s.leftPct}%;width:${s.widthPct}%;background:${fill}"
                 title=${s.label}
                 @click=${() => this.visualSelectBlock(s.blockIndex)}
               >
                 <span class="timeline-segment-label">${s.label}</span>
               </div>
-            `
-          )}
+            `;
+          })}
           ${boundaries.map(
             (tb) => html`
               <button
@@ -1032,9 +1126,7 @@ export class ScheduleManagerCard extends LitElement {
           )}
           <div class="timeline-now" style="left:${nowPct}%"></div>
         </div>
-        <div class="timeline-ticks">
-          <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
-        </div>
+        ${this.renderTimelineScale()}
       </div>
     `;
   }
@@ -1102,8 +1194,8 @@ export class ScheduleManagerCard extends LitElement {
             </div>
           </div>
           <div class="sm-toolbar">
-            <button type="button" class="sm-tool-btn" @click=${() => this.visualAddBlock()}>
-              ＋ Ajouter une plage
+            <button type="button" class="sm-tool-btn sm-tool-accent" @click=${() => this.visualAddBlock()}>
+              + Ajouter une plage
             </button>
             <button
               type="button"
@@ -1114,11 +1206,16 @@ export class ScheduleManagerCard extends LitElement {
               Supprimer la plage
             </button>
           </div>
-          ${blocks.length ? this.renderEditorTimeline(blocks, sel) : html`
-              <div class="sm-modal-body">
-                <div class="empty-hint">Aucune plage — ajoutez-en une avec le bouton ci-dessus.</div>
-              </div>
-            `}
+          ${this.renderEditorTimeline(blocks, sel)}
+          ${blocks.length === 0
+            ? html`
+                <div class="sm-modal-body sm-modal-body-frise-placeholder">
+                  <div class="empty-hint">
+                    Aucune plage — utilisez « + Ajouter une plage » ci-dessus.
+                  </div>
+                </div>
+              `
+            : null}
           ${selected
             ? html`
                 <div class="sm-modal-body">
@@ -1156,6 +1253,7 @@ export class ScheduleManagerCard extends LitElement {
                       />
                     </label>
                   </div>
+                  ${this.renderBlockColorControls(selected)}
                   <div class="sm-action-card">
                     <h4>Action pendant cette plage</h4>
                     <label class="sm-form-label">

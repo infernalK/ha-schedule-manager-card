@@ -2,6 +2,9 @@ import type { TimeBlock } from './types';
 
 export const MINUTES_PER_DAY = 24 * 60;
 
+/** Métadonnée carte uniquement — à retirer si le payload est passé tel quel à un service HA. */
+export const SCHEDULE_MANAGER_COLOR_KEY = 'schedule_manager_color';
+
 export interface TimelineSegment {
   /** Position gauche en % (0–100) */
   leftPct: number;
@@ -54,6 +57,25 @@ function hueFromLabel(label: string): number {
 export function hueForBlock(block: TimeBlock): number {
   const label = segmentLabel(block);
   return hueFromLabel(`${label}-${block.action_type}`);
+}
+
+/** Couleur de remplissage segment (#hex ou hsl dérivé du bloc). */
+export function blockTimelineFill(block: TimeBlock): string {
+  const p = block.action_payload;
+  if (p && typeof p === 'object') {
+    const raw = (p as Record<string, unknown>)[SCHEDULE_MANAGER_COLOR_KEY];
+    if (typeof raw === 'string') {
+      const c = raw.trim();
+      if (/^#[0-9A-Fa-f]{6}$/.test(c)) {
+        return c;
+      }
+      if (/^#[0-9A-Fa-f]{3}$/.test(c)) {
+        const h = c.slice(1);
+        return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+      }
+    }
+  }
+  return `hsl(${hueForBlock(block)}, 58%, 42%)`;
 }
 
 /**

@@ -327,13 +327,20 @@ const styles = i$2 `
     line-height: 1.35;
   }
 
-  /* Frise 24 h */
+  /* Frise 24 h — variante « thermostat » (barre continue, type intégration HA) */
   .timeline-frise {
     margin: 0 0 16px;
     padding: 10px 12px;
     border-radius: 8px;
     background: rgba(127, 127, 127, 0.08);
     border: 1px solid var(--divider-color);
+  }
+
+  .timeline-frise--hvac {
+    padding: 12px 14px 14px;
+    border-radius: 12px;
+    background: rgba(30, 30, 30, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .timeline-rail {
@@ -345,31 +352,62 @@ const styles = i$2 `
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
   }
 
+  .timeline-rail--continuous {
+    height: 56px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.42) 0%,
+      rgba(0, 0, 0, 0.22) 100%
+    );
+    box-shadow:
+      inset 0 2px 8px rgba(0, 0, 0, 0.45),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+      0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
   .timeline-segment {
     position: absolute;
     top: 0;
     height: 100%;
     min-width: 3px;
     box-sizing: border-box;
-    padding: 2px 4px;
+    padding: 2px 6px;
     color: var(--text-primary-color, #fff);
-    border-right: 1px solid rgba(0, 0, 0, 0.15);
+    border-right: 1px solid rgba(0, 0, 0, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
   }
 
+  .timeline-segment--hvac {
+    border-right: 1px solid rgba(255, 255, 255, 0.14);
+    border-left: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .timeline-frise--hvac .timeline-segment.is-selected {
+    z-index: 3;
+    box-shadow:
+      inset 0 0 0 3px rgba(255, 255, 255, 0.95),
+      0 0 0 2px rgba(0, 0, 0, 0.35),
+      0 0 16px rgba(255, 255, 255, 0.25);
+    filter: saturate(1.12) brightness(1.05);
+  }
+
   .timeline-segment-label {
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    line-height: 1.1;
+    line-height: 1.15;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    padding: 0 2px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
   }
 
   .timeline-now {
@@ -380,17 +418,68 @@ const styles = i$2 `
     margin-left: -1px;
     background: var(--accent-color, var(--primary-color));
     opacity: 0.95;
-    z-index: 2;
+    z-index: 5;
     pointer-events: none;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   }
 
-  .timeline-ticks {
+  .timeline-scale {
+    position: relative;
+    height: 26px;
+    margin-top: 8px;
+    margin-bottom: 2px;
+  }
+
+  .timeline-scale-item {
+    position: absolute;
+    bottom: 0;
     display: flex;
-    justify-content: space-between;
-    margin-top: 4px;
-    font-size: 0.68rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .timeline-scale-item--start {
+    transform: translateX(0);
+    align-items: flex-start;
+  }
+
+  .timeline-scale-item--center {
+    transform: translateX(-50%);
+  }
+
+  .timeline-scale-item--end {
+    transform: translateX(-100%);
+    align-items: flex-end;
+  }
+
+  .timeline-scale-mark {
+    width: 1px;
+    height: 9px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.28);
+  }
+
+  .timeline-scale-label {
+    font-size: 0.65rem;
+    font-weight: 500;
     color: var(--secondary-text-color);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+
+  .sm-frise-heading {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 0 2px;
+  }
+
+  .sm-frise-heading-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
   }
 
   /* Entités (formulaire plage) */
@@ -527,13 +616,14 @@ const styles = i$2 `
   }
 
   .sm-day {
-    min-width: 2.5rem;
-    padding: 6px 8px;
-    border-radius: 8px;
+    min-width: 2.85rem;
+    padding: 10px 10px;
+    border-radius: 10px;
     border: 1px solid var(--divider-color);
     background: transparent;
     color: var(--secondary-text-color);
-    font-size: 0.85em;
+    font-size: 0.95em;
+    font-weight: 500;
     cursor: pointer;
   }
 
@@ -545,26 +635,34 @@ const styles = i$2 `
   }
 
   .sm-toolbar {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
-    padding: 4px 16px 12px;
-    flex-wrap: wrap;
+    padding: 4px 16px 14px;
+    align-items: stretch;
   }
 
   .sm-tool-btn {
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 12px 14px;
+    border-radius: 10px;
     border: 1px solid var(--divider-color);
     background: var(--card-background-color);
     color: var(--primary-text-color);
-    font-size: 0.85em;
+    font-size: 0.92em;
+    font-weight: 600;
     cursor: pointer;
   }
 
+  .sm-tool-accent {
+    border-color: rgba(33, 150, 243, 0.55);
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--primary-color, #2196f3);
+  }
+
   .sm-tool-btn.danger {
-    border-color: rgba(219, 68, 55, 0.45);
+    border-color: rgba(219, 68, 55, 0.55);
     color: var(--error-color, #ef5350);
+    background: rgba(239, 83, 80, 0.08);
   }
 
   .sm-tool-btn:disabled {
@@ -574,6 +672,72 @@ const styles = i$2 `
 
   .sm-editor-frise {
     margin: 0 16px 12px;
+  }
+
+  .sm-color-field {
+    margin-bottom: 14px;
+  }
+
+  .sm-color-field-title {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.78em;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-color-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sm-color-native {
+    width: 52px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--divider-color);
+    border-radius: 8px;
+    cursor: pointer;
+    background: var(--card-background-color);
+  }
+
+  .sm-color-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sm-color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    padding: 0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  }
+
+  .sm-color-swatch:hover {
+    transform: scale(1.08);
+  }
+
+  .sm-color-reset {
+    padding: 8px 12px;
+    font-size: 0.8em;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: transparent;
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .sm-color-reset:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .sm-modal-body {
@@ -680,55 +844,53 @@ const styles = i$2 `
     margin-right: auto;
   }
 
-  .timeline-segment.is-selected {
-    box-shadow:
-      inset 0 0 0 2px rgba(255, 255, 255, 0.95),
-      0 0 0 2px rgba(0, 0, 0, 0.35);
-    z-index: 1;
-    cursor: pointer;
-  }
-
   .sm-editor-rail .timeline-segment {
     cursor: pointer;
   }
 
-  .sm-editor-rail .timeline-segment:hover {
-    filter: brightness(1.12);
+  .sm-editor-rail .timeline-segment:hover:not(.is-selected) {
+    filter: brightness(1.08);
   }
 
   .timeline-boundary-handle {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 14px;
-    margin-left: -7px;
+    top: 50%;
+    width: 30px;
+    height: 30px;
+    margin-top: -15px;
+    margin-left: -15px;
     padding: 0;
     border: none;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
+    background: rgba(245, 248, 252, 0.96);
     box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.35),
-      0 2px 6px rgba(0, 0, 0, 0.25);
+      0 0 0 1px rgba(0, 0, 0, 0.28),
+      0 3px 10px rgba(0, 0, 0, 0.35);
     cursor: ew-resize;
-    z-index: 4;
+    z-index: 6;
     touch-action: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(0, 0, 0, 0.45);
-    font-size: 10px;
+    color: rgba(55, 71, 79, 0.85);
+    font-size: 11px;
+    font-weight: 600;
     line-height: 1;
   }
 
   .timeline-boundary-handle::after {
-    content: '◀▶';
-    letter-spacing: -2px;
+    content: '\2039 \203A';
+    letter-spacing: 0.02em;
     pointer-events: none;
+    font-size: 12px;
   }
 
   .timeline-boundary-handle:hover {
-    background: var(--primary-color, #03a9f4);
+    background: var(--primary-color, #2196f3);
     color: var(--text-primary-color, #fff);
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.35),
+      0 4px 12px rgba(33, 150, 243, 0.55);
   }
 
   .sm-select {
@@ -786,6 +948,8 @@ function entityMatchesDomains(entityId, domains) {
 }
 
 const MINUTES_PER_DAY = 24 * 60;
+/** Métadonnée carte uniquement — à retirer si le payload est passé tel quel à un service HA. */
+const SCHEDULE_MANAGER_COLOR_KEY = 'schedule_manager_color';
 function parseToMinutes(t) {
     const parts = String(t).split(':').map((p) => Number(p));
     const h = parts[0] ?? 0;
@@ -823,6 +987,24 @@ function hueFromLabel(label) {
 function hueForBlock(block) {
     const label = segmentLabel(block);
     return hueFromLabel(`${label}-${block.action_type}`);
+}
+/** Couleur de remplissage segment (#hex ou hsl dérivé du bloc). */
+function blockTimelineFill(block) {
+    const p = block.action_payload;
+    if (p && typeof p === 'object') {
+        const raw = p[SCHEDULE_MANAGER_COLOR_KEY];
+        if (typeof raw === 'string') {
+            const c = raw.trim();
+            if (/^#[0-9A-Fa-f]{6}$/.test(c)) {
+                return c;
+            }
+            if (/^#[0-9A-Fa-f]{3}$/.test(c)) {
+                const h = c.slice(1);
+                return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+            }
+        }
+    }
+    return `hsl(${hueForBlock(block)}, 58%, 42%)`;
 }
 /**
  * Découpe les plages en segments sur une journée (0:00–24:00), gère le passage minuit.
@@ -1018,12 +1200,43 @@ ScheduleManagerCardEditor = __decorate([
 
 const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+/** Graduations alignées sur la journée (comme le planning clim intégré HA). */
+const TIMELINE_SCALE_TICKS = [
+    { pct: 0, label: '00:00', align: 'start' },
+    { pct: 25, label: '06:00', align: 'center' },
+    { pct: 50, label: '12:00', align: 'center' },
+    { pct: 75, label: '18:00', align: 'center' },
+    { pct: 100, label: '24:00', align: 'end' },
+];
+/** Pastilles de couleur rapides (+ valeur du sélecteur). */
+const BLOCK_COLOR_PRESETS = [
+    '#2196F3',
+    '#4CAF50',
+    '#FF9800',
+    '#9C27B0',
+    '#00BCD4',
+    '#E91E63',
+    '#795548',
+    '#607D8B',
+];
 function payloadWithoutEntityId(payload) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
         return {};
     }
     const rec = { ...payload };
     delete rec.entity_id;
+    return rec;
+}
+/** JSON éditable : sans entity_id ni couleur (couleur = champ dédié). */
+function payloadForJsonEditor(payload) {
+    const rec = payloadWithoutEntityId(payload);
+    delete rec[SCHEDULE_MANAGER_COLOR_KEY];
+    return rec;
+}
+/** Empêcher qu’une même couleur fasse doublon avec une autre plage identique en action. */
+function payloadForDuplicateCheck(payload) {
+    const rec = payloadWithoutEntityId(payload);
+    delete rec[SCHEDULE_MANAGER_COLOR_KEY];
     return rec;
 }
 function entityIdsFromPayload(payload) {
@@ -1115,7 +1328,7 @@ function blockFingerprint(block) {
     const st = normalizeTimeForHa(block.start_time);
     const et = normalizeTimeForHa(block.end_time);
     const at = String(block.action_type).trim();
-    return `${st}|${et}|${at}|${stablePayloadString(block.action_payload)}`;
+    return `${st}|${et}|${at}|${stablePayloadString(payloadForDuplicateCheck(block.action_payload))}`;
 }
 let ScheduleManagerCard = class ScheduleManagerCard extends s {
     constructor() {
@@ -1341,26 +1554,47 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
       </div>
     `;
     }
+    renderTimelineScale() {
+        return x `
+      <div class="timeline-scale" aria-hidden="true">
+        ${TIMELINE_SCALE_TICKS.map((t) => x `
+            <div
+              class="timeline-scale-item timeline-scale-item--${t.align}"
+              style="left:${t.pct}%"
+            >
+              <span class="timeline-scale-mark"></span>
+              <span class="timeline-scale-label">${t.label}</span>
+            </div>
+          `)}
+      </div>
+    `;
+    }
     renderDayTimeline(blocks) {
         const segments = blocksToTimelineSegments(blocks);
         const nowPct = nowPercentOfDay();
         return x `
-      <div class="timeline-frise" role="img" aria-label="Plages sur 24 heures">
-        <div class="timeline-rail">
-          ${segments.map((s) => x `
+      <div
+        class="timeline-frise timeline-frise--hvac"
+        role="img"
+        aria-label="Plages sur 24 heures"
+      >
+        <div class="timeline-rail timeline-rail--continuous">
+          ${segments.map((s) => {
+            const blk = blocks[s.blockIndex];
+            const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            return x `
               <div
-                class="timeline-segment"
-                style="left:${s.leftPct}%;width:${s.widthPct}%;background:hsl(${s.hue}, 52%, 40%)"
+                class="timeline-segment timeline-segment--hvac"
+                style="left:${s.leftPct}%;width:${s.widthPct}%;background:${fill}"
                 title=${s.label}
               >
                 <span class="timeline-segment-label">${s.label}</span>
               </div>
-            `)}
+            `;
+        })}
           <div class="timeline-now" style="left:${nowPct}%"></div>
         </div>
-        <div class="timeline-ticks">
-          <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
-        </div>
+        ${this.renderTimelineScale()}
       </div>
     `;
     }
@@ -1423,7 +1657,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         ${blocks.map((block, index) => x `
             <div
               class="time-block ${this.isActiveBlock(block) ? 'active' : ''}"
-              style="--block-accent:hsl(${hueForBlock(block)} 52% 40%)"
+              style="--block-accent:${blockTimelineFill(block)}"
             >
               <div class="time-block-col">
                 <span
@@ -1598,7 +1832,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             return;
         }
         try {
-            this._visualPayloadStr = JSON.stringify(payloadWithoutEntityId(b.action_payload), null, 2);
+            this._visualPayloadStr = JSON.stringify(payloadForJsonEditor(b.action_payload), null, 2);
         }
         catch {
             this._visualPayloadStr = '{}';
@@ -1620,6 +1854,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                 throw new Error('invalid');
             }
             delete extra.entity_id;
+            delete extra[SCHEDULE_MANAGER_COLOR_KEY];
             const entityIds = entityIdsFromPayload(block.action_payload);
             const action_payload = { ...extra };
             if (entityIds.length === 1) {
@@ -1627,6 +1862,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             }
             else if (entityIds.length > 1) {
                 action_payload.entity_id = [...entityIds];
+            }
+            const prevRec = typeof block.action_payload === 'object' && block.action_payload !== null
+                ? block.action_payload
+                : {};
+            const prevColor = prevRec[SCHEDULE_MANAGER_COLOR_KEY];
+            if (typeof prevColor === 'string') {
+                action_payload[SCHEDULE_MANAGER_COLOR_KEY] = prevColor;
             }
             const nextBlocks = [...this._visualEdit.blocks];
             nextBlocks[sel] = { ...block, action_payload };
@@ -1874,29 +2116,120 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this.visualPatchSelected({ action_payload: base });
         this.syncPayloadStrFromSelection();
     }
+    hasCustomBlockColor(block) {
+        const p = block.action_payload;
+        if (!p || typeof p !== 'object') {
+            return false;
+        }
+        return typeof p[SCHEDULE_MANAGER_COLOR_KEY] === 'string';
+    }
+    blockColorPickerHex(block) {
+        const p = block.action_payload;
+        if (p && typeof p === 'object') {
+            const c = p[SCHEDULE_MANAGER_COLOR_KEY];
+            if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.trim())) {
+                return c.trim();
+            }
+        }
+        return '#2196F3';
+    }
+    visualSetBlockColor(hex) {
+        if (!this._visualEdit) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        if (!block) {
+            return;
+        }
+        const base = typeof block.action_payload === 'object' && block.action_payload !== null
+            ? { ...block.action_payload }
+            : {};
+        base[SCHEDULE_MANAGER_COLOR_KEY] = hex;
+        this.visualPatchSelected({ action_payload: base });
+    }
+    visualClearBlockColor() {
+        if (!this._visualEdit) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        if (!block) {
+            return;
+        }
+        const base = typeof block.action_payload === 'object' && block.action_payload !== null
+            ? { ...block.action_payload }
+            : {};
+        delete base[SCHEDULE_MANAGER_COLOR_KEY];
+        this.visualPatchSelected({ action_payload: base });
+    }
+    renderBlockColorControls(block) {
+        const pickerVal = this.blockColorPickerHex(block);
+        const custom = this.hasCustomBlockColor(block);
+        return x `
+      <div class="sm-form-label sm-color-field">
+        <span class="sm-color-field-title">Couleur sur la frise</span>
+        <div class="sm-color-row">
+          <input
+            type="color"
+            class="sm-color-native"
+            .value=${pickerVal}
+            @input=${(e) => this.visualSetBlockColor(e.target.value)}
+          />
+          <div class="sm-color-presets" aria-hidden="true">
+            ${BLOCK_COLOR_PRESETS.map((hex) => x `
+                <button
+                  type="button"
+                  class="sm-color-swatch"
+                  style="background:${hex}"
+                  title=${hex}
+                  aria-label="Appliquer la couleur ${hex}"
+                  @click=${() => this.visualSetBlockColor(hex)}
+                ></button>
+              `)}
+          </div>
+          <button
+            type="button"
+            class="sm-color-reset"
+            ?disabled=${!custom}
+            @click=${() => this.visualClearBlockColor()}
+          >
+            Défaut
+          </button>
+        </div>
+      </div>
+    `;
+    }
     renderEditorTimeline(blocks, selectedIndex) {
         const segments = blocksToTimelineSegments(blocks);
         const boundaries = touchBoundariesBetweenBlocks(blocks);
         const nowPct = nowPercentOfDay();
         return x `
       <div
-        class="timeline-frise sm-editor-frise"
+        class="timeline-frise sm-editor-frise timeline-frise--hvac"
         role="group"
         aria-label="Plages sur 24 heures — cliquer pour sélectionner, poignées pour ajuster"
       >
-        <div class="timeline-rail sm-editor-rail">
-          ${segments.map((s) => x `
+        <div class="sm-frise-heading">
+          <span class="sm-frise-heading-label">Heure</span>
+        </div>
+        <div class="timeline-rail sm-editor-rail timeline-rail--continuous">
+          ${segments.map((s) => {
+            const blk = blocks[s.blockIndex];
+            const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            return x `
               <div
-                class="timeline-segment ${s.blockIndex === selectedIndex
-            ? 'is-selected'
-            : ''}"
-                style="left:${s.leftPct}%;width:${s.widthPct}%;background:hsl(${s.hue}, 52%, 40%)"
+                class="timeline-segment timeline-segment--hvac ${s.blockIndex === selectedIndex
+                ? 'is-selected'
+                : ''}"
+                style="left:${s.leftPct}%;width:${s.widthPct}%;background:${fill}"
                 title=${s.label}
                 @click=${() => this.visualSelectBlock(s.blockIndex)}
               >
                 <span class="timeline-segment-label">${s.label}</span>
               </div>
-            `)}
+            `;
+        })}
           ${boundaries.map((tb) => x `
               <button
                 type="button"
@@ -1909,9 +2242,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             `)}
           <div class="timeline-now" style="left:${nowPct}%"></div>
         </div>
-        <div class="timeline-ticks">
-          <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
-        </div>
+        ${this.renderTimelineScale()}
       </div>
     `;
     }
@@ -1975,8 +2306,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             </div>
           </div>
           <div class="sm-toolbar">
-            <button type="button" class="sm-tool-btn" @click=${() => this.visualAddBlock()}>
-              ＋ Ajouter une plage
+            <button type="button" class="sm-tool-btn sm-tool-accent" @click=${() => this.visualAddBlock()}>
+              + Ajouter une plage
             </button>
             <button
               type="button"
@@ -1987,11 +2318,16 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
               Supprimer la plage
             </button>
           </div>
-          ${blocks.length ? this.renderEditorTimeline(blocks, sel) : x `
-              <div class="sm-modal-body">
-                <div class="empty-hint">Aucune plage — ajoutez-en une avec le bouton ci-dessus.</div>
-              </div>
-            `}
+          ${this.renderEditorTimeline(blocks, sel)}
+          ${blocks.length === 0
+            ? x `
+                <div class="sm-modal-body sm-modal-body-frise-placeholder">
+                  <div class="empty-hint">
+                    Aucune plage — utilisez « + Ajouter une plage » ci-dessus.
+                  </div>
+                </div>
+              `
+            : null}
           ${selected
             ? x `
                 <div class="sm-modal-body">
@@ -2023,6 +2359,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                       />
                     </label>
                   </div>
+                  ${this.renderBlockColorControls(selected)}
                   <div class="sm-action-card">
                     <h4>Action pendant cette plage</h4>
                     <label class="sm-form-label">
