@@ -229,27 +229,27 @@ export const styles = css`
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   }
 
-  /* Échelle horaire en ligne (évite les bugs de positionnement absolu dans HA) */
+  /* Échelle horaire : grille explicite (le flex faisait fondre les colonnes → texte concaténé). */
   .timeline-scale-flex {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: flex-start;
+    display: grid;
+    align-items: center;
     width: 100%;
     max-width: 100%;
     margin-top: 10px;
-    padding: 2px 2px 0;
+    padding: 4px 2px 0;
     box-sizing: border-box;
-    gap: 2px;
+    column-gap: 8px;
+    row-gap: 4px;
   }
 
   .timeline-scale-flex-label {
-    flex: 1 1 0;
     min-width: 0;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 500;
     color: var(--secondary-text-color);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     text-align: center;
     letter-spacing: 0.02em;
   }
@@ -591,28 +591,38 @@ export const styles = css`
     color: var(--secondary-text-color);
   }
 
-  .sm-time-row {
+  .sm-modal-body .sm-time-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px 16px;
+    margin-bottom: 14px;
+    align-items: start;
+    width: 100%;
+    box-sizing: border-box;
   }
 
-  .sm-time-row label {
+  .sm-modal-body .sm-time-row label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     font-size: 0.78em;
     color: var(--secondary-text-color);
+    min-width: 0;
+    margin: 0;
   }
 
-  .sm-time-row input {
+  .sm-modal-body .sm-time-row input {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
     padding: 8px 10px;
     border-radius: 8px;
     border: 1px solid var(--divider-color);
     background: var(--card-background-color);
     color: var(--primary-text-color);
     font-family: inherit;
+    font-size: 1rem;
   }
 
   .sm-modal-footer {

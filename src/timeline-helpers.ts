@@ -218,10 +218,76 @@ export function minuteToHaTimeForSchedule(totalMinutes: number): string {
   return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
 }
 
-function isOvernightBlock(b: TimeBlock): boolean {
+export function isOvernightBlock(b: TimeBlock): boolean {
   const s = parseToMinutes(b.start_time);
   const e = parseToMinutes(b.end_time);
   return e < s;
+}
+
+/** Intervalle [start, end) en minutes sur une même journée (pas de passage minuit). */
+export function sameDayBlockIntervalExclusiveEnd(
+  b: TimeBlock
+): { start: number; end: number } | null {
+  if (isOvernightBlock(b)) {
+    return null;
+  }
+  const s = Math.round(parseToMinutes(b.start_time));
+  const e = Math.round(parseToMinutes(b.end_time));
+  if (e <= s) {
+    return null;
+  }
+  return { start: s, end: e };
+}
+
+/**
+ * Détecte un chevauchement entre plages « même jour » (intervalles [début, fin) en minutes).
+ * Utilisé pour empêcher deux créneaux actifs au même moment.
+ */
+export function hasOverlappingSameDayBlocks(blocks: TimeBlock[]): boolean {
+  const intervals: { start: number; end: number }[] = [];
+  for (const b of blocks || []) {
+    const iv = sameDayBlockIntervalExclusiveEnd(b);
+    if (iv) {
+      intervals.push(iv);
+    }
+  }
+  intervals.sort((a, b) => a.start - b.start);
+  for (let i = 0; i < intervals.length - 1; i++) {
+    if (intervals[i].end > intervals[i + 1].start) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Trouve un créneau libre d’au moins `minDurationMinutes` minutes pour une nouvelle plage. */
+export function suggestGapIntervalMinutes(
+  blocks: TimeBlock[],
+  minDurationMinutes = 60
+): { start: number; end: number } | null {
+  const minDur = Math.max(TIMELINE_DRAG_SNAP_MINUTES, minDurationMinutes);
+  const intervals: { start: number; end: number }[] = [];
+  for (const b of blocks || []) {
+    const iv = sameDayBlockIntervalExclusiveEnd(b);
+    if (iv) {
+      intervals.push(iv);
+    }
+  }
+  intervals.sort((a, b) => a.start - b.start);
+  let prevEnd = 0;
+  for (const iv of intervals) {
+    if (iv.start - prevEnd >= minDur) {
+      return { start: prevEnd, end: prevEnd + minDur };
+    }
+    prevEnd = Math.max(prevEnd, iv.end);
+  }
+  if (MINUTES_PER_DAY - prevEnd >= minDur) {
+    return { start: prevEnd, end: prevEnd + minDur };
+  }
+  if (minDur > TIMELINE_DRAG_SNAP_MINUTES) {
+    return suggestGapIntervalMinutes(blocks, TIMELINE_DRAG_SNAP_MINUTES);
+  }
+  return null;
 }
 
 /** Frontière draggable entre deux plages consécutives sur la frise (sans passage minuit). */

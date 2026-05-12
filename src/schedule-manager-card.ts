@@ -1,6 +1,7 @@
 import { LitElement, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { PropertyValues } from 'lit';
+import { styleMap } from 'lit/directives/style-map.js';
 import {
   CardConfig,
   HomeAssistant,
@@ -17,11 +18,15 @@ import {
   blockTimelineFill,
   blocksToTimelineSegments,
   DEFAULT_TIMELINE_SCALE_TICKS,
+  hasOverlappingSameDayBlocks,
+  isOvernightBlock,
   MINUTES_PER_DAY,
   minuteToHaTimeForSchedule,
   nowPercentOfDay,
+  sameDayBlockIntervalExclusiveEnd,
   SCHEDULE_MANAGER_COLOR_KEY,
   snapMinutesToGrid,
+  suggestGapIntervalMinutes,
   TIMELINE_DRAG_SNAP_MINUTES,
   timelineScaleTicksForWidth,
   type TimelineResizeHandle,
@@ -266,6 +271,9 @@ export class ScheduleManagerCard extends LitElement {
       blocks[d.blockIdx] = { ...B, end_time: ha };
     }
 
+    if (hasOverlappingSameDayBlocks(blocks)) {
+      return;
+    }
     this._visualEdit = { ...this._visualEdit, blocks };
     this.requestUpdate();
   };
@@ -494,10 +502,23 @@ export class ScheduleManagerCard extends LitElement {
         ? timelineScaleTicksForWidth(this._editorFriseWidth)
         : DEFAULT_TIMELINE_SCALE_TICKS;
     return html`
-      <div class="timeline-scale-flex" aria-hidden="true">
+      <div
+        class="timeline-scale-flex"
+        style=${styleMap({
+          gridTemplateColumns: `repeat(${ticks.length}, minmax(2.25rem, 1fr))`,
+        })}
+        aria-hidden="true"
+      >
         ${ticks.map((t) => html`<span class="timeline-scale-flex-label">${t.label}</span>`)}
       </div>
     `;
+  }
+
+  /** Ordre de peinture : plages plus étroites au-dessus (données anciennes encore chevauchées). */
+  private sortTimelineSegmentsForPaint(segments: TimelineSegment[]): TimelineSegment[] {
+    return [...segments].sort((a, b) =>
+      a.leftPct !== b.leftPct ? a.leftPct - b.leftPct : b.widthPct - a.widthPct
+    );
   }
 
   /** Indices visuellement extrêmes sur la frise (coins arrondis type barre continue). */
@@ -531,7 +552,7 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private renderDayTimeline(blocks: TimeBlock[]) {
-    const segments = blocksToTimelineSegments(blocks);
+    const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
     const caps = this.segmentCapIndices(segments);
     const nowPct = nowPercentOfDay();
     return html`
@@ -929,9 +950,20 @@ export class ScheduleManagerCard extends LitElement {
     if (!cur) {
       return;
     }
-    const nextBlocks = [...this._visualEdit.blocks];
-    nextBlocks[sel] = { ...cur, ...patch } as TimeBlock;
-    this._visualEdit = { ...this._visualEdit, blocks: nextBlocks };
+    const next = { ...cur, ...patch } as TimeBlock;
+    if (!isOvernightBlock(next) && !sameDayBlockIntervalExclusiveEnd(next)) {
+      alert(
+        'Pour une plage sur une même journée, l’heure de fin doit être strictement après le début.'
+      );
+      return;
+    }
+    const trial = [...this._visualEdit.blocks];
+    trial[sel] = next;
+    if (hasOverlappingSameDayBlocks(trial)) {
+      alert('Les plages horaires ne peuvent pas se chevaucher.');
+      return;
+    }
+    this._visualEdit = { ...this._visualEdit, blocks: trial };
   }
 
   private visualAddBlock() {
@@ -941,8 +973,22 @@ export class ScheduleManagerCard extends LitElement {
     if (!this.applyPayloadEditorToVisualBlocks()) {
       return;
     }
-    const nb = defaultNewBlock();
+    const gap = suggestGapIntervalMinutes(this._visualEdit.blocks, 60);
+    const nb = gap
+      ? {
+          start_time: minuteToHaTimeForSchedule(gap.start),
+          end_time: minuteToHaTimeForSchedule(gap.end),
+          action_type: 'climate.set_preset_mode',
+          action_payload: { preset_mode: 'comfort' },
+        }
+      : defaultNewBlock();
     const nextBlocks = [...this._visualEdit.blocks, nb];
+    if (hasOverlappingSameDayBlocks(nextBlocks)) {
+      alert(
+        'Impossible d’ajouter une plage sans chevauchement : libérez du temps sur la journée ou supprimez une plage.'
+      );
+      return;
+    }
     const fp = blockFingerprint(nb);
     for (const b of this._visualEdit.blocks) {
       if (blockFingerprint(b) === fp) {
@@ -1059,6 +1105,12 @@ export class ScheduleManagerCard extends LitElement {
     if (dupAt >= 0) {
       alert(
         `Deux plages identiques (horaires + action + payload) — modifiez l’entrée n° ${dupAt + 1}.`
+      );
+      return;
+    }
+    if (hasOverlappingSameDayBlocks(blocks)) {
+      alert(
+        'Des plages se chevauchent sur la journée. Corrigez les horaires avant d’enregistrer.'
       );
       return;
     }
@@ -1237,7 +1289,7 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private renderEditorTimeline(blocks: TimeBlock[], selectedIndex: number) {
-    const segments = blocksToTimelineSegments(blocks);
+    const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
     const caps = this.segmentCapIndices(segments);
     const resizeHandles = allTimelineResizeHandles(blocks);
     const nowPct = nowPercentOfDay();
