@@ -275,14 +275,10 @@ const styles = i$4 `
   }
 
   .sm-scheduler-bar {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: stretch;
+    position: relative;
     width: 100%;
     height: 60px;
     box-sizing: border-box;
-    gap: 3px;
   }
 
   .sm-slot {
@@ -298,18 +294,19 @@ const styles = i$4 `
     white-space: normal;
     overflow: hidden;
     padding: 2px 4px;
-    /* Couleur de fond = inline (couleur par plage ou teinte par défaut) */
+    min-width: 3px;
+    /* position / taille / fond en inline (pourcentage exact sur 24 h) */
   }
 
   .sm-scheduler-track--editor .sm-slot {
     cursor: pointer;
   }
 
-  .sm-slot:first-child {
+  .sm-slot--cap-start {
     border-radius: 10px 0 0 10px;
   }
 
-  .sm-slot:last-child {
+  .sm-slot--cap-end {
     border-radius: 0 10px 10px 0;
   }
 
@@ -779,13 +776,13 @@ const styles = i$4 `
     touch-action: manipulation;
   }
 
-  /* Poignées type scheduler-card (.handle + disque sur fond carte) */
+  /* Poignées : centrées sur l’heure (translateX dans le style inline), pas deux disques noirs collés */
   .sm-scheduler-handle {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 36px;
-    margin-left: -18px;
+    width: 28px;
+    margin: 0;
     padding: 0;
     border: none;
     background: transparent;
@@ -797,22 +794,25 @@ const styles = i$4 `
     justify-content: center;
   }
 
-  .sm-scheduler-handle-disc {
-    width: 24px;
-    height: 24px;
+  /* Poignée visible sur thème sombre / clair */
+  .sm-scheduler-handle-grip {
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    background: var(--card-background-color);
+    box-sizing: border-box;
+    background: rgb(var(--rgb-primary-color, 33, 150, 243));
+    border: 2px solid rgba(255, 255, 255, 0.92);
     box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.22),
-      0 2px 8px rgba(0, 0, 0, 0.25);
+      0 0 0 1px rgba(0, 0, 0, 0.28),
+      0 2px 10px rgba(0, 0, 0, 0.35);
     pointer-events: none;
   }
 
-  .sm-scheduler-handle:hover .sm-scheduler-handle-disc {
-    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.95);
+  .sm-scheduler-handle:hover .sm-scheduler-handle-grip {
+    filter: brightness(1.12);
     box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.35),
-      0 3px 10px rgba(0, 0, 0, 0.3);
+      0 0 0 2px rgba(255, 255, 255, 0.5),
+      0 3px 12px rgba(0, 0, 0, 0.35);
   }
 
   .sm-select {
@@ -1342,6 +1342,15 @@ function defaultNewBlock() {
         action_payload: { preset_mode: 'comfort' },
     };
 }
+/** Ouverture éditeur ou planning vide : une plage couvrant la journée (comportement attendu type scheduler). */
+function defaultFullDayBlock() {
+    return {
+        start_time: '00:00:00',
+        end_time: '24:00:00',
+        action_type: 'climate.set_preset_mode',
+        action_payload: { preset_mode: 'comfort' },
+    };
+}
 function findDuplicateBlockIndex(blocks) {
     const seen = new Set();
     for (let i = 0; i < blocks.length; i++) {
@@ -1363,10 +1372,22 @@ function normalizeTimeForHa(t) {
     if (p.length < 2) {
         return '00:00:00';
     }
-    const h = Math.min(23, Math.max(0, parseInt(p[0] ?? '0', 10)));
-    const m = Math.min(59, Math.max(0, parseInt(p[1] ?? '0', 10)));
+    const hRaw = parseInt(p[0] ?? '0', 10);
+    const mRaw = parseInt(p[1] ?? '0', 10);
+    const secRaw = p[2] !== undefined && p[2] !== ''
+        ? parseInt(p[2] ?? '0', 10)
+        : 0;
+    if (!Number.isNaN(hRaw) &&
+        !Number.isNaN(mRaw) &&
+        hRaw === 24 &&
+        mRaw === 0 &&
+        (secRaw === 0 || Number.isNaN(secRaw))) {
+        return '24:00:00';
+    }
+    const h = Math.min(23, Math.max(0, hRaw));
+    const m = Math.min(59, Math.max(0, mRaw));
     const sec = p[2] !== undefined && p[2] !== ''
-        ? Math.min(59, Math.max(0, parseInt(p[2] ?? '0', 10)))
+        ? Math.min(59, Math.max(0, secRaw))
         : 0;
     if ([h, m, sec].some((n) => Number.isNaN(n))) {
         return '00:00:00';
@@ -1672,37 +1693,75 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     sortTimelineSegmentsForPaint(segments) {
         return [...segments].sort((a, b) => a.leftPct !== b.leftPct ? a.leftPct - b.leftPct : b.widthPct - a.widthPct);
     }
-    /** Styles flex par créneau (proportionnel à la journée, comme scheduler-card `computeSlotWidths`). */
-    schedulerSlotFlexStyle(widthPct, fill) {
+    /** Positionnement réel sur la journée (le flex-grow seul faisait occuper toute la barre à un seul bloc). */
+    schedulerSlotAbsoluteStyle(leftPct, widthPct, fill) {
         return o({
-            flexGrow: String(widthPct),
-            flexShrink: '1',
-            flexBasis: '0',
-            minWidth: '5px',
+            position: 'absolute',
+            left: `${leftPct}%`,
+            width: `${widthPct}%`,
+            top: '0',
+            height: '100%',
+            boxSizing: 'border-box',
             background: fill,
         });
     }
+    /** Coins arrondis uniquement sur le premier / dernier segment visible (gauche → droite). */
+    segmentCapIndices(segments) {
+        if (!segments.length) {
+            return { capStart: new Set(), capEnd: new Set() };
+        }
+        let minLeft = Infinity;
+        let maxRight = -Infinity;
+        let iStart = 0;
+        let iEnd = 0;
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            if (seg.leftPct < minLeft) {
+                minLeft = seg.leftPct;
+                iStart = i;
+            }
+            const right = seg.leftPct + seg.widthPct;
+            if (right > maxRight) {
+                maxRight = right;
+                iEnd = i;
+            }
+        }
+        return {
+            capStart: new Set([iStart]),
+            capEnd: new Set([iEnd]),
+        };
+    }
     renderDayTimeline(blocks) {
         const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
+        const caps = this.segmentCapIndices(segments);
+        const showNow = segments.length > 0;
         const nowPct = nowPercentOfDay();
         return x `
       <div class="timeline-frise sm-scheduler-frise" role="img" aria-label="Plages sur 24 heures">
         <div class="sm-scheduler-track">
           <div class="sm-scheduler-bar">
-            ${segments.map((s) => {
+            ${segments.map((s, i) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            const capS = caps.capStart.has(i) ? 'sm-slot--cap-start' : '';
+            const capE = caps.capEnd.has(i) ? 'sm-slot--cap-end' : '';
             return x `
-                <div class="sm-slot" style=${this.schedulerSlotFlexStyle(s.widthPct, fill)} title=${s.label}>
+                <div
+                  class="sm-slot ${capS} ${capE}"
+                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
+                  title=${s.label}
+                >
                   <span class="sm-slot-label">${s.label}</span>
                 </div>
               `;
         })}
           </div>
-          <div
-            class="timeline-now"
-            style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
-          ></div>
+          ${showNow
+            ? x `<div
+                class="timeline-now"
+                style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
+              ></div>`
+            : null}
         </div>
         ${this.renderSchedulerTimeScale('dashboard')}
       </div>
@@ -1815,7 +1874,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
     }
     openVisualEditor(schedule) {
-        const blocks = JSON.parse(JSON.stringify(schedule.time_blocks || []));
+        let blocks = JSON.parse(JSON.stringify(schedule.time_blocks || []));
+        if (!blocks.length) {
+            blocks = [defaultFullDayBlock()];
+        }
         this._visualEdit = {
             scheduleId: schedule.id,
             blocks,
@@ -2354,7 +2416,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     }
     renderEditorTimeline(blocks, selectedIndex) {
         const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
+        const caps = this.segmentCapIndices(segments);
         const resizeHandles = allTimelineResizeHandles(blocks);
+        const showNow = segments.length > 0;
         const nowPct = nowPercentOfDay();
         return x `
       <div
@@ -2367,14 +2431,16 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         </div>
         <div class="sm-scheduler-track sm-scheduler-track--editor">
           <div class="sm-scheduler-bar">
-            ${segments.map((s) => {
+            ${segments.map((s, i) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
             const sel = s.blockIndex === selectedIndex ? 'is-selected' : '';
+            const capS = caps.capStart.has(i) ? 'sm-slot--cap-start' : '';
+            const capE = caps.capEnd.has(i) ? 'sm-slot--cap-end' : '';
             return x `
                 <div
-                  class="sm-slot ${sel}"
-                  style=${this.schedulerSlotFlexStyle(s.widthPct, fill)}
+                  class="sm-slot ${sel} ${capS} ${capE}"
+                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
                   title=${s.label}
                   @click=${() => this.visualSelectBlock(s.blockIndex)}
                 >
@@ -2398,19 +2464,24 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
               <button
                 type="button"
                 class="sm-scheduler-handle"
-                style="left:${h.pct}%"
+                style=${o({
+                left: `${h.pct}%`,
+                transform: 'translateX(-50%)',
+            })}
                 aria-label=${label}
                 title=${title}
                 @pointerdown=${(e) => this.onResizePointerDown(e, h)}
               >
-                <span class="sm-scheduler-handle-disc"></span>
+                <span class="sm-scheduler-handle-grip"></span>
               </button>
             `;
         })}
-          <div
-            class="timeline-now"
-            style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
-          ></div>
+          ${showNow
+            ? x `<div
+                class="timeline-now"
+                style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
+              ></div>`
+            : null}
         </div>
         ${this.renderSchedulerTimeScale('editor')}
       </div>

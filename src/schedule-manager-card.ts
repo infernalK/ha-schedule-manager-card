@@ -97,6 +97,16 @@ function defaultNewBlock(): TimeBlock {
   };
 }
 
+/** Ouverture éditeur ou planning vide : une plage couvrant la journée (comportement attendu type scheduler). */
+function defaultFullDayBlock(): TimeBlock {
+  return {
+    start_time: '00:00:00',
+    end_time: '24:00:00',
+    action_type: 'climate.set_preset_mode',
+    action_payload: { preset_mode: 'comfort' },
+  };
+}
+
 function findDuplicateBlockIndex(blocks: TimeBlock[]): number {
   const seen = new Set<string>();
   for (let i = 0; i < blocks.length; i++) {
@@ -126,11 +136,26 @@ function normalizeTimeForHa(t: string): string {
   if (p.length < 2) {
     return '00:00:00';
   }
-  const h = Math.min(23, Math.max(0, parseInt(p[0] ?? '0', 10)));
-  const m = Math.min(59, Math.max(0, parseInt(p[1] ?? '0', 10)));
+  const hRaw = parseInt(p[0] ?? '0', 10);
+  const mRaw = parseInt(p[1] ?? '0', 10);
+  const secRaw =
+    p[2] !== undefined && p[2] !== ''
+      ? parseInt(p[2] ?? '0', 10)
+      : 0;
+  if (
+    !Number.isNaN(hRaw) &&
+    !Number.isNaN(mRaw) &&
+    hRaw === 24 &&
+    mRaw === 0 &&
+    (secRaw === 0 || Number.isNaN(secRaw))
+  ) {
+    return '24:00:00';
+  }
+  const h = Math.min(23, Math.max(0, hRaw));
+  const m = Math.min(59, Math.max(0, mRaw));
   const sec =
     p[2] !== undefined && p[2] !== ''
-      ? Math.min(59, Math.max(0, parseInt(p[2] ?? '0', 10)))
+      ? Math.min(59, Math.max(0, secRaw))
       : 0;
   if ([h, m, sec].some((n) => Number.isNaN(n))) {
     return '00:00:00';
@@ -497,38 +522,80 @@ export class ScheduleManagerCard extends LitElement {
     );
   }
 
-  /** Styles flex par créneau (proportionnel à la journée, comme scheduler-card `computeSlotWidths`). */
-  private schedulerSlotFlexStyle(widthPct: number, fill: string) {
+  /** Positionnement réel sur la journée (le flex-grow seul faisait occuper toute la barre à un seul bloc). */
+  private schedulerSlotAbsoluteStyle(leftPct: number, widthPct: number, fill: string) {
     return styleMap({
-      flexGrow: String(widthPct),
-      flexShrink: '1',
-      flexBasis: '0',
-      minWidth: '5px',
+      position: 'absolute',
+      left: `${leftPct}%`,
+      width: `${widthPct}%`,
+      top: '0',
+      height: '100%',
+      boxSizing: 'border-box',
       background: fill,
     });
   }
 
+  /** Coins arrondis uniquement sur le premier / dernier segment visible (gauche → droite). */
+  private segmentCapIndices(segments: TimelineSegment[]): {
+    capStart: Set<number>;
+    capEnd: Set<number>;
+  } {
+    if (!segments.length) {
+      return { capStart: new Set(), capEnd: new Set() };
+    }
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    let iStart = 0;
+    let iEnd = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (seg.leftPct < minLeft) {
+        minLeft = seg.leftPct;
+        iStart = i;
+      }
+      const right = seg.leftPct + seg.widthPct;
+      if (right > maxRight) {
+        maxRight = right;
+        iEnd = i;
+      }
+    }
+    return {
+      capStart: new Set([iStart]),
+      capEnd: new Set([iEnd]),
+    };
+  }
+
   private renderDayTimeline(blocks: TimeBlock[]) {
     const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
+    const caps = this.segmentCapIndices(segments);
+    const showNow = segments.length > 0;
     const nowPct = nowPercentOfDay();
     return html`
       <div class="timeline-frise sm-scheduler-frise" role="img" aria-label="Plages sur 24 heures">
         <div class="sm-scheduler-track">
           <div class="sm-scheduler-bar">
-            ${segments.map((s) => {
+            ${segments.map((s, i) => {
               const blk = blocks[s.blockIndex];
               const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+              const capS = caps.capStart.has(i) ? 'sm-slot--cap-start' : '';
+              const capE = caps.capEnd.has(i) ? 'sm-slot--cap-end' : '';
               return html`
-                <div class="sm-slot" style=${this.schedulerSlotFlexStyle(s.widthPct, fill)} title=${s.label}>
+                <div
+                  class="sm-slot ${capS} ${capE}"
+                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
+                  title=${s.label}
+                >
                   <span class="sm-slot-label">${s.label}</span>
                 </div>
               `;
             })}
           </div>
-          <div
-            class="timeline-now"
-            style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
-          ></div>
+          ${showNow
+            ? html`<div
+                class="timeline-now"
+                style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
+              ></div>`
+            : null}
         </div>
         ${this.renderSchedulerTimeScale('dashboard')}
       </div>
@@ -651,9 +718,10 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private openVisualEditor(schedule: Schedule) {
-    const blocks = JSON.parse(
-      JSON.stringify(schedule.time_blocks || [])
-    ) as TimeBlock[];
+    let blocks = JSON.parse(JSON.stringify(schedule.time_blocks || [])) as TimeBlock[];
+    if (!blocks.length) {
+      blocks = [defaultFullDayBlock()];
+    }
     this._visualEdit = {
       scheduleId: schedule.id,
       blocks,
@@ -1235,7 +1303,9 @@ export class ScheduleManagerCard extends LitElement {
 
   private renderEditorTimeline(blocks: TimeBlock[], selectedIndex: number) {
     const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
+    const caps = this.segmentCapIndices(segments);
     const resizeHandles = allTimelineResizeHandles(blocks);
+    const showNow = segments.length > 0;
     const nowPct = nowPercentOfDay();
     return html`
       <div
@@ -1248,14 +1318,16 @@ export class ScheduleManagerCard extends LitElement {
         </div>
         <div class="sm-scheduler-track sm-scheduler-track--editor">
           <div class="sm-scheduler-bar">
-            ${segments.map((s) => {
+            ${segments.map((s, i) => {
               const blk = blocks[s.blockIndex];
               const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
               const sel = s.blockIndex === selectedIndex ? 'is-selected' : '';
+              const capS = caps.capStart.has(i) ? 'sm-slot--cap-start' : '';
+              const capE = caps.capEnd.has(i) ? 'sm-slot--cap-end' : '';
               return html`
                 <div
-                  class="sm-slot ${sel}"
-                  style=${this.schedulerSlotFlexStyle(s.widthPct, fill)}
+                  class="sm-slot ${sel} ${capS} ${capE}"
+                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
                   title=${s.label}
                   @click=${() => this.visualSelectBlock(s.blockIndex)}
                 >
@@ -1281,19 +1353,24 @@ export class ScheduleManagerCard extends LitElement {
               <button
                 type="button"
                 class="sm-scheduler-handle"
-                style="left:${h.pct}%"
+                style=${styleMap({
+                  left: `${h.pct}%`,
+                  transform: 'translateX(-50%)',
+                })}
                 aria-label=${label}
                 title=${title}
                 @pointerdown=${(e: PointerEvent) => this.onResizePointerDown(e, h)}
               >
-                <span class="sm-scheduler-handle-disc"></span>
+                <span class="sm-scheduler-handle-grip"></span>
               </button>
             `;
           })}
-          <div
-            class="timeline-now"
-            style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
-          ></div>
+          ${showNow
+            ? html`<div
+                class="timeline-now"
+                style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
+              ></div>`
+            : null}
         </div>
         ${this.renderSchedulerTimeScale('editor')}
       </div>

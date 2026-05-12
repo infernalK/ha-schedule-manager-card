@@ -140,14 +140,10 @@ export const styles = css`
   }
 
   .sm-scheduler-bar {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: stretch;
+    position: relative;
     width: 100%;
     height: 60px;
     box-sizing: border-box;
-    gap: 3px;
   }
 
   .sm-slot {
@@ -163,18 +159,19 @@ export const styles = css`
     white-space: normal;
     overflow: hidden;
     padding: 2px 4px;
-    /* Couleur de fond = inline (couleur par plage ou teinte par défaut) */
+    min-width: 3px;
+    /* position / taille / fond en inline (pourcentage exact sur 24 h) */
   }
 
   .sm-scheduler-track--editor .sm-slot {
     cursor: pointer;
   }
 
-  .sm-slot:first-child {
+  .sm-slot--cap-start {
     border-radius: 10px 0 0 10px;
   }
 
-  .sm-slot:last-child {
+  .sm-slot--cap-end {
     border-radius: 0 10px 10px 0;
   }
 
@@ -644,13 +641,13 @@ export const styles = css`
     touch-action: manipulation;
   }
 
-  /* Poignées type scheduler-card (.handle + disque sur fond carte) */
+  /* Poignées : centrées sur l’heure (translateX dans le style inline), pas deux disques noirs collés */
   .sm-scheduler-handle {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 36px;
-    margin-left: -18px;
+    width: 28px;
+    margin: 0;
     padding: 0;
     border: none;
     background: transparent;
@@ -662,22 +659,25 @@ export const styles = css`
     justify-content: center;
   }
 
-  .sm-scheduler-handle-disc {
-    width: 24px;
-    height: 24px;
+  /* Poignée visible sur thème sombre / clair */
+  .sm-scheduler-handle-grip {
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    background: var(--card-background-color);
+    box-sizing: border-box;
+    background: rgb(var(--rgb-primary-color, 33, 150, 243));
+    border: 2px solid rgba(255, 255, 255, 0.92);
     box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.22),
-      0 2px 8px rgba(0, 0, 0, 0.25);
+      0 0 0 1px rgba(0, 0, 0, 0.28),
+      0 2px 10px rgba(0, 0, 0, 0.35);
     pointer-events: none;
   }
 
-  .sm-scheduler-handle:hover .sm-scheduler-handle-disc {
-    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.95);
+  .sm-scheduler-handle:hover .sm-scheduler-handle-grip {
+    filter: brightness(1.12);
     box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.35),
-      0 3px 10px rgba(0, 0, 0, 0.3);
+      0 0 0 2px rgba(255, 255, 255, 0.5),
+      0 3px 12px rgba(0, 0, 0, 0.35);
   }
 
   .sm-select {
