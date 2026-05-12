@@ -20,6 +20,7 @@ import {
   DEFAULT_TIMELINE_SCALE_TICKS,
   hasOverlappingSameDayBlocks,
   isOvernightBlock,
+  HA_END_OF_DAY_TIME,
   MINUTES_PER_DAY,
   minuteToHaTimeForSchedule,
   nowPercentOfDay,
@@ -101,7 +102,7 @@ function defaultNewBlock(): TimeBlock {
 function defaultFullDayBlock(): TimeBlock {
   return {
     start_time: '00:00:00',
-    end_time: '24:00:00',
+    end_time: HA_END_OF_DAY_TIME,
     action_type: 'climate.set_preset_mode',
     action_payload: { preset_mode: 'comfort' },
   };
@@ -149,7 +150,7 @@ function normalizeTimeForHa(t: string): string {
     mRaw === 0 &&
     (secRaw === 0 || Number.isNaN(secRaw))
   ) {
-    return '24:00:00';
+    return HA_END_OF_DAY_TIME;
   }
   const h = Math.min(23, Math.max(0, hRaw));
   const m = Math.min(59, Math.max(0, mRaw));
@@ -604,8 +605,8 @@ export class ScheduleManagerCard extends LitElement {
 
   private blocksToPayload(blocks: TimeBlock[]): TimeBlockServicePayload[] {
     return (blocks || []).map((b) => ({
-      start_time: String(b.start_time),
-      end_time: String(b.end_time),
+      start_time: normalizeTimeForHa(String(b.start_time)),
+      end_time: normalizeTimeForHa(String(b.end_time)),
       action_type: b.action_type,
       action_payload:
         typeof b.action_payload === 'object' && b.action_payload !== null

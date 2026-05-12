@@ -870,6 +870,11 @@ function entityMatchesDomains(entityId, domains) {
 }
 
 const MINUTES_PER_DAY = 24 * 60;
+/**
+ * Dernière heure acceptée par Home Assistant `cv.time` (pas de 24:00:00 dans les services).
+ * Utilisée pour fin de journée / drag maximal.
+ */
+const HA_END_OF_DAY_TIME = '23:59:59';
 /** Aligné sur l’usage du scheduler-card (pas de 15 min pour le drag des séparateurs). */
 const TIMELINE_DRAG_SNAP_MINUTES = 15;
 function snapMinutesToGrid(totalMinutes, stepMinutes) {
@@ -1025,11 +1030,11 @@ function nowPercentOfDay() {
     const m = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
     return (m / MINUTES_PER_DAY) * 100;
 }
-/** Pour le drag sur la frise : minute 1440 → fin de journée (évite 00:00 après modulo). */
+/** Pour le drag sur la frise : minute ≥ fin de journée → `HA_END_OF_DAY_TIME` (pas 24:00:00). */
 function minuteToHaTimeForSchedule(totalMinutes) {
     const r = Math.round(totalMinutes);
     if (r >= MINUTES_PER_DAY) {
-        return '24:00:00';
+        return HA_END_OF_DAY_TIME;
     }
     if (r <= 0) {
         return '00:00:00';
@@ -1346,7 +1351,7 @@ function defaultNewBlock() {
 function defaultFullDayBlock() {
     return {
         start_time: '00:00:00',
-        end_time: '24:00:00',
+        end_time: HA_END_OF_DAY_TIME,
         action_type: 'climate.set_preset_mode',
         action_payload: { preset_mode: 'comfort' },
     };
@@ -1382,7 +1387,7 @@ function normalizeTimeForHa(t) {
         hRaw === 24 &&
         mRaw === 0 &&
         (secRaw === 0 || Number.isNaN(secRaw))) {
-        return '24:00:00';
+        return HA_END_OF_DAY_TIME;
     }
     const h = Math.min(23, Math.max(0, hRaw));
     const m = Math.min(59, Math.max(0, mRaw));
@@ -1769,8 +1774,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     }
     blocksToPayload(blocks) {
         return (blocks || []).map((b) => ({
-            start_time: String(b.start_time),
-            end_time: String(b.end_time),
+            start_time: normalizeTimeForHa(String(b.start_time)),
+            end_time: normalizeTimeForHa(String(b.end_time)),
             action_type: b.action_type,
             action_payload: typeof b.action_payload === 'object' && b.action_payload !== null
                 ? b.action_payload

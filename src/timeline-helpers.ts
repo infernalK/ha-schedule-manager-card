@@ -2,6 +2,12 @@ import type { TimeBlock } from './types';
 
 export const MINUTES_PER_DAY = 24 * 60;
 
+/**
+ * Dernière heure acceptée par Home Assistant `cv.time` (pas de 24:00:00 dans les services).
+ * Utilisée pour fin de journée / drag maximal.
+ */
+export const HA_END_OF_DAY_TIME = '23:59:59';
+
 /** Aligné sur l’usage du scheduler-card (pas de 15 min pour le drag des séparateurs). */
 export const TIMELINE_DRAG_SNAP_MINUTES = 15;
 
@@ -204,11 +210,11 @@ export function minutesToHaTime(totalMinutes: number): string {
   return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
 }
 
-/** Pour le drag sur la frise : minute 1440 → fin de journée (évite 00:00 après modulo). */
+/** Pour le drag sur la frise : minute ≥ fin de journée → `HA_END_OF_DAY_TIME` (pas 24:00:00). */
 export function minuteToHaTimeForSchedule(totalMinutes: number): string {
   const r = Math.round(totalMinutes);
   if (r >= MINUTES_PER_DAY) {
-    return '24:00:00';
+    return HA_END_OF_DAY_TIME;
   }
   if (r <= 0) {
     return '00:00:00';
