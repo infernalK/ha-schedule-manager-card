@@ -42,6 +42,35 @@ const TIMELINE_SCALE_TICKS: {
   { pct: 100, label: '24:00', align: 'end' },
 ];
 
+/** Inline pour forcer la barre horizontale (certains thèmes HA neutralisent le CSS du shadow DOM). */
+function railLayoutInlineStyle(): string {
+  return [
+    'position:relative',
+    'display:block',
+    'width:100%',
+    'min-height:56px',
+    'height:56px',
+    'overflow:hidden',
+    'border-radius:999px',
+    'box-sizing:border-box',
+  ].join(';');
+}
+
+function segmentLayoutInlineStyle(leftPct: number, widthPct: number, fill: string): string {
+  return [
+    'position:absolute',
+    'top:0',
+    'height:100%',
+    `left:${leftPct}%`,
+    `width:${widthPct}%`,
+    'box-sizing:border-box',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    `background:${fill}`,
+  ].join(';');
+}
+
 /** Pastilles de couleur rapides (+ valeur du sélecteur). */
 const BLOCK_COLOR_PRESETS = [
   '#2196F3',
@@ -440,17 +469,9 @@ export class ScheduleManagerCard extends LitElement {
 
   private renderTimelineScale() {
     return html`
-      <div class="timeline-scale" aria-hidden="true">
+      <div class="timeline-scale-flex" aria-hidden="true">
         ${TIMELINE_SCALE_TICKS.map(
-          (t) => html`
-            <div
-              class="timeline-scale-item timeline-scale-item--${t.align}"
-              style="left:${t.pct}%"
-            >
-              <span class="timeline-scale-mark"></span>
-              <span class="timeline-scale-label">${t.label}</span>
-            </div>
-          `
+          (t) => html`<span class="timeline-scale-flex-label">${t.label}</span>`
         )}
       </div>
     `;
@@ -465,21 +486,27 @@ export class ScheduleManagerCard extends LitElement {
         role="img"
         aria-label="Plages sur 24 heures"
       >
-        <div class="timeline-rail timeline-rail--continuous">
+        <div
+          class="timeline-rail timeline-rail--continuous"
+          style=${railLayoutInlineStyle()}
+        >
           ${segments.map((s) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
             return html`
               <div
                 class="timeline-segment timeline-segment--hvac"
-                style="left:${s.leftPct}%;width:${s.widthPct}%;background:${fill}"
+                style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
                 title=${s.label}
               >
                 <span class="timeline-segment-label">${s.label}</span>
               </div>
             `;
           })}
-          <div class="timeline-now" style="left:${nowPct}%"></div>
+          <div
+            class="timeline-now"
+            style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
+          ></div>
         </div>
         ${this.renderTimelineScale()}
       </div>
@@ -1095,7 +1122,10 @@ export class ScheduleManagerCard extends LitElement {
         <div class="sm-frise-heading">
           <span class="sm-frise-heading-label">Heure</span>
         </div>
-        <div class="timeline-rail sm-editor-rail timeline-rail--continuous">
+        <div
+          class="timeline-rail sm-editor-rail timeline-rail--continuous"
+          style=${railLayoutInlineStyle()}
+        >
           ${segments.map((s) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
@@ -1104,7 +1134,7 @@ export class ScheduleManagerCard extends LitElement {
                 class="timeline-segment timeline-segment--hvac ${s.blockIndex === selectedIndex
                   ? 'is-selected'
                   : ''}"
-                style="left:${s.leftPct}%;width:${s.widthPct}%;background:${fill}"
+                style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
                 title=${s.label}
                 @click=${() => this.visualSelectBlock(s.blockIndex)}
               >
@@ -1117,14 +1147,17 @@ export class ScheduleManagerCard extends LitElement {
               <button
                 type="button"
                 class="timeline-boundary-handle"
-                style="left:${tb.pct}%"
+                style="position:absolute;left:${tb.pct}%"
                 aria-label="Ajuster la transition entre deux plages"
                 title="Glisser pour déplacer la transition"
                 @pointerdown=${(e: PointerEvent) => this.onBoundaryPointerDown(e, tb)}
               ></button>
             `
           )}
-          <div class="timeline-now" style="left:${nowPct}%"></div>
+          <div
+            class="timeline-now"
+            style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
+          ></div>
         </div>
         ${this.renderTimelineScale()}
       </div>

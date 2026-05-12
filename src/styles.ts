@@ -3,10 +3,16 @@ import { css } from 'lit';
 export const styles = css`
   :host {
     display: block;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .card {
     padding: 16px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .schedule {
@@ -116,6 +122,10 @@ export const styles = css`
     border-radius: 8px;
     background: rgba(127, 127, 127, 0.08);
     border: 1px solid var(--divider-color);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .timeline-frise--hvac {
@@ -132,6 +142,8 @@ export const styles = css`
     background: rgba(127, 127, 127, 0.18);
     overflow: hidden;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .timeline-rail--continuous {
@@ -147,6 +159,7 @@ export const styles = css`
       inset 0 2px 8px rgba(0, 0, 0, 0.45),
       inset 0 -1px 0 rgba(255, 255, 255, 0.06),
       0 1px 0 rgba(255, 255, 255, 0.05);
+    isolation: isolate;
   }
 
   .timeline-segment {
@@ -205,49 +218,37 @@ export const styles = css`
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   }
 
-  .timeline-scale {
-    position: relative;
-    height: 26px;
-    margin-top: 8px;
-    margin-bottom: 2px;
-  }
-
-  .timeline-scale-item {
-    position: absolute;
-    bottom: 0;
+  /* Échelle horaire en ligne (évite les bugs de positionnement absolu dans HA) */
+  .timeline-scale-flex {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .timeline-scale-item--start {
-    transform: translateX(0);
+    flex-direction: row;
+    justify-content: space-between;
     align-items: flex-start;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 10px;
+    padding: 2px 2px 0;
+    box-sizing: border-box;
+    gap: 2px;
   }
 
-  .timeline-scale-item--center {
-    transform: translateX(-50%);
-  }
-
-  .timeline-scale-item--end {
-    transform: translateX(-100%);
-    align-items: flex-end;
-  }
-
-  .timeline-scale-mark {
-    width: 1px;
-    height: 9px;
-    border-radius: 1px;
-    background: rgba(255, 255, 255, 0.28);
-  }
-
-  .timeline-scale-label {
-    font-size: 0.65rem;
+  .timeline-scale-flex-label {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 0.78rem;
     font-weight: 500;
     color: var(--secondary-text-color);
     white-space: nowrap;
+    text-align: center;
     letter-spacing: 0.02em;
+  }
+
+  .timeline-scale-flex-label:first-child {
+    text-align: left;
+  }
+
+  .timeline-scale-flex-label:last-child {
+    text-align: right;
   }
 
   .sm-frise-heading {
@@ -337,6 +338,7 @@ export const styles = css`
 
   .sm-modal {
     width: min(100%, 520px);
+    max-width: calc(100vw - 24px);
     margin-top: 8px;
     margin-bottom: 24px;
     border-radius: 12px;
@@ -344,6 +346,8 @@ export const styles = css`
     border: 1px solid var(--divider-color);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
     color: var(--primary-text-color);
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .sm-modal-head {
@@ -469,6 +473,7 @@ export const styles = css`
 
   .sm-color-row {
     display: flex;
+    flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;

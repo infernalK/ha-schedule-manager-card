@@ -125,6 +125,9 @@ class ScheduleManagerServices {
 const styles = i$2 `
   :host {
     display: block;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .card {
@@ -238,6 +241,10 @@ const styles = i$2 `
     border-radius: 8px;
     background: rgba(127, 127, 127, 0.08);
     border: 1px solid var(--divider-color);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .timeline-frise--hvac {
@@ -254,6 +261,8 @@ const styles = i$2 `
     background: rgba(127, 127, 127, 0.18);
     overflow: hidden;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .timeline-rail--continuous {
@@ -269,6 +278,7 @@ const styles = i$2 `
       inset 0 2px 8px rgba(0, 0, 0, 0.45),
       inset 0 -1px 0 rgba(255, 255, 255, 0.06),
       0 1px 0 rgba(255, 255, 255, 0.05);
+    isolation: isolate;
   }
 
   .timeline-segment {
@@ -327,49 +337,37 @@ const styles = i$2 `
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   }
 
-  .timeline-scale {
-    position: relative;
-    height: 26px;
-    margin-top: 8px;
-    margin-bottom: 2px;
-  }
-
-  .timeline-scale-item {
-    position: absolute;
-    bottom: 0;
+  /* Échelle horaire en ligne (évite les bugs de positionnement absolu dans HA) */
+  .timeline-scale-flex {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .timeline-scale-item--start {
-    transform: translateX(0);
+    flex-direction: row;
+    justify-content: space-between;
     align-items: flex-start;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 10px;
+    padding: 2px 2px 0;
+    box-sizing: border-box;
+    gap: 2px;
   }
 
-  .timeline-scale-item--center {
-    transform: translateX(-50%);
-  }
-
-  .timeline-scale-item--end {
-    transform: translateX(-100%);
-    align-items: flex-end;
-  }
-
-  .timeline-scale-mark {
-    width: 1px;
-    height: 9px;
-    border-radius: 1px;
-    background: rgba(255, 255, 255, 0.28);
-  }
-
-  .timeline-scale-label {
-    font-size: 0.65rem;
+  .timeline-scale-flex-label {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 0.78rem;
     font-weight: 500;
     color: var(--secondary-text-color);
     white-space: nowrap;
+    text-align: center;
     letter-spacing: 0.02em;
+  }
+
+  .timeline-scale-flex-label:first-child {
+    text-align: left;
+  }
+
+  .timeline-scale-flex-label:last-child {
+    text-align: right;
   }
 
   .sm-frise-heading {
@@ -459,6 +457,7 @@ const styles = i$2 `
 
   .sm-modal {
     width: min(100%, 520px);
+    max-width: calc(100vw - 24px);
     margin-top: 8px;
     margin-bottom: 24px;
     border-radius: 12px;
@@ -466,6 +465,8 @@ const styles = i$2 `
     border: 1px solid var(--divider-color);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
     color: var(--primary-text-color);
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .sm-modal-head {
@@ -591,6 +592,7 @@ const styles = i$2 `
 
   .sm-color-row {
     display: flex;
+    flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
@@ -1112,6 +1114,33 @@ const TIMELINE_SCALE_TICKS = [
     { pct: 75, label: '18:00', align: 'center' },
     { pct: 100, label: '24:00', align: 'end' },
 ];
+/** Inline pour forcer la barre horizontale (certains thèmes HA neutralisent le CSS du shadow DOM). */
+function railLayoutInlineStyle() {
+    return [
+        'position:relative',
+        'display:block',
+        'width:100%',
+        'min-height:56px',
+        'height:56px',
+        'overflow:hidden',
+        'border-radius:999px',
+        'box-sizing:border-box',
+    ].join(';');
+}
+function segmentLayoutInlineStyle(leftPct, widthPct, fill) {
+    return [
+        'position:absolute',
+        'top:0',
+        'height:100%',
+        `left:${leftPct}%`,
+        `width:${widthPct}%`,
+        'box-sizing:border-box',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        `background:${fill}`,
+    ].join(';');
+}
 /** Pastilles de couleur rapides (+ valeur du sélecteur). */
 const BLOCK_COLOR_PRESETS = [
     '#2196F3',
@@ -1443,16 +1472,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     }
     renderTimelineScale() {
         return x `
-      <div class="timeline-scale" aria-hidden="true">
-        ${TIMELINE_SCALE_TICKS.map((t) => x `
-            <div
-              class="timeline-scale-item timeline-scale-item--${t.align}"
-              style="left:${t.pct}%"
-            >
-              <span class="timeline-scale-mark"></span>
-              <span class="timeline-scale-label">${t.label}</span>
-            </div>
-          `)}
+      <div class="timeline-scale-flex" aria-hidden="true">
+        ${TIMELINE_SCALE_TICKS.map((t) => x `<span class="timeline-scale-flex-label">${t.label}</span>`)}
       </div>
     `;
     }
@@ -1465,21 +1486,27 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         role="img"
         aria-label="Plages sur 24 heures"
       >
-        <div class="timeline-rail timeline-rail--continuous">
+        <div
+          class="timeline-rail timeline-rail--continuous"
+          style=${railLayoutInlineStyle()}
+        >
           ${segments.map((s) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
             return x `
               <div
                 class="timeline-segment timeline-segment--hvac"
-                style="left:${s.leftPct}%;width:${s.widthPct}%;background:${fill}"
+                style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
                 title=${s.label}
               >
                 <span class="timeline-segment-label">${s.label}</span>
               </div>
             `;
         })}
-          <div class="timeline-now" style="left:${nowPct}%"></div>
+          <div
+            class="timeline-now"
+            style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
+          ></div>
         </div>
         ${this.renderTimelineScale()}
       </div>
@@ -2047,7 +2074,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         <div class="sm-frise-heading">
           <span class="sm-frise-heading-label">Heure</span>
         </div>
-        <div class="timeline-rail sm-editor-rail timeline-rail--continuous">
+        <div
+          class="timeline-rail sm-editor-rail timeline-rail--continuous"
+          style=${railLayoutInlineStyle()}
+        >
           ${segments.map((s) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
@@ -2056,7 +2086,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                 class="timeline-segment timeline-segment--hvac ${s.blockIndex === selectedIndex
                 ? 'is-selected'
                 : ''}"
-                style="left:${s.leftPct}%;width:${s.widthPct}%;background:${fill}"
+                style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
                 title=${s.label}
                 @click=${() => this.visualSelectBlock(s.blockIndex)}
               >
@@ -2068,13 +2098,16 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
               <button
                 type="button"
                 class="timeline-boundary-handle"
-                style="left:${tb.pct}%"
+                style="position:absolute;left:${tb.pct}%"
                 aria-label="Ajuster la transition entre deux plages"
                 title="Glisser pour déplacer la transition"
                 @pointerdown=${(e) => this.onBoundaryPointerDown(e, tb)}
               ></button>
             `)}
-          <div class="timeline-now" style="left:${nowPct}%"></div>
+          <div
+            class="timeline-now"
+            style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
+          ></div>
         </div>
         ${this.renderTimelineScale()}
       </div>
