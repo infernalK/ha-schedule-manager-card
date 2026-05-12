@@ -448,6 +448,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     statusEntityId() {
         return this.config?.status_entity?.trim() || DEFAULT_STATUS_ENTITY;
     }
+    withCanonicalId(storageKey, schedule) {
+        if (schedule.id === storageKey) {
+            return schedule;
+        }
+        return { ...schedule, id: storageKey };
+    }
     getSchedulesRecord() {
         const state = this.hass?.states[this.statusEntityId()];
         const attrs = state?.attributes;
@@ -504,8 +510,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     renderSchedulesList(scheduleIds, schedulesMap) {
         const totalCount = Object.keys(schedulesMap).length;
         const list = scheduleIds.length > 0
-            ? scheduleIds.map((id) => schedulesMap[id]).filter(Boolean)
-            : Object.values(schedulesMap);
+            ? scheduleIds
+                .map((id) => {
+                const sch = schedulesMap[id];
+                return sch ? this.withCanonicalId(id, sch) : undefined;
+            })
+                .filter((s) => Boolean(s))
+            : Object.entries(schedulesMap).map(([id, sch]) => this.withCanonicalId(id, sch));
         if (!list.length) {
             if (scheduleIds.length > 0 && totalCount > 0) {
                 return x `
@@ -557,12 +568,22 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!group) {
             return x `<div>Groupe introuvable.</div>`;
         }
+        const refs = group.schedules || [];
+        const missing = refs.filter((id) => !schedulesMap[id]);
         return x `
       <div class="group">
         <h3>${group.name}</h3>
-        ${group.schedules.map((scheduleId) => {
+        ${missing.length
+            ? x `<div class="empty-hint">
+              Références de planning absentes du stockage :
+              <code class="inline">${missing.join(', ')}</code>
+            </div>`
+            : null}
+        ${refs
+            .filter((scheduleId) => schedulesMap[scheduleId])
+            .map((scheduleId) => {
             const schedule = schedulesMap[scheduleId];
-            return this.renderSchedule(schedule, group);
+            return this.renderSchedule(this.withCanonicalId(scheduleId, schedule), group);
         })}
       </div>
     `;

@@ -93,6 +93,18 @@ export class ScheduleManagerCard extends LitElement {
     return this.config?.status_entity?.trim() || DEFAULT_STATUS_ENTITY;
   }
 
+  /**
+   * La clé de l’objet `attributes.schedules` est l’identifiant canonique côté stockage.
+   * Si le champ `id` à l’intérieur diverge (fichier JSON édité, ancien bug), les actions / suppression
+   * visaient le mauvais UUID — d’où un planning « fantôme » ou introuvable.
+   */
+  private withCanonicalId(storageKey: string, schedule: Schedule): Schedule {
+    if (schedule.id === storageKey) {
+      return schedule;
+    }
+    return { ...schedule, id: storageKey };
+  }
+
   private getSchedulesRecord(): Record<string, Schedule> {
     const state = this.hass?.states[this.statusEntityId()];
     const attrs = state?.attributes as Record<string, unknown> | undefined;
@@ -156,10 +168,17 @@ export class ScheduleManagerCard extends LitElement {
 
   private renderSchedulesList(scheduleIds: string[], schedulesMap: Record<string, Schedule>) {
     const totalCount = Object.keys(schedulesMap).length;
-    const list =
+    const list: Schedule[] =
       scheduleIds.length > 0
-        ? scheduleIds.map((id) => schedulesMap[id]).filter(Boolean)
-        : Object.values(schedulesMap);
+        ? scheduleIds
+            .map((id) => {
+              const sch = schedulesMap[id];
+              return sch ? this.withCanonicalId(id, sch) : undefined;
+            })
+            .filter((s): s is Schedule => Boolean(s))
+        : Object.entries(schedulesMap).map(([id, sch]) =>
+            this.withCanonicalId(id, sch)
+          );
 
     if (!list.length) {
       if (scheduleIds.length > 0 && totalCount > 0) {
@@ -218,13 +237,27 @@ export class ScheduleManagerCard extends LitElement {
       return html`<div>Groupe introuvable.</div>`;
     }
 
+    const refs = group.schedules || [];
+    const missing = refs.filter((id) => !schedulesMap[id]);
+
     return html`
       <div class="group">
         <h3>${group.name}</h3>
-        ${group.schedules.map((scheduleId) => {
-          const schedule = schedulesMap[scheduleId];
-          return this.renderSchedule(schedule, group);
-        })}
+        ${missing.length
+          ? html`<div class="empty-hint">
+              Références de planning absentes du stockage :
+              <code class="inline">${missing.join(', ')}</code>
+            </div>`
+          : null}
+        ${refs
+          .filter((scheduleId) => schedulesMap[scheduleId])
+          .map((scheduleId) => {
+            const schedule = schedulesMap[scheduleId]!;
+            return this.renderSchedule(
+              this.withCanonicalId(scheduleId, schedule),
+              group
+            );
+          })}
       </div>
     `;
   }
