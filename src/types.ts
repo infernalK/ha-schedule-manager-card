@@ -26,4 +26,6 @@ export interface CardConfig {
   type: string;
   group_id?: string;
   schedule_ids?: string[];
+  /** Capteur Schedule Manager exposant les attributs schedules / groups (défaut: sensor.schedule_manager_status) */
+  status_entity?: string;
 }
