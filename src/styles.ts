@@ -642,8 +642,19 @@ export const styles = css`
     margin-right: auto;
   }
 
+  .sm-editor-rail.timeline-rail--continuous {
+    overflow: visible;
+  }
+
+  .sm-editor-frise {
+    overflow-x: visible;
+    overflow-y: visible;
+  }
+
   .sm-editor-rail .timeline-segment {
     cursor: pointer;
+    touch-action: manipulation;
+    z-index: 2;
   }
 
   .sm-editor-rail .timeline-segment:hover:not(.is-selected) {
@@ -666,7 +677,7 @@ export const styles = css`
       0 0 0 1px rgba(0, 0, 0, 0.22),
       0 3px 10px rgba(0, 0, 0, 0.35);
     cursor: ew-resize;
-    z-index: 6;
+    z-index: 10;
     touch-action: none;
     display: flex;
     align-items: center;

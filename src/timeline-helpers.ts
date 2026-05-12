@@ -204,6 +204,20 @@ export function minutesToHaTime(totalMinutes: number): string {
   return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
 }
 
+/** Pour le drag sur la frise : minute 1440 → fin de journée (évite 00:00 après modulo). */
+export function minuteToHaTimeForSchedule(totalMinutes: number): string {
+  const r = Math.round(totalMinutes);
+  if (r >= MINUTES_PER_DAY) {
+    return '24:00:00';
+  }
+  if (r <= 0) {
+    return '00:00:00';
+  }
+  const h = Math.floor(r / 60);
+  const mm = r % 60;
+  return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
+}
+
 function isOvernightBlock(b: TimeBlock): boolean {
   const s = parseToMinutes(b.start_time);
   const e = parseToMinutes(b.end_time);
@@ -263,5 +277,96 @@ export function touchBoundariesBetweenBlocks(blocks: TimeBlock[]): TouchBoundary
     });
   }
 
+  return out;
+}
+
+/** Poignée unique sur la frise : jonction entre deux plages ou bord début/fin d’une plage. */
+export type TimelineResizeHandle =
+  | {
+      kind: 'junction';
+      pct: number;
+      leftBlockIndex: number;
+      rightBlockIndex: number;
+      minMinute: number;
+      maxMinute: number;
+    }
+  | {
+      kind: 'start';
+      pct: number;
+      blockIndex: number;
+      minMinute: number;
+      maxMinute: number;
+    }
+  | {
+      kind: 'end';
+      pct: number;
+      blockIndex: number;
+      minMinute: number;
+      maxMinute: number;
+    };
+
+/**
+ * Toutes les poignées redimensionnement : jonctions entre blocs adjacents + début/fin libres.
+ * Sans cela, une seule plage ou des plages séparées par un trou n’avaient aucune poignée.
+ */
+export function allTimelineResizeHandles(blocks: TimeBlock[]): TimelineResizeHandle[] {
+  const list = blocks || [];
+  const internals = touchBoundariesBetweenBlocks(list);
+  const junctionMinutes = new Set<number>();
+  for (const tb of internals) {
+    const L = list[tb.leftBlockIndex];
+    if (L) {
+      junctionMinutes.add(Math.round(parseToMinutes(L.end_time)));
+    }
+  }
+
+  const out: TimelineResizeHandle[] = internals.map((tb) => ({
+    kind: 'junction' as const,
+    pct: tb.pct,
+    leftBlockIndex: tb.leftBlockIndex,
+    rightBlockIndex: tb.rightBlockIndex,
+    minMinute: tb.minMinute,
+    maxMinute: tb.maxMinute,
+  }));
+
+  const gap = TIMELINE_DRAG_SNAP_MINUTES;
+
+  for (let i = 0; i < list.length; i++) {
+    const b = list[i];
+    if (isOvernightBlock(b)) {
+      continue;
+    }
+
+    const sm = Math.round(parseToMinutes(b.start_time));
+    const em = Math.round(parseToMinutes(b.end_time));
+
+    if (!junctionMinutes.has(sm)) {
+      const maxStart = em - gap;
+      if (maxStart >= 0 && sm <= maxStart) {
+        out.push({
+          kind: 'start',
+          pct: (sm / MINUTES_PER_DAY) * 100,
+          blockIndex: i,
+          minMinute: 0,
+          maxMinute: maxStart,
+        });
+      }
+    }
+
+    if (!junctionMinutes.has(em)) {
+      const minEnd = sm + gap;
+      if (minEnd <= MINUTES_PER_DAY) {
+        out.push({
+          kind: 'end',
+          pct: Math.min(100, (em / MINUTES_PER_DAY) * 100),
+          blockIndex: i,
+          minMinute: minEnd,
+          maxMinute: MINUTES_PER_DAY,
+        });
+      }
+    }
+  }
+
+  out.sort((a, b) => a.pct - b.pct);
   return out;
 }

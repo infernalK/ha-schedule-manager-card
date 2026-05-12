@@ -305,6 +305,17 @@ const styles = i$2 `
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 
+  /* Extrémités visuelles de la barre (continuité type scheduler-card / pilule) */
+  .timeline-segment--cap-start {
+    border-top-left-radius: 999px;
+    border-bottom-left-radius: 999px;
+  }
+
+  .timeline-segment--cap-end {
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+  }
+
   .timeline-frise--hvac .timeline-segment.is-selected {
     z-index: 3;
     box-shadow:
@@ -753,8 +764,19 @@ const styles = i$2 `
     margin-right: auto;
   }
 
+  .sm-editor-rail.timeline-rail--continuous {
+    overflow: visible;
+  }
+
+  .sm-editor-frise {
+    overflow-x: visible;
+    overflow-y: visible;
+  }
+
   .sm-editor-rail .timeline-segment {
     cursor: pointer;
+    touch-action: manipulation;
+    z-index: 2;
   }
 
   .sm-editor-rail .timeline-segment:hover:not(.is-selected) {
@@ -764,24 +786,25 @@ const styles = i$2 `
   .timeline-boundary-handle {
     position: absolute;
     top: 50%;
-    width: 30px;
-    height: 30px;
-    margin-top: -15px;
-    margin-left: -15px;
+    width: 26px;
+    height: 26px;
+    margin-top: -13px;
+    margin-left: -13px;
     padding: 0;
     border: none;
-    border-radius: 50%;
-    background: rgba(245, 248, 252, 0.96);
+    border-radius: 11px 11px 3px 11px;
+    transform: rotate(45deg);
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.92);
     box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.28),
+      0 0 0 1px rgba(0, 0, 0, 0.22),
       0 3px 10px rgba(0, 0, 0, 0.35);
     cursor: ew-resize;
-    z-index: 6;
+    z-index: 10;
     touch-action: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(55, 71, 79, 0.85);
+    color: var(--text-primary-color, #fff);
     font-size: 11px;
     font-weight: 600;
     line-height: 1;
@@ -791,15 +814,15 @@ const styles = i$2 `
     content: '\2039 \203A';
     letter-spacing: 0.02em;
     pointer-events: none;
-    font-size: 12px;
+    font-size: 11px;
+    transform: rotate(-45deg);
   }
 
   .timeline-boundary-handle:hover {
-    background: var(--primary-color, #2196f3);
-    color: var(--text-primary-color, #fff);
+    filter: brightness(1.12);
     box-shadow:
       0 0 0 2px rgba(255, 255, 255, 0.35),
-      0 4px 12px rgba(33, 150, 243, 0.55);
+      0 4px 12px rgba(0, 0, 0, 0.35);
   }
 
   .sm-select {
@@ -857,6 +880,54 @@ function entityMatchesDomains(entityId, domains) {
 }
 
 const MINUTES_PER_DAY = 24 * 60;
+/** Aligné sur l’usage du scheduler-card (pas de 15 min pour le drag des séparateurs). */
+const TIMELINE_DRAG_SNAP_MINUTES = 15;
+function snapMinutesToGrid(totalMinutes, stepMinutes) {
+    if (stepMinutes <= 1) {
+        return Math.round(totalMinutes);
+    }
+    return Math.round(totalMinutes / stepMinutes) * stepMinutes;
+}
+const DEFAULT_TIMELINE_SCALE_TICKS = [
+    { pct: 0, label: '00:00', align: 'start' },
+    { pct: 25, label: '06:00', align: 'center' },
+    { pct: 50, label: '12:00', align: 'center' },
+    { pct: 75, label: '18:00', align: 'center' },
+    { pct: 100, label: '24:00', align: 'end' },
+];
+/**
+ * Heures affichées sous la frise selon la largeur (même logique que scheduler-card :
+ * éviter les étiquettes trop serrées sur petit écran).
+ */
+function timelineScaleTicksForWidth(widthPx) {
+    if (!widthPx || widthPx < 120) {
+        return DEFAULT_TIMELINE_SCALE_TICKS;
+    }
+    const allowedStepHours = [1, 2, 3, 4, 6, 8, 12];
+    const targetPxPerHour = 100;
+    let stepH = Math.ceil(24 / (widthPx / targetPxPerHour));
+    if (stepH < 1) {
+        stepH = 1;
+    }
+    while (stepH <= 24 && !allowedStepHours.includes(stepH)) {
+        stepH++;
+    }
+    if (stepH > 12) {
+        stepH = 12;
+    }
+    const inner = Math.max(0, Math.floor(24 / stepH) - 1);
+    const nums = [
+        0,
+        ...Array.from({ length: inner }, (_, i) => (i + 1) * stepH),
+        24,
+    ];
+    const uniq = [...new Set(nums)].sort((a, b) => a - b);
+    return uniq.map((h, i) => ({
+        pct: (h / 24) * 100,
+        label: h === 24 ? '24:00' : `${String(h).padStart(2, '0')}:00`,
+        align: i === 0 ? 'start' : i === uniq.length - 1 ? 'end' : 'center',
+    }));
+}
 /** Métadonnée carte uniquement — à retirer si le payload est passé tel quel à un service HA. */
 const SCHEDULE_MANAGER_COLOR_KEY = 'schedule_manager_color';
 function parseToMinutes(t) {
@@ -964,13 +1035,17 @@ function nowPercentOfDay() {
     const m = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
     return (m / MINUTES_PER_DAY) * 100;
 }
-function minutesToHaTime(totalMinutes) {
-    let m = Math.round(totalMinutes) % MINUTES_PER_DAY;
-    if (m < 0) {
-        m += MINUTES_PER_DAY;
+/** Pour le drag sur la frise : minute 1440 → fin de journée (évite 00:00 après modulo). */
+function minuteToHaTimeForSchedule(totalMinutes) {
+    const r = Math.round(totalMinutes);
+    if (r >= MINUTES_PER_DAY) {
+        return '24:00:00';
     }
-    const h = Math.floor(m / 60);
-    const mm = m % 60;
+    if (r <= 0) {
+        return '00:00:00';
+    }
+    const h = Math.floor(r / 60);
+    const mm = r % 60;
     return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
 }
 function isOvernightBlock(b) {
@@ -1017,6 +1092,64 @@ function touchBoundariesBetweenBlocks(blocks) {
             maxMinute: maxM,
         });
     }
+    return out;
+}
+/**
+ * Toutes les poignées redimensionnement : jonctions entre blocs adjacents + début/fin libres.
+ * Sans cela, une seule plage ou des plages séparées par un trou n’avaient aucune poignée.
+ */
+function allTimelineResizeHandles(blocks) {
+    const list = blocks || [];
+    const internals = touchBoundariesBetweenBlocks(list);
+    const junctionMinutes = new Set();
+    for (const tb of internals) {
+        const L = list[tb.leftBlockIndex];
+        if (L) {
+            junctionMinutes.add(Math.round(parseToMinutes(L.end_time)));
+        }
+    }
+    const out = internals.map((tb) => ({
+        kind: 'junction',
+        pct: tb.pct,
+        leftBlockIndex: tb.leftBlockIndex,
+        rightBlockIndex: tb.rightBlockIndex,
+        minMinute: tb.minMinute,
+        maxMinute: tb.maxMinute,
+    }));
+    const gap = TIMELINE_DRAG_SNAP_MINUTES;
+    for (let i = 0; i < list.length; i++) {
+        const b = list[i];
+        if (isOvernightBlock(b)) {
+            continue;
+        }
+        const sm = Math.round(parseToMinutes(b.start_time));
+        const em = Math.round(parseToMinutes(b.end_time));
+        if (!junctionMinutes.has(sm)) {
+            const maxStart = em - gap;
+            if (maxStart >= 0 && sm <= maxStart) {
+                out.push({
+                    kind: 'start',
+                    pct: (sm / MINUTES_PER_DAY) * 100,
+                    blockIndex: i,
+                    minMinute: 0,
+                    maxMinute: maxStart,
+                });
+            }
+        }
+        if (!junctionMinutes.has(em)) {
+            const minEnd = sm + gap;
+            if (minEnd <= MINUTES_PER_DAY) {
+                out.push({
+                    kind: 'end',
+                    pct: Math.min(100, (em / MINUTES_PER_DAY) * 100),
+                    blockIndex: i,
+                    minMinute: minEnd,
+                    maxMinute: MINUTES_PER_DAY,
+                });
+            }
+        }
+    }
+    out.sort((a, b) => a.pct - b.pct);
     return out;
 }
 
@@ -1109,14 +1242,6 @@ ScheduleManagerCardEditor = __decorate([
 
 const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-/** Graduations alignées sur la journée (comme le planning clim intégré HA). */
-const TIMELINE_SCALE_TICKS = [
-    { pct: 0, label: '00:00', align: 'start' },
-    { pct: 25, label: '06:00', align: 'center' },
-    { pct: 50, label: '12:00', align: 'center' },
-    { pct: 75, label: '18:00', align: 'center' },
-    { pct: 100, label: '24:00', align: 'end' },
-];
 /** Inline pour forcer la barre horizontale (certains thèmes HA neutralisent le CSS du shadow DOM). */
 function railLayoutInlineStyle() {
     return [
@@ -1264,6 +1389,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._visualEdit = null;
         this._visualPayloadStr = '';
         this._visualEntityPickerNonce = 0;
+        /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
+        this._editorFriseWidth = 0;
         /** Glisser-déposer sur la frise (pas @state : évite un render à chaque pixel). */
         this._boundaryDrag = null;
         this._onBoundaryMove = (ev) => {
@@ -1275,16 +1402,33 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             const x = Math.max(0, Math.min(rect.width, ev.clientX - rect.left));
             const pct = (x / rect.width) * 100;
             let m = Math.round((pct / 100) * MINUTES_PER_DAY);
+            m = snapMinutesToGrid(m, TIMELINE_DRAG_SNAP_MINUTES);
             m = Math.max(d.minM, Math.min(d.maxM, m));
-            const ha = minutesToHaTime(m);
+            const ha = minuteToHaTimeForSchedule(m);
             const blocks = [...this._visualEdit.blocks];
-            const L = blocks[d.leftIdx];
-            const R = blocks[d.rightIdx];
-            if (!L || !R) {
-                return;
+            if (d.mode === 'junction') {
+                const L = blocks[d.leftIdx];
+                const R = blocks[d.rightIdx];
+                if (!L || !R) {
+                    return;
+                }
+                blocks[d.leftIdx] = { ...L, end_time: ha };
+                blocks[d.rightIdx] = { ...R, start_time: ha };
             }
-            blocks[d.leftIdx] = { ...L, end_time: ha };
-            blocks[d.rightIdx] = { ...R, start_time: ha };
+            else if (d.mode === 'start') {
+                const B = blocks[d.blockIdx];
+                if (!B) {
+                    return;
+                }
+                blocks[d.blockIdx] = { ...B, start_time: ha };
+            }
+            else {
+                const B = blocks[d.blockIdx];
+                if (!B) {
+                    return;
+                }
+                blocks[d.blockIdx] = { ...B, end_time: ha };
+            }
             this._visualEdit = { ...this._visualEdit, blocks };
             this.requestUpdate();
         };
@@ -1321,11 +1465,18 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (changed.has('hass') && this.hass) {
             void this.requestUpdate();
         }
-        if (changed.has('_visualEdit') && this._visualEdit) {
-            requestAnimationFrame(() => {
-                const m = this.shadowRoot?.querySelector('.sm-modal');
-                m?.focus();
-            });
+        if (changed.has('_visualEdit')) {
+            if (this._visualEdit) {
+                this._syncEditorFriseObserver();
+                requestAnimationFrame(() => {
+                    const m = this.shadowRoot?.querySelector('.sm-modal');
+                    m?.focus();
+                });
+            }
+            else {
+                this._detachEditorFriseObserver();
+                this._editorFriseWidth = 0;
+            }
         }
     }
     statusEntityId() {
@@ -1473,15 +1624,45 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
       </div>
     `;
     }
-    renderTimelineScale() {
+    renderTimelineScale(mode) {
+        const ticks = mode === 'editor'
+            ? timelineScaleTicksForWidth(this._editorFriseWidth)
+            : DEFAULT_TIMELINE_SCALE_TICKS;
         return x `
       <div class="timeline-scale-flex" aria-hidden="true">
-        ${TIMELINE_SCALE_TICKS.map((t) => x `<span class="timeline-scale-flex-label">${t.label}</span>`)}
+        ${ticks.map((t) => x `<span class="timeline-scale-flex-label">${t.label}</span>`)}
       </div>
     `;
     }
+    /** Indices visuellement extrêmes sur la frise (coins arrondis type barre continue). */
+    segmentCapIndices(segments) {
+        if (!segments.length) {
+            return { capStart: new Set(), capEnd: new Set() };
+        }
+        let minLeft = Infinity;
+        let maxRight = -Infinity;
+        let iStart = 0;
+        let iEnd = 0;
+        for (let i = 0; i < segments.length; i++) {
+            const s = segments[i];
+            if (s.leftPct < minLeft) {
+                minLeft = s.leftPct;
+                iStart = i;
+            }
+            const right = s.leftPct + s.widthPct;
+            if (right > maxRight) {
+                maxRight = right;
+                iEnd = i;
+            }
+        }
+        return {
+            capStart: new Set([iStart]),
+            capEnd: new Set([iEnd]),
+        };
+    }
     renderDayTimeline(blocks) {
         const segments = blocksToTimelineSegments(blocks);
+        const caps = this.segmentCapIndices(segments);
         const nowPct = nowPercentOfDay();
         return x `
       <div
@@ -1493,12 +1674,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
           class="timeline-rail timeline-rail--continuous"
           style=${railLayoutInlineStyle()}
         >
-          ${segments.map((s) => {
+          ${segments.map((s, i) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            const capStart = caps.capStart.has(i) ? 'timeline-segment--cap-start' : '';
+            const capEnd = caps.capEnd.has(i) ? 'timeline-segment--cap-end' : '';
             return x `
               <div
-                class="timeline-segment timeline-segment--hvac"
+                class="timeline-segment timeline-segment--hvac ${capStart} ${capEnd}"
                 style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
                 title=${s.label}
               >
@@ -1511,7 +1694,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
           ></div>
         </div>
-        ${this.renderTimelineScale()}
+        ${this.renderTimelineScale('dashboard')}
       </div>
     `;
     }
@@ -1637,6 +1820,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     }
     closeVisualEditor() {
         this.endBoundaryDrag();
+        this._detachEditorFriseObserver();
+        this._editorFriseWidth = 0;
         this._visualEdit = null;
         this._visualPayloadStr = '';
     }
@@ -1658,8 +1843,40 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     disconnectedCallback() {
         super.disconnectedCallback();
         this.endBoundaryDrag();
+        this._detachEditorFriseObserver();
     }
-    onBoundaryPointerDown(ev, tb) {
+    _detachEditorFriseObserver() {
+        this._editorFriseResizeObserver?.disconnect();
+        this._editorFriseResizeObserver = undefined;
+    }
+    _syncEditorFriseObserver() {
+        this._detachEditorFriseObserver();
+        if (!this._visualEdit) {
+            return;
+        }
+        requestAnimationFrame(() => {
+            if (!this._visualEdit) {
+                return;
+            }
+            const el = this.shadowRoot?.querySelector('.sm-editor-frise');
+            if (!el) {
+                return;
+            }
+            const ro = new ResizeObserver((entries) => {
+                const w = entries[0]?.contentRect.width ?? 0;
+                if (Math.abs(w - this._editorFriseWidth) > 0.5) {
+                    this._editorFriseWidth = w;
+                }
+            });
+            ro.observe(el);
+            this._editorFriseResizeObserver = ro;
+            const w = el.getBoundingClientRect().width;
+            if (w > 0 && Math.abs(w - this._editorFriseWidth) > 0.5) {
+                this._editorFriseWidth = w;
+            }
+        });
+    }
+    onResizePointerDown(ev, h) {
         ev.preventDefault();
         ev.stopPropagation();
         if (!this._visualEdit) {
@@ -1671,15 +1888,40 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
         this.endBoundaryDrag();
         const handle = ev.currentTarget;
-        this._boundaryDrag = {
-            pointerId: ev.pointerId,
-            leftIdx: tb.leftBlockIndex,
-            rightIdx: tb.rightBlockIndex,
-            minM: tb.minMinute,
-            maxM: tb.maxMinute,
-            rail,
-            handle,
-        };
+        if (h.kind === 'junction') {
+            this._boundaryDrag = {
+                pointerId: ev.pointerId,
+                mode: 'junction',
+                leftIdx: h.leftBlockIndex,
+                rightIdx: h.rightBlockIndex,
+                minM: h.minMinute,
+                maxM: h.maxMinute,
+                rail,
+                handle,
+            };
+        }
+        else if (h.kind === 'start') {
+            this._boundaryDrag = {
+                pointerId: ev.pointerId,
+                mode: 'start',
+                blockIdx: h.blockIndex,
+                minM: h.minMinute,
+                maxM: h.maxMinute,
+                rail,
+                handle,
+            };
+        }
+        else {
+            this._boundaryDrag = {
+                pointerId: ev.pointerId,
+                mode: 'end',
+                blockIdx: h.blockIndex,
+                minM: h.minMinute,
+                maxM: h.maxMinute,
+                rail,
+                handle,
+            };
+        }
         handle.setPointerCapture(ev.pointerId);
         window.addEventListener('pointermove', this._onBoundaryMove);
         window.addEventListener('pointerup', this._onBoundaryUp);
@@ -1702,7 +1944,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             this._visualPayloadStr = '{}';
         }
     }
-    applyPayloadEditorToVisualBlocks() {
+    /**
+     * Applique le JSON du formulaire à la plage sélectionnée (sans alerte).
+     * Utilisé avant changement de sélection : JSON invalide ne bloque plus le clic sur la frise.
+     */
+    mergeJsonPayloadIntoSelectedBlock() {
         if (!this._visualEdit) {
             return false;
         }
@@ -1715,7 +1961,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             const raw = this._visualPayloadStr.trim() || '{}';
             const extra = JSON.parse(raw);
             if (typeof extra !== 'object' || extra === null || Array.isArray(extra)) {
-                throw new Error('invalid');
+                return false;
             }
             delete extra.entity_id;
             delete extra[SCHEDULE_MANAGER_COLOR_KEY];
@@ -1740,9 +1986,15 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             return true;
         }
         catch {
-            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu).');
             return false;
         }
+    }
+    applyPayloadEditorToVisualBlocks() {
+        const ok = this.mergeJsonPayloadIntoSelectedBlock();
+        if (!ok) {
+            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu).');
+        }
+        return ok;
     }
     visualToggleDay(day) {
         if (!this._visualEdit) {
@@ -1765,11 +2017,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!this._visualEdit) {
             return;
         }
-        if (!this.applyPayloadEditorToVisualBlocks()) {
-            return;
-        }
+        this.mergeJsonPayloadIntoSelectedBlock();
         const max = this._visualEdit.blocks.length - 1;
         const idx = Math.max(0, Math.min(index, max));
+        if (idx === this._visualEdit.selectedIndex) {
+            return;
+        }
         this._visualEdit = { ...this._visualEdit, selectedIndex: idx };
         this.syncPayloadStrFromSelection();
     }
@@ -2066,7 +2319,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     }
     renderEditorTimeline(blocks, selectedIndex) {
         const segments = blocksToTimelineSegments(blocks);
-        const boundaries = touchBoundariesBetweenBlocks(blocks);
+        const caps = this.segmentCapIndices(segments);
+        const resizeHandles = allTimelineResizeHandles(blocks);
         const nowPct = nowPercentOfDay();
         return x `
       <div
@@ -2081,14 +2335,16 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
           class="timeline-rail sm-editor-rail timeline-rail--continuous"
           style=${railLayoutInlineStyle()}
         >
-          ${segments.map((s) => {
+          ${segments.map((s, i) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            const capStart = caps.capStart.has(i) ? 'timeline-segment--cap-start' : '';
+            const capEnd = caps.capEnd.has(i) ? 'timeline-segment--cap-end' : '';
             return x `
               <div
                 class="timeline-segment timeline-segment--hvac ${s.blockIndex === selectedIndex
                 ? 'is-selected'
-                : ''}"
+                : ''} ${capStart} ${capEnd}"
                 style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
                 title=${s.label}
                 @click=${() => this.visualSelectBlock(s.blockIndex)}
@@ -2097,22 +2353,38 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
               </div>
             `;
         })}
-          ${boundaries.map((tb) => x `
+          ${resizeHandles.map((h) => {
+            const label = h.kind === 'junction'
+                ? 'Ajuster la transition entre deux plages'
+                : h.kind === 'start'
+                    ? 'Déplacer le début de la plage'
+                    : 'Déplacer la fin de la plage';
+            const title = h.kind === 'junction'
+                ? 'Glisser pour déplacer la transition'
+                : h.kind === 'start'
+                    ? 'Glisser pour modifier l’heure de début'
+                    : 'Glisser pour modifier l’heure de fin';
+            return x `
               <button
                 type="button"
-                class="timeline-boundary-handle"
-                style="position:absolute;left:${tb.pct}%"
-                aria-label="Ajuster la transition entre deux plages"
-                title="Glisser pour déplacer la transition"
-                @pointerdown=${(e) => this.onBoundaryPointerDown(e, tb)}
+                class="timeline-boundary-handle ${h.kind === 'start'
+                ? 'timeline-boundary-handle--edge-start'
+                : h.kind === 'end'
+                    ? 'timeline-boundary-handle--edge-end'
+                    : ''}"
+                style="position:absolute;left:${h.pct}%"
+                aria-label=${label}
+                title=${title}
+                @pointerdown=${(e) => this.onResizePointerDown(e, h)}
               ></button>
-            `)}
+            `;
+        })}
           <div
             class="timeline-now"
             style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
           ></div>
         </div>
-        ${this.renderTimelineScale()}
+        ${this.renderTimelineScale('editor')}
       </div>
     `;
     }
@@ -2345,6 +2617,9 @@ __decorate([
 __decorate([
     t()
 ], ScheduleManagerCard.prototype, "_visualEntityPickerNonce", void 0);
+__decorate([
+    t()
+], ScheduleManagerCard.prototype, "_editorFriseWidth", void 0);
 ScheduleManagerCard = __decorate([
     e$1('schedule-manager-card')
 ], ScheduleManagerCard);

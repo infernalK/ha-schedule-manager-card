@@ -13,19 +13,19 @@ import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
 import { domainsForActionType, entityMatchesDomains } from './entity-domains';
 import {
+  allTimelineResizeHandles,
   blockTimelineFill,
   blocksToTimelineSegments,
   DEFAULT_TIMELINE_SCALE_TICKS,
   MINUTES_PER_DAY,
-  minutesToHaTime,
+  minuteToHaTimeForSchedule,
   nowPercentOfDay,
   SCHEDULE_MANAGER_COLOR_KEY,
   snapMinutesToGrid,
   TIMELINE_DRAG_SNAP_MINUTES,
   timelineScaleTicksForWidth,
-  touchBoundariesBetweenBlocks,
+  type TimelineResizeHandle,
   type TimelineSegment,
-  type TouchBoundary,
 } from './timeline-helpers';
 
 import './editor';
@@ -218,15 +218,17 @@ export class ScheduleManagerCard extends LitElement {
   /** Glisser-déposer sur la frise (pas @state : évite un render à chaque pixel). */
   private _boundaryDrag:
     | null
-    | {
+    | ({
         pointerId: number;
-        leftIdx: number;
-        rightIdx: number;
         minM: number;
         maxM: number;
         rail: HTMLElement;
         handle: HTMLElement;
-      } = null;
+      } & (
+        | { mode: 'junction'; leftIdx: number; rightIdx: number }
+        | { mode: 'start'; blockIdx: number }
+        | { mode: 'end'; blockIdx: number }
+      )) = null;
 
   private _onBoundaryMove = (ev: PointerEvent) => {
     const d = this._boundaryDrag;
@@ -239,15 +241,31 @@ export class ScheduleManagerCard extends LitElement {
     let m = Math.round((pct / 100) * MINUTES_PER_DAY);
     m = snapMinutesToGrid(m, TIMELINE_DRAG_SNAP_MINUTES);
     m = Math.max(d.minM, Math.min(d.maxM, m));
-    const ha = minutesToHaTime(m);
+    const ha = minuteToHaTimeForSchedule(m);
     const blocks = [...this._visualEdit.blocks];
-    const L = blocks[d.leftIdx];
-    const R = blocks[d.rightIdx];
-    if (!L || !R) {
-      return;
+
+    if (d.mode === 'junction') {
+      const L = blocks[d.leftIdx];
+      const R = blocks[d.rightIdx];
+      if (!L || !R) {
+        return;
+      }
+      blocks[d.leftIdx] = { ...L, end_time: ha };
+      blocks[d.rightIdx] = { ...R, start_time: ha };
+    } else if (d.mode === 'start') {
+      const B = blocks[d.blockIdx];
+      if (!B) {
+        return;
+      }
+      blocks[d.blockIdx] = { ...B, start_time: ha };
+    } else {
+      const B = blocks[d.blockIdx];
+      if (!B) {
+        return;
+      }
+      blocks[d.blockIdx] = { ...B, end_time: ha };
     }
-    blocks[d.leftIdx] = { ...L, end_time: ha };
-    blocks[d.rightIdx] = { ...R, start_time: ha };
+
     this._visualEdit = { ...this._visualEdit, blocks };
     this.requestUpdate();
   };
@@ -745,7 +763,7 @@ export class ScheduleManagerCard extends LitElement {
     });
   }
 
-  private onBoundaryPointerDown(ev: PointerEvent, tb: TouchBoundary) {
+  private onResizePointerDown(ev: PointerEvent, h: TimelineResizeHandle) {
     ev.preventDefault();
     ev.stopPropagation();
     if (!this._visualEdit) {
@@ -759,15 +777,38 @@ export class ScheduleManagerCard extends LitElement {
     }
     this.endBoundaryDrag();
     const handle = ev.currentTarget as HTMLElement;
-    this._boundaryDrag = {
-      pointerId: ev.pointerId,
-      leftIdx: tb.leftBlockIndex,
-      rightIdx: tb.rightBlockIndex,
-      minM: tb.minMinute,
-      maxM: tb.maxMinute,
-      rail,
-      handle,
-    };
+    if (h.kind === 'junction') {
+      this._boundaryDrag = {
+        pointerId: ev.pointerId,
+        mode: 'junction',
+        leftIdx: h.leftBlockIndex,
+        rightIdx: h.rightBlockIndex,
+        minM: h.minMinute,
+        maxM: h.maxMinute,
+        rail,
+        handle,
+      };
+    } else if (h.kind === 'start') {
+      this._boundaryDrag = {
+        pointerId: ev.pointerId,
+        mode: 'start',
+        blockIdx: h.blockIndex,
+        minM: h.minMinute,
+        maxM: h.maxMinute,
+        rail,
+        handle,
+      };
+    } else {
+      this._boundaryDrag = {
+        pointerId: ev.pointerId,
+        mode: 'end',
+        blockIdx: h.blockIndex,
+        minM: h.minMinute,
+        maxM: h.maxMinute,
+        rail,
+        handle,
+      };
+    }
     handle.setPointerCapture(ev.pointerId);
     window.addEventListener('pointermove', this._onBoundaryMove);
     window.addEventListener('pointerup', this._onBoundaryUp);
@@ -795,7 +836,11 @@ export class ScheduleManagerCard extends LitElement {
     }
   }
 
-  private applyPayloadEditorToVisualBlocks(): boolean {
+  /**
+   * Applique le JSON du formulaire à la plage sélectionnée (sans alerte).
+   * Utilisé avant changement de sélection : JSON invalide ne bloque plus le clic sur la frise.
+   */
+  private mergeJsonPayloadIntoSelectedBlock(): boolean {
     if (!this._visualEdit) {
       return false;
     }
@@ -808,7 +853,7 @@ export class ScheduleManagerCard extends LitElement {
       const raw = this._visualPayloadStr.trim() || '{}';
       const extra = JSON.parse(raw) as Record<string, unknown>;
       if (typeof extra !== 'object' || extra === null || Array.isArray(extra)) {
-        throw new Error('invalid');
+        return false;
       }
       delete extra.entity_id;
       delete extra[SCHEDULE_MANAGER_COLOR_KEY];
@@ -832,9 +877,16 @@ export class ScheduleManagerCard extends LitElement {
       this._visualEdit = { ...this._visualEdit, blocks: nextBlocks };
       return true;
     } catch {
-      alert('Payload JSON invalide pour la plage sélectionnée (objet attendu).');
       return false;
     }
+  }
+
+  private applyPayloadEditorToVisualBlocks(): boolean {
+    const ok = this.mergeJsonPayloadIntoSelectedBlock();
+    if (!ok) {
+      alert('Payload JSON invalide pour la plage sélectionnée (objet attendu).');
+    }
+    return ok;
   }
 
   private visualToggleDay(day: number) {
@@ -858,11 +910,12 @@ export class ScheduleManagerCard extends LitElement {
     if (!this._visualEdit) {
       return;
     }
-    if (!this.applyPayloadEditorToVisualBlocks()) {
-      return;
-    }
+    this.mergeJsonPayloadIntoSelectedBlock();
     const max = this._visualEdit.blocks.length - 1;
     const idx = Math.max(0, Math.min(index, max));
+    if (idx === this._visualEdit.selectedIndex) {
+      return;
+    }
     this._visualEdit = { ...this._visualEdit, selectedIndex: idx };
     this.syncPayloadStrFromSelection();
   }
@@ -1186,7 +1239,7 @@ export class ScheduleManagerCard extends LitElement {
   private renderEditorTimeline(blocks: TimeBlock[], selectedIndex: number) {
     const segments = blocksToTimelineSegments(blocks);
     const caps = this.segmentCapIndices(segments);
-    const boundaries = touchBoundariesBetweenBlocks(blocks);
+    const resizeHandles = allTimelineResizeHandles(blocks);
     const nowPct = nowPercentOfDay();
     return html`
       <div
@@ -1219,18 +1272,34 @@ export class ScheduleManagerCard extends LitElement {
               </div>
             `;
           })}
-          ${boundaries.map(
-            (tb) => html`
+          ${resizeHandles.map((h) => {
+            const label =
+              h.kind === 'junction'
+                ? 'Ajuster la transition entre deux plages'
+                : h.kind === 'start'
+                  ? 'Déplacer le début de la plage'
+                  : 'Déplacer la fin de la plage';
+            const title =
+              h.kind === 'junction'
+                ? 'Glisser pour déplacer la transition'
+                : h.kind === 'start'
+                  ? 'Glisser pour modifier l’heure de début'
+                  : 'Glisser pour modifier l’heure de fin';
+            return html`
               <button
                 type="button"
-                class="timeline-boundary-handle"
-                style="position:absolute;left:${tb.pct}%"
-                aria-label="Ajuster la transition entre deux plages"
-                title="Glisser pour déplacer la transition"
-                @pointerdown=${(e: PointerEvent) => this.onBoundaryPointerDown(e, tb)}
+                class="timeline-boundary-handle ${h.kind === 'start'
+                  ? 'timeline-boundary-handle--edge-start'
+                  : h.kind === 'end'
+                    ? 'timeline-boundary-handle--edge-end'
+                    : ''}"
+                style="position:absolute;left:${h.pct}%"
+                aria-label=${label}
+                title=${title}
+                @pointerdown=${(e: PointerEvent) => this.onResizePointerDown(e, h)}
               ></button>
-            `
-          )}
+            `;
+          })}
           <div
             class="timeline-now"
             style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
