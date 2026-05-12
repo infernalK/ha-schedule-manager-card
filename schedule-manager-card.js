@@ -1240,6 +1240,8 @@ function timelineResizeHandlesForSelection(blocks, selectedIndex) {
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
     constructor() {
         super(...arguments);
+        /** True si l’utilisateur a vidé le capteur — ne pas réappliquer le défaut automatiquement. */
+        this._userClearedStatusEntity = false;
         /** Réduit la liste aux capteurs « Schedule Manager » (nom ou attribut schedules). */
         this._statusEntityFilter = (entityId) => {
             if (entityId === SCHEDULE_MANAGER_STATUS_ENTITY_ID) {
@@ -1261,30 +1263,118 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
             ...config,
             type: 'custom:schedule-manager-card',
         };
+        this._userClearedStatusEntity = false;
+    }
+    updated(changed) {
+        super.updated(changed);
+        if (changed.has('hass') || changed.has('config')) {
+            this._maybeApplyDefaultStatusEntity();
+        }
+    }
+    /** Présélectionne le capteur d’état standard si aucun n’est configuré et qu’il existe. */
+    _maybeApplyDefaultStatusEntity() {
+        if (this._userClearedStatusEntity || !this.hass) {
+            return;
+        }
+        if (!this.hass.states[SCHEDULE_MANAGER_STATUS_ENTITY_ID]) {
+            return;
+        }
+        if (this._config?.status_entity?.trim()) {
+            return;
+        }
+        this._patchConfig({ status_entity: SCHEDULE_MANAGER_STATUS_ENTITY_ID });
+    }
+    _resolvedStatusEntityId() {
+        return this._config?.status_entity?.trim() || SCHEDULE_MANAGER_STATUS_ENTITY_ID;
+    }
+    /** Valeur affichée dans le sélecteur (vide si l’utilisateur a explicitement retiré le capteur). */
+    _statusEntityPickerValue() {
+        const v = this._config?.status_entity?.trim();
+        if (v) {
+            return v;
+        }
+        if (this._userClearedStatusEntity) {
+            return '';
+        }
+        return SCHEDULE_MANAGER_STATUS_ENTITY_ID;
+    }
+    _schedulesRecord() {
+        const st = this.hass?.states[this._resolvedStatusEntityId()];
+        const raw = st?.attributes?.schedules;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+            return {};
+        }
+        return raw;
+    }
+    _scheduleEntries() {
+        const rec = this._schedulesRecord();
+        return Object.entries(rec)
+            .map(([id, sch]) => ({
+            id,
+            name: typeof sch?.name === 'string' && sch.name.trim() ? sch.name.trim() : id,
+        }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    }
+    _allScheduleIds() {
+        return this._scheduleEntries().map((e) => e.id);
+    }
+    /** Filtrage actif uniquement si `schedule_ids` est une liste non vide. */
+    _isScheduleChecked(scheduleId) {
+        const explicit = this._config?.schedule_ids;
+        if (!explicit || explicit.length === 0) {
+            return true;
+        }
+        return explicit.includes(scheduleId);
+    }
+    _onScheduleCheck(ev, scheduleId) {
+        const t = ev.currentTarget;
+        const checked = t.checked;
+        const allIds = this._allScheduleIds();
+        if (allIds.length === 0) {
+            return;
+        }
+        const explicit = this._config?.schedule_ids;
+        let selected = new Set(explicit && explicit.length > 0 ? explicit : allIds);
+        if (checked) {
+            selected.add(scheduleId);
+        }
+        else {
+            if (selected.size <= 1) {
+                t.checked = true;
+                return;
+            }
+            selected.delete(scheduleId);
+        }
+        const arr = Array.from(selected).sort();
+        const allOn = arr.length === allIds.length && allIds.every((id) => selected.has(id));
+        this._patchConfig({
+            schedule_ids: allOn ? undefined : arr,
+        });
     }
     render() {
         const hass = this.hass;
         if (!hass) {
             return x `<div class="card-config">Chargement du tableau de bord…</div>`;
         }
+        const entries = this._scheduleEntries();
+        const entityMissing = !hass.states[this._resolvedStatusEntityId()];
         return x `
       <div class="card-config">
         <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
             label="Capteur d’état Schedule Manager"
-            .value=${this._config?.status_entity ?? ''}
+            .value=${this._statusEntityPickerValue()}
             .includeDomains=${['sensor']}
             .entityFilter=${this._statusEntityFilter}
             .allowCustomEntity=${true}
             @value-changed=${this._statusEntityChanged}
           ></ha-entity-picker>
           <p class="hint">
-            Choisissez le capteur créé par l’intégration
-            <strong>Schedule Manager</strong>, en principe
-            <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>.
-            Il expose les plannings dans ses attributs — ce n’est pas un capteur « statut » quelconque
-            (Prusa, Pi-hole, etc.). Laissez le champ vide pour utiliser cette valeur par défaut.
+            En général une seule entité :
+            <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>
+            (présélectionnée si elle existe). Autre capteur seulement si vous avez plusieurs entrées
+            Schedule Manager.
           </p>
         </div>
         <div class="field-block">
@@ -1294,25 +1384,44 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
             @input=${this._groupIdChanged}
           ></ha-textfield>
           <p class="hint">
-            Renseignez l’UUID d’un <strong>groupe</strong> défini dans Schedule Manager pour n’afficher
-            que ce groupe (excluant la liste ci‑dessous). Sinon laissez vide : la carte affiche une
-            liste de plannings selon le champ suivant.
+            UUID d’un groupe exclusif pour n’afficher que ce groupe. Vide = liste de plannings
+            ci‑dessous.
           </p>
         </div>
         <div class="field-block">
-          <ha-textfield
-            label="Plannings à afficher (optionnel)"
-            .value=${this._config?.schedule_ids?.join(', ') ?? ''}
-            placeholder="Vide = tous les plannings"
-            @input=${this._scheduleIdsChanged}
-          ></ha-textfield>
-          <p class="hint">
-            Une ou plusieurs UUID de plannings, séparées par des virgules.
-            <strong>Vide</strong> = afficher <strong>tous</strong> les plannings du capteur.
-            Les UUID se trouvent sous
-            <code class="inline">schedules</code> dans les attributs du capteur (Outils de développement
-            → États), ou dans le fichier de stockage de l’intégration.
-          </p>
+          ${entityMissing
+            ? x `
+                <p class="hint">
+                  Capteur
+                  <code class="inline">${this._resolvedStatusEntityId()}</code>
+                  introuvable — vérifiez l’intégration Schedule Manager.
+                </p>
+              `
+            : entries.length === 0
+                ? x `
+                  <p class="hint">
+                    Aucun planning dans les attributs du capteur pour l’instant. Créez un planning
+                    depuis la carte ou le service
+                    <code class="inline">schedule_manager.create_schedule</code>.
+                  </p>
+                `
+                : x `
+                  <div class="schedule-list-title">Plannings à afficher sur la carte</div>
+                  <p class="hint">
+                    Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un
+                    planning (au moins un reste visible).
+                  </p>
+                  <div class="schedule-list">
+                    ${entries.map((row) => x `
+                        <ha-formfield label=${row.name}>
+                          <ha-checkbox
+                            .checked=${this._isScheduleChecked(row.id)}
+                            @change=${(e) => this._onScheduleCheck(e, row.id)}
+                          ></ha-checkbox>
+                        </ha-formfield>
+                      `)}
+                  </div>
+                `}
         </div>
       </div>
     `;
@@ -1331,19 +1440,17 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
     }
     _statusEntityChanged(ev) {
         const value = String(ev.detail?.value ?? '').trim();
-        this._patchConfig({ status_entity: value || undefined });
+        if (!value) {
+            this._userClearedStatusEntity = true;
+            this._patchConfig({ status_entity: undefined });
+            return;
+        }
+        this._userClearedStatusEntity = false;
+        this._patchConfig({ status_entity: value });
     }
     _groupIdChanged(ev) {
         const value = (ev.target.value ?? '').trim();
         this._patchConfig({ group_id: value || undefined });
-    }
-    _scheduleIdsChanged(ev) {
-        const raw = ev.target.value ?? '';
-        const ids = String(raw)
-            .split(',')
-            .map((id) => id.trim())
-            .filter((id) => id.length > 0);
-        this._patchConfig({ schedule_ids: ids.length ? ids : undefined });
     }
 };
 ScheduleManagerCardEditor.styles = i$4 `
@@ -1376,6 +1483,25 @@ ScheduleManagerCardEditor.styles = i$4 `
       background: rgba(127, 127, 127, 0.2);
       word-break: break-all;
     }
+    .schedule-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 4px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--divider-color);
+      background: rgba(var(--rgb-primary-text-color, 221, 221, 221), 0.04);
+    }
+    .schedule-list-title {
+      font-size: 0.88rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--primary-text-color);
+    }
+    ha-formfield {
+      --mdc-theme-text-primary-on-background: var(--primary-text-color);
+    }
   `;
 __decorate([
     n$2({ attribute: false })
@@ -1383,6 +1509,9 @@ __decorate([
 __decorate([
     n$2({ attribute: false })
 ], ScheduleManagerCardEditor.prototype, "config", void 0);
+__decorate([
+    t$1()
+], ScheduleManagerCardEditor.prototype, "_userClearedStatusEntity", void 0);
 ScheduleManagerCardEditor = __decorate([
     e$2('schedule-manager-card-editor')
 ], ScheduleManagerCardEditor);
