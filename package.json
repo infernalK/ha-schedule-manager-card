@@ -2,7 +2,7 @@
   "name": "ha-schedule-manager-card",
   "version": "0.1.0",
   "description": "Lovelace card for Schedule Manager",
-  "main": "dist/schedule-manager-card.js",
+  "main": "schedule-manager-card.js",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",

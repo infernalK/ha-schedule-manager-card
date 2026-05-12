@@ -4,7 +4,7 @@ import typescript from '@rollup/plugin-typescript';
 export default {
   input: 'src/schedule-manager-card.ts',
   output: {
-    file: 'dist/schedule-manager-card.js',
+    file: 'schedule-manager-card.js',
     format: 'es',
   },
   plugins: [
