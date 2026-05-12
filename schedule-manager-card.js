@@ -226,7 +226,7 @@ const styles = i$2 `
     color: var(--secondary-text-color);
   }
 
-  .add-block-form input[type='time'],
+  .add-block-form input.time-field,
   .add-block-form input[type='text'],
   .add-block-form textarea {
     padding: 6px 8px;
@@ -396,11 +396,20 @@ function normalizeTimeForHa(t) {
     if (!s) {
         return '00:00:00';
     }
-    const p = s.split(':');
-    if (p.length === 2) {
-        return `${p[0]}:${p[1]}:00`;
+    const p = s.split(':').map((x) => x.trim());
+    if (p.length < 2) {
+        return '00:00:00';
     }
-    return s;
+    const h = Math.min(23, Math.max(0, parseInt(p[0] ?? '0', 10)));
+    const m = Math.min(59, Math.max(0, parseInt(p[1] ?? '0', 10)));
+    const sec =
+        p[2] !== undefined && p[2] !== ''
+            ? Math.min(59, Math.max(0, parseInt(p[2] ?? '0', 10)))
+            : 0;
+    if ([h, m, sec].some((n) => Number.isNaN(n))) {
+        return '00:00:00';
+    }
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 function parseTimeToMinutes(t) {
     const parts = String(t).split(':').map((p) => Number(p));
@@ -629,9 +638,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
 
         <div class="add-block-form">
           <label>
-            Début
+            Début (HH:MM)
             <input
-              type="time"
+              class="time-field"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="08:00"
+              maxlength="8"
               .value=${draft.start}
               @input=${(e) => this.patchDraft(schedule.id, {
             start: e.target.value,
@@ -639,9 +653,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             />
           </label>
           <label>
-            Fin
+            Fin (HH:MM)
             <input
-              type="time"
+              class="time-field"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              placeholder="09:00"
+              maxlength="8"
               .value=${draft.end}
               @input=${(e) => this.patchDraft(schedule.id, { end: e.target.value })}
             />
@@ -765,6 +784,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         const actionType = d.actionType.trim();
         if (!actionType) {
             alert('Indiquez un type d’action.');
+            return;
+        }
+        if (!d.start.trim() || !d.end.trim()) {
+            alert('Indiquez une heure de début et de fin (ex. 08:00 et 09:30).');
             return;
         }
         const newBlock = {

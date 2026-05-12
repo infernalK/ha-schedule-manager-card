@@ -104,7 +104,7 @@ export const styles = css`
     color: var(--secondary-text-color);
   }
 
-  .add-block-form input[type='time'],
+  .add-block-form input.time-field,
   .add-block-form input[type='text'],
   .add-block-form textarea {
     padding: 6px 8px;
