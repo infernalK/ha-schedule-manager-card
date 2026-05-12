@@ -322,66 +322,56 @@ const styles = i$2 `
 
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
     setConfig(config) {
-        this._config = {
-            type: 'custom:schedule-manager-card',
-            ...config,
-        };
+        this._config = config;
     }
     render() {
-        const hass = this.hass;
-        if (!hass) {
-            return x `<div class="card-config">Chargement du tableau de bord…</div>`;
-        }
         return x `
-      <div class="card-config" style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
-        <ha-entity-picker
-          .hass=${hass}
-          label="Capteur Schedule Manager"
-          .value=${this._config?.status_entity ?? ''}
-          .includeDomains=${['sensor']}
-          .allowCustomEntity=${true}
+      <div class="card-config">
+        <paper-input
+          label="Entité statut (optionnel)"
+          .value=${this._config?.status_entity || ''}
           @value-changed=${this._statusEntityChanged}
-        ></ha-entity-picker>
-        <ha-textfield
+        ></paper-input>
+        <paper-input
           label="ID de groupe (optionnel)"
-          .value=${this._config?.group_id ?? ''}
-          @input=${this._groupIdChanged}
-        ></ha-textfield>
-        <ha-textfield
-          label="IDs de plannings (optionnel, virgules — vide = tous)"
-          .value=${this._config?.schedule_ids?.join(', ') ?? ''}
-          @input=${this._scheduleIdsChanged}
-        ></ha-textfield>
+          .value=${this._config?.group_id || ''}
+          @value-changed=${this._groupIdChanged}
+        ></paper-input>
+        <paper-input
+          label="IDs de plannings (séparés par des virgules)"
+          .value=${this._config?.schedule_ids?.join(',') || ''}
+          @value-changed=${this._scheduleIdsChanged}
+        ></paper-input>
       </div>
     `;
     }
-    _patchConfig(patch) {
-        this._config = {
-            type: 'custom:schedule-manager-card',
-            ...(this._config ?? {}),
-            ...patch,
-        };
-        this.dispatchEvent(new CustomEvent('config-changed', {
-            bubbles: true,
-            composed: true,
-            detail: { config: this._config },
-        }));
-    }
     _statusEntityChanged(ev) {
-        const value = String(ev.detail?.value ?? '').trim();
-        this._patchConfig({ status_entity: value || undefined });
+        const value = (ev.detail?.value ?? '').trim();
+        this._config = {
+            ...(this._config || { type: 'custom:schedule-manager-card' }),
+            status_entity: value || undefined,
+        };
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config } }));
     }
     _groupIdChanged(ev) {
-        const value = (ev.target.value ?? '').trim();
-        this._patchConfig({ group_id: value || undefined });
+        const value = (ev.detail?.value ?? '').trim();
+        this._config = {
+            ...(this._config || { type: 'custom:schedule-manager-card' }),
+            group_id: value || undefined,
+        };
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config } }));
     }
     _scheduleIdsChanged(ev) {
-        const raw = ev.target.value ?? '';
+        const raw = ev.detail?.value ?? '';
         const ids = String(raw)
             .split(',')
             .map((id) => id.trim())
-            .filter((id) => id.length > 0);
-        this._patchConfig({ schedule_ids: ids.length ? ids : undefined });
+            .filter((id) => id);
+        this._config = {
+            ...(this._config || { type: 'custom:schedule-manager-card' }),
+            schedule_ids: ids.length ? ids : undefined,
+        };
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config } }));
     }
 };
 __decorate([
@@ -401,6 +391,7 @@ const DEFAULT_BLOCK_DRAFT = {
     actionType: 'set_preset_mode',
     payloadStr: '{"preset_mode":"comfort"}',
 };
+/** Format HH:MM[:SS] pour les services HA (évite `<input type="time">` = crash app Mac Catalyst). */
 function normalizeTimeForHa(t) {
     const s = t.trim();
     if (!s) {
@@ -412,10 +403,9 @@ function normalizeTimeForHa(t) {
     }
     const h = Math.min(23, Math.max(0, parseInt(p[0] ?? '0', 10)));
     const m = Math.min(59, Math.max(0, parseInt(p[1] ?? '0', 10)));
-    const sec =
-        p[2] !== undefined && p[2] !== ''
-            ? Math.min(59, Math.max(0, parseInt(p[2] ?? '0', 10)))
-            : 0;
+    const sec = p[2] !== undefined && p[2] !== ''
+        ? Math.min(59, Math.max(0, parseInt(p[2] ?? '0', 10)))
+        : 0;
     if ([h, m, sec].some((n) => Number.isNaN(n))) {
         return '00:00:00';
     }
