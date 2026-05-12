@@ -11,6 +11,8 @@ import {
 } from './types';
 import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
+import { domainsForActionType, entityMatchesDomains } from './entity-domains';
+import { blocksToTimelineSegments, nowPercentOfDay } from './timeline-helpers';
 
 import './editor';
 
@@ -19,8 +21,9 @@ const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 const DEFAULT_BLOCK_DRAFT = {
   start: '08:00',
   end: '09:00',
-  actionType: 'set_preset_mode',
+  actionType: 'climate.set_preset_mode',
   payloadStr: '{"preset_mode":"comfort"}',
+  entityIds: [] as string[],
 };
 
 type BlockDraft = typeof DEFAULT_BLOCK_DRAFT;
@@ -69,6 +72,8 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _creating = false;
   /** Brouillon pour le formulaire « ajouter une plage » par planning */
   @state() private _drafts: Record<string, BlockDraft> = {};
+  /** Réinitialise le sélecteur d’entités après chaque ajout */
+  @state() private _entityPickerNonce: Record<string, number> = {};
 
   static get styles() {
     return styles;
@@ -263,12 +268,75 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private draftFor(scheduleId: string): BlockDraft {
-    return this._drafts[scheduleId] ?? DEFAULT_BLOCK_DRAFT;
+    return (
+      this._drafts[scheduleId] ?? {
+        ...DEFAULT_BLOCK_DRAFT,
+        entityIds: [...DEFAULT_BLOCK_DRAFT.entityIds],
+      }
+    );
   }
 
   private patchDraft(scheduleId: string, patch: Partial<BlockDraft>) {
-    const prev = this._drafts[scheduleId] ?? { ...DEFAULT_BLOCK_DRAFT };
+    const prev =
+      this._drafts[scheduleId] ?? {
+        ...DEFAULT_BLOCK_DRAFT,
+        entityIds: [...DEFAULT_BLOCK_DRAFT.entityIds],
+      };
     this._drafts = { ...this._drafts, [scheduleId]: { ...prev, ...patch } };
+  }
+
+  private renderDayTimeline(blocks: TimeBlock[]) {
+    const segments = blocksToTimelineSegments(blocks);
+    const nowPct = nowPercentOfDay();
+    return html`
+      <div class="timeline-frise" role="img" aria-label="Plages sur 24 heures">
+        <div class="timeline-rail">
+          ${segments.map(
+            (s) => html`
+              <div
+                class="timeline-segment"
+                style="left:${s.leftPct}%;width:${s.widthPct}%;background:hsl(${s.hue}, 52%, 40%)"
+                title=${s.label}
+              >
+                <span class="timeline-segment-label">${s.label}</span>
+              </div>
+            `
+          )}
+          <div class="timeline-now" style="left:${nowPct}%"></div>
+        </div>
+        <div class="timeline-ticks">
+          <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+        </div>
+      </div>
+    `;
+  }
+
+  private entityFilterForSchedule(scheduleId: string): (entityId: string) => boolean {
+    const domains = domainsForActionType(this.draftFor(scheduleId).actionType);
+    return (entityId: string) => entityMatchesDomains(entityId, domains);
+  }
+
+  private onEntitySelected(scheduleId: string, ev: CustomEvent<{ value?: string }>) {
+    const v = String(ev.detail?.value ?? '').trim();
+    if (!v) {
+      return;
+    }
+    const d = this.draftFor(scheduleId);
+    if (d.entityIds.includes(v)) {
+      return;
+    }
+    this.patchDraft(scheduleId, { entityIds: [...d.entityIds, v] });
+    this._entityPickerNonce = {
+      ...this._entityPickerNonce,
+      [scheduleId]: (this._entityPickerNonce[scheduleId] ?? 0) + 1,
+    };
+  }
+
+  private removeDraftEntity(scheduleId: string, entityId: string) {
+    const d = this.draftFor(scheduleId);
+    this.patchDraft(scheduleId, {
+      entityIds: d.entityIds.filter((e) => e !== entityId),
+    });
   }
 
   private blocksToPayload(blocks: TimeBlock[]): TimeBlockServicePayload[] {
@@ -313,6 +381,7 @@ export class ScheduleManagerCard extends LitElement {
         </div>
 
         <div class="subsection-title">Plages horaires</div>
+        ${blocks.length ? this.renderDayTimeline(blocks) : null}
         ${blocks.length === 0
           ? html`<div class="empty-hint">Aucune plage — ajoutez-en une ci-dessous.</div>`
           : null}
@@ -375,13 +444,42 @@ export class ScheduleManagerCard extends LitElement {
             Type d’action
             <input
               type="text"
-              placeholder="set_preset_mode"
+              placeholder="climate.set_preset_mode"
               .value=${draft.actionType}
               @input=${(e: Event) =>
                 this.patchDraft(schedule.id, {
                   actionType: (e.target as HTMLInputElement).value,
                 })}
             />
+          </label>
+          <label class="full-row entity-picker-row">
+            Entités (filtrées selon le domaine du service)
+            <div class="entity-chips">
+              ${draft.entityIds.map(
+                (eid) => html`
+                  <span class="entity-chip">
+                    <code>${eid}</code>
+                    <button
+                      type="button"
+                      aria-label="Retirer"
+                      @click=${() => this.removeDraftEntity(schedule.id, eid)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                `
+              )}
+            </div>
+            <ha-entity-picker
+              .hass=${this.hass}
+              .entityFilter=${this.entityFilterForSchedule(schedule.id)}
+              .allowCustomEntity=${true}
+              label="Ajouter une entité"
+              .value=${''}
+              id=${`sm-ep-${schedule.id}-${this._entityPickerNonce[schedule.id] ?? 0}`}
+              @value-changed=${(e: CustomEvent<{ value?: string }>) =>
+                this.onEntitySelected(schedule.id, e)}
+            ></ha-entity-picker>
           </label>
           <label class="full-row">
             Payload JSON
@@ -502,6 +600,13 @@ export class ScheduleManagerCard extends LitElement {
       alert('Indiquez une heure de début et de fin (ex. 08:00 et 09:30).');
       return;
     }
+    if (d.entityIds.length > 0) {
+      payload = {
+        ...payload,
+        entity_id:
+          d.entityIds.length === 1 ? d.entityIds[0] : [...d.entityIds],
+      };
+    }
     const newBlock: TimeBlockServicePayload = {
       start_time: normalizeTimeForHa(d.start),
       end_time: normalizeTimeForHa(d.end),
@@ -511,6 +616,7 @@ export class ScheduleManagerCard extends LitElement {
     const merged = [...this.blocksToPayload(schedule.time_blocks || []), newBlock];
     try {
       await this.services().updateSchedule(schedule.id, { time_blocks: merged });
+      this.patchDraft(schedule.id, { entityIds: [] });
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('schedule_manager.update_schedule failed', e);

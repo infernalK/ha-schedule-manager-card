@@ -196,4 +196,105 @@ export const styles = css`
     padding: 2px 6px;
     border-radius: 4px;
   }
+
+  /* Frise 24 h */
+  .timeline-frise {
+    margin: 10px 0 14px;
+  }
+
+  .timeline-rail {
+    position: relative;
+    height: 44px;
+    border-radius: 6px;
+    background: rgba(127, 127, 127, 0.15);
+    overflow: hidden;
+  }
+
+  .timeline-segment {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    min-width: 3px;
+    box-sizing: border-box;
+    padding: 2px 4px;
+    color: var(--text-primary-color, #fff);
+    border-right: 1px solid rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .timeline-segment-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.1;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  .timeline-now {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--accent-color, var(--primary-color));
+    opacity: 0.95;
+    z-index: 2;
+    pointer-events: none;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+  }
+
+  .timeline-ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 0.68rem;
+    color: var(--secondary-text-color);
+  }
+
+  /* Entités (formulaire plage) */
+  .entity-picker-row {
+    grid-column: 1 / -1;
+  }
+
+  .entity-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .entity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 16px;
+    background: rgba(127, 127, 127, 0.2);
+    max-width: 100%;
+  }
+
+  .entity-chip code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+  }
+
+  .entity-chip button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--error-color, #c62828);
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+  }
 `;
