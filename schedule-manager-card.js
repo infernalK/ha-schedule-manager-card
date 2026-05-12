@@ -93,7 +93,10 @@ class ScheduleManagerServices {
         await this.callService('schedule_manager', 'disable_schedule', { schedule_id: scheduleId });
     }
     async setActiveSchedule(groupId, scheduleId) {
-        await this.callService('schedule_manager', 'set_active_schedule', { group_id: groupId, schedule_id: scheduleId });
+        await this.callService('schedule_manager', 'set_active_schedule', {
+            group_id: groupId,
+            schedule_id: scheduleId,
+        });
     }
     async createSchedule(name) {
         const trimmed = name.trim();
@@ -101,6 +104,21 @@ class ScheduleManagerServices {
             return;
         }
         await this.callService('schedule_manager', 'create_schedule', { name: trimmed });
+    }
+    async deleteSchedule(scheduleId) {
+        await this.callService('schedule_manager', 'delete_schedule', { schedule_id: scheduleId });
+    }
+    async updateSchedule(scheduleId, updates) {
+        const data = { schedule_id: scheduleId };
+        if (updates.name !== undefined)
+            data.name = updates.name;
+        if (updates.enabled !== undefined)
+            data.enabled = updates.enabled;
+        if (updates.repeat_days !== undefined)
+            data.repeat_days = updates.repeat_days;
+        if (updates.time_blocks !== undefined)
+            data.time_blocks = updates.time_blocks;
+        await this.callService('schedule_manager', 'update_schedule', data);
     }
 }
 
@@ -114,13 +132,137 @@ const styles = i$2 `
   }
 
   .schedule {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--divider-color);
+  }
+
+  .schedule:last-child {
+    border-bottom: none;
+  }
+
+  .schedule-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .schedule-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-danger {
+    padding: 6px 10px;
+    font-size: 0.85em;
+    border-radius: 4px;
+    border: 1px solid var(--error-color, #db4437);
+    background: transparent;
+    color: var(--error-color, #db4437);
+    cursor: pointer;
+  }
+
+  .btn-danger:hover {
+    background: rgba(219, 68, 55, 0.12);
+  }
+
+  .subsection-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    margin: 12px 0 6px;
+    color: var(--secondary-text-color);
+  }
+
+  .time-block-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.9em;
+  }
+
+  .payload-preview {
+    font-size: 0.75em;
+    opacity: 0.85;
+    word-break: break-all;
+  }
+
+  .block-remove {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    font-size: 0.8em;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+  }
+
+  .add-block-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: end;
+  }
+
+  @media (max-width: 450px) {
+    .add-block-form {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .add-block-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.8em;
+    color: var(--secondary-text-color);
+  }
+
+  .add-block-form input[type='time'],
+  .add-block-form input[type='text'],
+  .add-block-form textarea {
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-family: inherit;
+  }
+
+  .add-block-form textarea {
+    grid-column: 1 / -1;
+    min-height: 52px;
+    resize: vertical;
+  }
+
+  .add-block-form .full-row {
+    grid-column: 1 / -1;
+  }
+
+  .add-block-form button.add-plage {
+    grid-column: 1 / -1;
+    padding: 8px;
+    border-radius: 4px;
+    border: none;
+    background: var(--primary-color);
+    color: var(--text-primary-color);
+    cursor: pointer;
   }
 
   .time-block {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    padding: 4px;
+    gap: 8px;
+    padding: 8px;
     border: 1px solid var(--divider-color);
     border-radius: 4px;
     margin-bottom: 4px;
@@ -243,6 +385,23 @@ ScheduleManagerCardEditor = __decorate([
 ], ScheduleManagerCardEditor);
 
 const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
+const DEFAULT_BLOCK_DRAFT = {
+    start: '08:00',
+    end: '09:00',
+    actionType: 'set_preset_mode',
+    payloadStr: '{"preset_mode":"comfort"}',
+};
+function normalizeTimeForHa(t) {
+    const s = t.trim();
+    if (!s) {
+        return '00:00:00';
+    }
+    const p = s.split(':');
+    if (p.length === 2) {
+        return `${p[0]}:${p[1]}:00`;
+    }
+    return s;
+}
 function parseTimeToMinutes(t) {
     const parts = String(t).split(':').map((p) => Number(p));
     const h = parts[0] ?? 0;
@@ -259,6 +418,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         super(...arguments);
         this._newScheduleName = '';
         this._creating = false;
+        /** Brouillon pour le formulaire « ajouter une plage » par planning */
+        this._drafts = {};
     }
     static get styles() {
         return styles;
@@ -397,32 +558,127 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
       </div>
     `;
     }
+    draftFor(scheduleId) {
+        return this._drafts[scheduleId] ?? DEFAULT_BLOCK_DRAFT;
+    }
+    patchDraft(scheduleId, patch) {
+        const prev = this._drafts[scheduleId] ?? { ...DEFAULT_BLOCK_DRAFT };
+        this._drafts = { ...this._drafts, [scheduleId]: { ...prev, ...patch } };
+    }
+    blocksToPayload(blocks) {
+        return (blocks || []).map((b) => ({
+            start_time: String(b.start_time),
+            end_time: String(b.end_time),
+            action_type: b.action_type,
+            action_payload: typeof b.action_payload === 'object' && b.action_payload !== null
+                ? b.action_payload
+                : {},
+            ...(b.id ? { id: b.id } : {}),
+        }));
+    }
     renderSchedule(schedule, group) {
         if (!schedule) {
             return x ``;
         }
+        const draft = this.draftFor(schedule.id);
+        const blocks = schedule.time_blocks || [];
         return x `
       <div class="schedule">
         <div class="schedule-header">
           <span>${schedule.name}</span>
-          <ha-switch
-            .checked=${schedule.enabled}
-            @change=${(e) => this.toggleSchedule(schedule.id, e.target.checked)}
-          ></ha-switch>
-        </div>
-        ${(schedule.time_blocks || []).map((block) => x `
-          <div class="time-block ${this.isActiveBlock(block) ? 'active' : ''}">
-            <span>${block.start_time} – ${block.end_time}</span>
-            <span>${block.action_type}</span>
+          <div class="schedule-actions">
+            <ha-switch
+              .checked=${schedule.enabled}
+              @change=${(e) => this.toggleSchedule(schedule.id, e.target.checked)}
+            ></ha-switch>
+            <button
+              type="button"
+              class="btn-danger"
+              @click=${() => this.deletePlanning(schedule)}
+            >
+              Supprimer
+            </button>
           </div>
-        `)}
+        </div>
+
+        <div class="subsection-title">Plages horaires</div>
+        ${blocks.length === 0
+            ? x `<div class="empty-hint">Aucune plage — ajoutez-en une ci-dessous.</div>`
+            : null}
+        ${blocks.map((block, index) => x `
+            <div class="time-block ${this.isActiveBlock(block) ? 'active' : ''}">
+              <div class="time-block-col">
+                <span
+                  ><strong>${block.start_time}</strong> →
+                  <strong>${block.end_time}</strong></span
+                >
+                <span>${block.action_type}</span>
+                <span class="payload-preview"
+                  >${JSON.stringify(block.action_payload ?? {})}</span
+                >
+              </div>
+              <button
+                type="button"
+                class="block-remove"
+                @click=${() => this.removeBlockAt(schedule, index)}
+              >
+                Retirer
+              </button>
+            </div>
+          `)}
+
+        <div class="add-block-form">
+          <label>
+            Début
+            <input
+              type="time"
+              .value=${draft.start}
+              @input=${(e) => this.patchDraft(schedule.id, {
+            start: e.target.value,
+        })}
+            />
+          </label>
+          <label>
+            Fin
+            <input
+              type="time"
+              .value=${draft.end}
+              @input=${(e) => this.patchDraft(schedule.id, { end: e.target.value })}
+            />
+          </label>
+          <label class="full-row">
+            Type d’action
+            <input
+              type="text"
+              placeholder="set_preset_mode"
+              .value=${draft.actionType}
+              @input=${(e) => this.patchDraft(schedule.id, {
+            actionType: e.target.value,
+        })}
+            />
+          </label>
+          <label class="full-row">
+            Payload JSON
+            <textarea
+              .value=${draft.payloadStr}
+              @input=${(e) => this.patchDraft(schedule.id, {
+            payloadStr: e.target.value,
+        })}
+            ></textarea>
+          </label>
+          <button type="button" class="add-plage" @click=${() => this.addBlockToSchedule(schedule)}>
+            Ajouter la plage
+          </button>
+        </div>
+
         ${group?.exclusive
             ? x `
               <button
                 type="button"
+                style="margin-top:10px"
                 @click=${() => this.setActiveSchedule(group.id, schedule.id)}
               >
-                Définir comme actif
+                Définir comme actif (groupe exclusif)
               </button>
             `
             : ''}
@@ -468,6 +724,64 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             console.error('schedule_manager.set_active_schedule failed', e);
         }
     }
+    async deletePlanning(schedule) {
+        if (!confirm(`Supprimer définitivement le planning « ${schedule.name} » ?`)) {
+            return;
+        }
+        try {
+            await this.services().deleteSchedule(schedule.id);
+        }
+        catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('schedule_manager.delete_schedule failed', e);
+        }
+    }
+    async removeBlockAt(schedule, index) {
+        const next = [...(schedule.time_blocks || [])];
+        next.splice(index, 1);
+        try {
+            await this.services().updateSchedule(schedule.id, {
+                time_blocks: this.blocksToPayload(next),
+            });
+        }
+        catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('schedule_manager.update_schedule failed', e);
+        }
+    }
+    async addBlockToSchedule(schedule) {
+        const d = this.draftFor(schedule.id);
+        let payload;
+        try {
+            payload = JSON.parse(d.payloadStr.trim() || '{}');
+            if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+                throw new Error('payload doit être un objet JSON');
+            }
+        }
+        catch {
+            alert('Payload JSON invalide (objet attendu, ex. {"preset_mode":"comfort"})');
+            return;
+        }
+        const actionType = d.actionType.trim();
+        if (!actionType) {
+            alert('Indiquez un type d’action.');
+            return;
+        }
+        const newBlock = {
+            start_time: normalizeTimeForHa(d.start),
+            end_time: normalizeTimeForHa(d.end),
+            action_type: actionType,
+            action_payload: payload,
+        };
+        const merged = [...this.blocksToPayload(schedule.time_blocks || []), newBlock];
+        try {
+            await this.services().updateSchedule(schedule.id, { time_blocks: merged });
+        }
+        catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('schedule_manager.update_schedule failed', e);
+        }
+    }
     async createScheduleFromInput() {
         const name = this._newScheduleName.trim();
         if (!name || this._creating) {
@@ -508,6 +822,9 @@ __decorate([
 __decorate([
     t()
 ], ScheduleManagerCard.prototype, "_creating", void 0);
+__decorate([
+    t()
+], ScheduleManagerCard.prototype, "_drafts", void 0);
 ScheduleManagerCard = __decorate([
     e$1('schedule-manager-card')
 ], ScheduleManagerCard);

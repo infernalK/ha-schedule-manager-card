@@ -1,13 +1,41 @@
 import { LitElement, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { PropertyValues } from 'lit';
-import { CardConfig, HomeAssistant, Schedule, ScheduleGroup, TimeBlock } from './types';
+import {
+  CardConfig,
+  HomeAssistant,
+  Schedule,
+  ScheduleGroup,
+  TimeBlock,
+  TimeBlockServicePayload,
+} from './types';
 import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
 
 import './editor';
 
 const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
+
+const DEFAULT_BLOCK_DRAFT = {
+  start: '08:00',
+  end: '09:00',
+  actionType: 'set_preset_mode',
+  payloadStr: '{"preset_mode":"comfort"}',
+};
+
+type BlockDraft = typeof DEFAULT_BLOCK_DRAFT;
+
+function normalizeTimeForHa(t: string): string {
+  const s = t.trim();
+  if (!s) {
+    return '00:00:00';
+  }
+  const p = s.split(':');
+  if (p.length === 2) {
+    return `${p[0]}:${p[1]}:00`;
+  }
+  return s;
+}
 
 function parseTimeToMinutes(t: string): number {
   const parts = String(t).split(':').map((p) => Number(p));
@@ -29,6 +57,8 @@ export class ScheduleManagerCard extends LitElement {
 
   @state() private _newScheduleName = '';
   @state() private _creating = false;
+  /** Brouillon pour le formulaire « ajouter une plage » par planning */
+  @state() private _drafts: Record<string, BlockDraft> = {};
 
   static get styles() {
     return styles;
@@ -189,34 +219,140 @@ export class ScheduleManagerCard extends LitElement {
     `;
   }
 
+  private draftFor(scheduleId: string): BlockDraft {
+    return this._drafts[scheduleId] ?? DEFAULT_BLOCK_DRAFT;
+  }
+
+  private patchDraft(scheduleId: string, patch: Partial<BlockDraft>) {
+    const prev = this._drafts[scheduleId] ?? { ...DEFAULT_BLOCK_DRAFT };
+    this._drafts = { ...this._drafts, [scheduleId]: { ...prev, ...patch } };
+  }
+
+  private blocksToPayload(blocks: TimeBlock[]): TimeBlockServicePayload[] {
+    return (blocks || []).map((b) => ({
+      start_time: String(b.start_time),
+      end_time: String(b.end_time),
+      action_type: b.action_type,
+      action_payload:
+        typeof b.action_payload === 'object' && b.action_payload !== null
+          ? (b.action_payload as Record<string, unknown>)
+          : {},
+      ...(b.id ? { id: b.id } : {}),
+    }));
+  }
+
   private renderSchedule(schedule: Schedule | undefined, group: ScheduleGroup | undefined) {
     if (!schedule) {
       return html``;
     }
 
+    const draft = this.draftFor(schedule.id);
+    const blocks = schedule.time_blocks || [];
+
     return html`
       <div class="schedule">
         <div class="schedule-header">
           <span>${schedule.name}</span>
-          <ha-switch
-            .checked=${schedule.enabled}
-            @change=${(e: Event) =>
-              this.toggleSchedule(schedule.id, (e.target as HTMLInputElement).checked)}
-          ></ha-switch>
-        </div>
-        ${(schedule.time_blocks || []).map((block) => html`
-          <div class="time-block ${this.isActiveBlock(block) ? 'active' : ''}">
-            <span>${block.start_time} – ${block.end_time}</span>
-            <span>${block.action_type}</span>
+          <div class="schedule-actions">
+            <ha-switch
+              .checked=${schedule.enabled}
+              @change=${(e: Event) =>
+                this.toggleSchedule(schedule.id, (e.target as HTMLInputElement).checked)}
+            ></ha-switch>
+            <button
+              type="button"
+              class="btn-danger"
+              @click=${() => this.deletePlanning(schedule)}
+            >
+              Supprimer
+            </button>
           </div>
-        `)}
+        </div>
+
+        <div class="subsection-title">Plages horaires</div>
+        ${blocks.length === 0
+          ? html`<div class="empty-hint">Aucune plage — ajoutez-en une ci-dessous.</div>`
+          : null}
+        ${blocks.map(
+          (block, index) => html`
+            <div class="time-block ${this.isActiveBlock(block) ? 'active' : ''}">
+              <div class="time-block-col">
+                <span
+                  ><strong>${block.start_time}</strong> →
+                  <strong>${block.end_time}</strong></span
+                >
+                <span>${block.action_type}</span>
+                <span class="payload-preview"
+                  >${JSON.stringify(block.action_payload ?? {})}</span
+                >
+              </div>
+              <button
+                type="button"
+                class="block-remove"
+                @click=${() => this.removeBlockAt(schedule, index)}
+              >
+                Retirer
+              </button>
+            </div>
+          `
+        )}
+
+        <div class="add-block-form">
+          <label>
+            Début
+            <input
+              type="time"
+              .value=${draft.start}
+              @input=${(e: Event) =>
+                this.patchDraft(schedule.id, {
+                  start: (e.target as HTMLInputElement).value,
+                })}
+            />
+          </label>
+          <label>
+            Fin
+            <input
+              type="time"
+              .value=${draft.end}
+              @input=${(e: Event) =>
+                this.patchDraft(schedule.id, { end: (e.target as HTMLInputElement).value })}
+            />
+          </label>
+          <label class="full-row">
+            Type d’action
+            <input
+              type="text"
+              placeholder="set_preset_mode"
+              .value=${draft.actionType}
+              @input=${(e: Event) =>
+                this.patchDraft(schedule.id, {
+                  actionType: (e.target as HTMLInputElement).value,
+                })}
+            />
+          </label>
+          <label class="full-row">
+            Payload JSON
+            <textarea
+              .value=${draft.payloadStr}
+              @input=${(e: Event) =>
+                this.patchDraft(schedule.id, {
+                  payloadStr: (e.target as HTMLTextAreaElement).value,
+                })}
+            ></textarea>
+          </label>
+          <button type="button" class="add-plage" @click=${() => this.addBlockToSchedule(schedule)}>
+            Ajouter la plage
+          </button>
+        </div>
+
         ${group?.exclusive
           ? html`
               <button
                 type="button"
+                style="margin-top:10px"
                 @click=${() => this.setActiveSchedule(group.id, schedule.id)}
               >
-                Définir comme actif
+                Définir comme actif (groupe exclusif)
               </button>
             `
           : ''}
@@ -260,6 +396,67 @@ export class ScheduleManagerCard extends LitElement {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('schedule_manager.set_active_schedule failed', e);
+    }
+  }
+
+  private async deletePlanning(schedule: Schedule) {
+    if (
+      !confirm(
+        `Supprimer définitivement le planning « ${schedule.name} » ?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await this.services().deleteSchedule(schedule.id);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('schedule_manager.delete_schedule failed', e);
+    }
+  }
+
+  private async removeBlockAt(schedule: Schedule, index: number) {
+    const next = [...(schedule.time_blocks || [])];
+    next.splice(index, 1);
+    try {
+      await this.services().updateSchedule(schedule.id, {
+        time_blocks: this.blocksToPayload(next),
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('schedule_manager.update_schedule failed', e);
+    }
+  }
+
+  private async addBlockToSchedule(schedule: Schedule) {
+    const d = this.draftFor(schedule.id);
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(d.payloadStr.trim() || '{}');
+      if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+        throw new Error('payload doit être un objet JSON');
+      }
+    } catch {
+      alert('Payload JSON invalide (objet attendu, ex. {"preset_mode":"comfort"})');
+      return;
+    }
+    const actionType = d.actionType.trim();
+    if (!actionType) {
+      alert('Indiquez un type d’action.');
+      return;
+    }
+    const newBlock: TimeBlockServicePayload = {
+      start_time: normalizeTimeForHa(d.start),
+      end_time: normalizeTimeForHa(d.end),
+      action_type: actionType,
+      action_payload: payload,
+    };
+    const merged = [...this.blocksToPayload(schedule.time_blocks || []), newBlock];
+    try {
+      await this.services().updateSchedule(schedule.id, { time_blocks: merged });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('schedule_manager.update_schedule failed', e);
     }
   }
 

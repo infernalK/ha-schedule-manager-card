@@ -36,6 +36,15 @@ export interface ScheduleGroup {
   enabled: boolean;
 }
 
+/** Payload envoyé aux services create/update (horaires en chaînes HA). */
+export interface TimeBlockServicePayload {
+  start_time: string;
+  end_time: string;
+  action_type: string;
+  action_payload: Record<string, unknown>;
+  id?: string;
+}
+
 export interface CardConfig {
   type: string;
   group_id?: string;
