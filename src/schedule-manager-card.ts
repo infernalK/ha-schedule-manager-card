@@ -15,11 +15,16 @@ import { domainsForActionType, entityMatchesDomains } from './entity-domains';
 import {
   blockTimelineFill,
   blocksToTimelineSegments,
+  DEFAULT_TIMELINE_SCALE_TICKS,
   MINUTES_PER_DAY,
   minutesToHaTime,
   nowPercentOfDay,
   SCHEDULE_MANAGER_COLOR_KEY,
+  snapMinutesToGrid,
+  TIMELINE_DRAG_SNAP_MINUTES,
+  timelineScaleTicksForWidth,
   touchBoundariesBetweenBlocks,
+  type TimelineSegment,
   type TouchBoundary,
 } from './timeline-helpers';
 
@@ -28,19 +33,6 @@ import './editor';
 const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 
 const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
-
-/** Graduations alignées sur la journée (comme le planning clim intégré HA). */
-const TIMELINE_SCALE_TICKS: {
-  pct: number;
-  label: string;
-  align: 'start' | 'center' | 'end';
-}[] = [
-  { pct: 0, label: '00:00', align: 'start' },
-  { pct: 25, label: '06:00', align: 'center' },
-  { pct: 50, label: '12:00', align: 'center' },
-  { pct: 75, label: '18:00', align: 'center' },
-  { pct: 100, label: '24:00', align: 'end' },
-];
 
 /** Inline pour forcer la barre horizontale (certains thèmes HA neutralisent le CSS du shadow DOM). */
 function railLayoutInlineStyle(): string {
@@ -218,6 +210,10 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _visualEdit: VisualEditState | null = null;
   @state() private _visualPayloadStr = '';
   @state() private _visualEntityPickerNonce = 0;
+  /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
+  @state() private _editorFriseWidth = 0;
+
+  private _editorFriseResizeObserver?: ResizeObserver;
 
   /** Glisser-déposer sur la frise (pas @state : évite un render à chaque pixel). */
   private _boundaryDrag:
@@ -241,6 +237,7 @@ export class ScheduleManagerCard extends LitElement {
     const x = Math.max(0, Math.min(rect.width, ev.clientX - rect.left));
     const pct = (x / rect.width) * 100;
     let m = Math.round((pct / 100) * MINUTES_PER_DAY);
+    m = snapMinutesToGrid(m, TIMELINE_DRAG_SNAP_MINUTES);
     m = Math.max(d.minM, Math.min(d.maxM, m));
     const ha = minutesToHaTime(m);
     const blocks = [...this._visualEdit.blocks];
@@ -290,11 +287,17 @@ export class ScheduleManagerCard extends LitElement {
     if (changed.has('hass') && this.hass) {
       void this.requestUpdate();
     }
-    if (changed.has('_visualEdit') && this._visualEdit) {
-      requestAnimationFrame(() => {
-        const m = this.shadowRoot?.querySelector('.sm-modal') as HTMLElement | undefined;
-        m?.focus();
-      });
+    if (changed.has('_visualEdit')) {
+      if (this._visualEdit) {
+        this._syncEditorFriseObserver();
+        requestAnimationFrame(() => {
+          const m = this.shadowRoot?.querySelector('.sm-modal') as HTMLElement | undefined;
+          m?.focus();
+        });
+      } else {
+        this._detachEditorFriseObserver();
+        this._editorFriseWidth = 0;
+      }
     }
   }
 
@@ -467,18 +470,51 @@ export class ScheduleManagerCard extends LitElement {
     `;
   }
 
-  private renderTimelineScale() {
+  private renderTimelineScale(mode: 'dashboard' | 'editor') {
+    const ticks =
+      mode === 'editor'
+        ? timelineScaleTicksForWidth(this._editorFriseWidth)
+        : DEFAULT_TIMELINE_SCALE_TICKS;
     return html`
       <div class="timeline-scale-flex" aria-hidden="true">
-        ${TIMELINE_SCALE_TICKS.map(
-          (t) => html`<span class="timeline-scale-flex-label">${t.label}</span>`
-        )}
+        ${ticks.map((t) => html`<span class="timeline-scale-flex-label">${t.label}</span>`)}
       </div>
     `;
   }
 
+  /** Indices visuellement extrêmes sur la frise (coins arrondis type barre continue). */
+  private segmentCapIndices(segments: TimelineSegment[]): {
+    capStart: Set<number>;
+    capEnd: Set<number>;
+  } {
+    if (!segments.length) {
+      return { capStart: new Set(), capEnd: new Set() };
+    }
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    let iStart = 0;
+    let iEnd = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const s = segments[i];
+      if (s.leftPct < minLeft) {
+        minLeft = s.leftPct;
+        iStart = i;
+      }
+      const right = s.leftPct + s.widthPct;
+      if (right > maxRight) {
+        maxRight = right;
+        iEnd = i;
+      }
+    }
+    return {
+      capStart: new Set([iStart]),
+      capEnd: new Set([iEnd]),
+    };
+  }
+
   private renderDayTimeline(blocks: TimeBlock[]) {
     const segments = blocksToTimelineSegments(blocks);
+    const caps = this.segmentCapIndices(segments);
     const nowPct = nowPercentOfDay();
     return html`
       <div
@@ -490,12 +526,14 @@ export class ScheduleManagerCard extends LitElement {
           class="timeline-rail timeline-rail--continuous"
           style=${railLayoutInlineStyle()}
         >
-          ${segments.map((s) => {
+          ${segments.map((s, i) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            const capStart = caps.capStart.has(i) ? 'timeline-segment--cap-start' : '';
+            const capEnd = caps.capEnd.has(i) ? 'timeline-segment--cap-end' : '';
             return html`
               <div
-                class="timeline-segment timeline-segment--hvac"
+                class="timeline-segment timeline-segment--hvac ${capStart} ${capEnd}"
                 style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
                 title=${s.label}
               >
@@ -508,7 +546,7 @@ export class ScheduleManagerCard extends LitElement {
             style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
           ></div>
         </div>
-        ${this.renderTimelineScale()}
+        ${this.renderTimelineScale('dashboard')}
       </div>
     `;
   }
@@ -647,6 +685,8 @@ export class ScheduleManagerCard extends LitElement {
 
   private closeVisualEditor() {
     this.endBoundaryDrag();
+    this._detachEditorFriseObserver();
+    this._editorFriseWidth = 0;
     this._visualEdit = null;
     this._visualPayloadStr = '';
   }
@@ -669,6 +709,40 @@ export class ScheduleManagerCard extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this.endBoundaryDrag();
+    this._detachEditorFriseObserver();
+  }
+
+  private _detachEditorFriseObserver() {
+    this._editorFriseResizeObserver?.disconnect();
+    this._editorFriseResizeObserver = undefined;
+  }
+
+  private _syncEditorFriseObserver() {
+    this._detachEditorFriseObserver();
+    if (!this._visualEdit) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      if (!this._visualEdit) {
+        return;
+      }
+      const el = this.shadowRoot?.querySelector('.sm-editor-frise');
+      if (!el) {
+        return;
+      }
+      const ro = new ResizeObserver((entries) => {
+        const w = entries[0]?.contentRect.width ?? 0;
+        if (Math.abs(w - this._editorFriseWidth) > 0.5) {
+          this._editorFriseWidth = w;
+        }
+      });
+      ro.observe(el);
+      this._editorFriseResizeObserver = ro;
+      const w = el.getBoundingClientRect().width;
+      if (w > 0 && Math.abs(w - this._editorFriseWidth) > 0.5) {
+        this._editorFriseWidth = w;
+      }
+    });
   }
 
   private onBoundaryPointerDown(ev: PointerEvent, tb: TouchBoundary) {
@@ -1111,6 +1185,7 @@ export class ScheduleManagerCard extends LitElement {
 
   private renderEditorTimeline(blocks: TimeBlock[], selectedIndex: number) {
     const segments = blocksToTimelineSegments(blocks);
+    const caps = this.segmentCapIndices(segments);
     const boundaries = touchBoundariesBetweenBlocks(blocks);
     const nowPct = nowPercentOfDay();
     return html`
@@ -1126,14 +1201,16 @@ export class ScheduleManagerCard extends LitElement {
           class="timeline-rail sm-editor-rail timeline-rail--continuous"
           style=${railLayoutInlineStyle()}
         >
-          ${segments.map((s) => {
+          ${segments.map((s, i) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
+            const capStart = caps.capStart.has(i) ? 'timeline-segment--cap-start' : '';
+            const capEnd = caps.capEnd.has(i) ? 'timeline-segment--cap-end' : '';
             return html`
               <div
                 class="timeline-segment timeline-segment--hvac ${s.blockIndex === selectedIndex
                   ? 'is-selected'
-                  : ''}"
+                  : ''} ${capStart} ${capEnd}"
                 style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
                 title=${s.label}
                 @click=${() => this.visualSelectBlock(s.blockIndex)}
@@ -1159,7 +1236,7 @@ export class ScheduleManagerCard extends LitElement {
             style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
           ></div>
         </div>
-        ${this.renderTimelineScale()}
+        ${this.renderTimelineScale('editor')}
       </div>
     `;
   }

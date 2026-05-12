@@ -2,6 +2,69 @@ import type { TimeBlock } from './types';
 
 export const MINUTES_PER_DAY = 24 * 60;
 
+/** Aligné sur l’usage du scheduler-card (pas de 15 min pour le drag des séparateurs). */
+export const TIMELINE_DRAG_SNAP_MINUTES = 15;
+
+export function snapMinutesToGrid(totalMinutes: number, stepMinutes: number): number {
+  if (stepMinutes <= 1) {
+    return Math.round(totalMinutes);
+  }
+  return Math.round(totalMinutes / stepMinutes) * stepMinutes;
+}
+
+/** Graduations par défaut (vue dashboard / repli éditeur). */
+export interface TimelineScaleTick {
+  pct: number;
+  label: string;
+  align: 'start' | 'center' | 'end';
+}
+
+export const DEFAULT_TIMELINE_SCALE_TICKS: TimelineScaleTick[] = [
+  { pct: 0, label: '00:00', align: 'start' },
+  { pct: 25, label: '06:00', align: 'center' },
+  { pct: 50, label: '12:00', align: 'center' },
+  { pct: 75, label: '18:00', align: 'center' },
+  { pct: 100, label: '24:00', align: 'end' },
+];
+
+/**
+ * Heures affichées sous la frise selon la largeur (même logique que scheduler-card :
+ * éviter les étiquettes trop serrées sur petit écran).
+ */
+export function timelineScaleTicksForWidth(widthPx: number): TimelineScaleTick[] {
+  if (!widthPx || widthPx < 120) {
+    return DEFAULT_TIMELINE_SCALE_TICKS;
+  }
+
+  const allowedStepHours = [1, 2, 3, 4, 6, 8, 12];
+  const targetPxPerHour = 100;
+  let stepH = Math.ceil(24 / (widthPx / targetPxPerHour));
+  if (stepH < 1) {
+    stepH = 1;
+  }
+  while (stepH <= 24 && !allowedStepHours.includes(stepH)) {
+    stepH++;
+  }
+  if (stepH > 12) {
+    stepH = 12;
+  }
+
+  const inner = Math.max(0, Math.floor(24 / stepH) - 1);
+  const nums = [
+    0,
+    ...Array.from({ length: inner }, (_, i) => (i + 1) * stepH),
+    24,
+  ];
+  const uniq = [...new Set(nums)].sort((a, b) => a - b);
+
+  return uniq.map((h, i) => ({
+    pct: (h / 24) * 100,
+    label: h === 24 ? '24:00' : `${String(h).padStart(2, '0')}:00`,
+    align:
+      i === 0 ? 'start' : i === uniq.length - 1 ? 'end' : ('center' as const),
+  }));
+}
+
 /** Métadonnée carte uniquement — à retirer si le payload est passé tel quel à un service HA. */
 export const SCHEDULE_MANAGER_COLOR_KEY = 'schedule_manager_color';
 

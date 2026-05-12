@@ -183,6 +183,17 @@ export const styles = css`
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 
+  /* Extrémités visuelles de la barre (continuité type scheduler-card / pilule) */
+  .timeline-segment--cap-start {
+    border-top-left-radius: 999px;
+    border-bottom-left-radius: 999px;
+  }
+
+  .timeline-segment--cap-end {
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+  }
+
   .timeline-frise--hvac .timeline-segment.is-selected {
     z-index: 3;
     box-shadow:
@@ -642,16 +653,17 @@ export const styles = css`
   .timeline-boundary-handle {
     position: absolute;
     top: 50%;
-    width: 30px;
-    height: 30px;
-    margin-top: -15px;
-    margin-left: -15px;
+    width: 26px;
+    height: 26px;
+    margin-top: -13px;
+    margin-left: -13px;
     padding: 0;
     border: none;
-    border-radius: 50%;
-    background: rgba(245, 248, 252, 0.96);
+    border-radius: 11px 11px 3px 11px;
+    transform: rotate(45deg);
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.92);
     box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.28),
+      0 0 0 1px rgba(0, 0, 0, 0.22),
       0 3px 10px rgba(0, 0, 0, 0.35);
     cursor: ew-resize;
     z-index: 6;
@@ -659,7 +671,7 @@ export const styles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(55, 71, 79, 0.85);
+    color: var(--text-primary-color, #fff);
     font-size: 11px;
     font-weight: 600;
     line-height: 1;
@@ -669,15 +681,15 @@ export const styles = css`
     content: '\2039 \203A';
     letter-spacing: 0.02em;
     pointer-events: none;
-    font-size: 12px;
+    font-size: 11px;
+    transform: rotate(-45deg);
   }
 
   .timeline-boundary-handle:hover {
-    background: var(--primary-color, #2196f3);
-    color: var(--text-primary-color, #fff);
+    filter: brightness(1.12);
     box-shadow:
       0 0 0 2px rgba(255, 255, 255, 0.35),
-      0 4px 12px rgba(33, 150, 243, 0.55);
+      0 4px 12px rgba(0, 0, 0, 0.35);
   }
 
   .sm-select {
