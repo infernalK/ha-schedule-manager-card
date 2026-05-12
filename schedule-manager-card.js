@@ -193,6 +193,11 @@ const styles = i$4 `
     background: rgba(219, 68, 55, 0.12);
   }
 
+  .btn-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
   .subsection-title {
     font-size: 0.85em;
     font-weight: 600;
@@ -1128,6 +1133,110 @@ function suggestGapIntervalMinutes(blocks, minDurationMinutes = 60) {
     }
     return null;
 }
+/**
+ * Journée déjà couverte sans trou utilisable : insère une plage en tête [0, slotM)
+ * soit en décalant le début de la première plage « même jour » qui commence à minuit,
+ * soit si la première plage commence plus tard avec un trou ≥ slot avant elle.
+ */
+function tryInsertSlotAtDayStart(blocks, slotMinutes = TIMELINE_DRAG_SNAP_MINUTES) {
+    const slot = Math.max(1, Math.round(slotMinutes));
+    const list = blocks || [];
+    const indexed = list
+        .map((b, i) => ({ i, b, iv: sameDayBlockIntervalExclusiveEnd(b) }))
+        .filter((x) => x.iv !== null)
+        .sort((a, b) => a.iv.start - b.iv.start || a.iv.end - b.iv.end);
+    if (!indexed.length) {
+        return null;
+    }
+    const first = indexed[0];
+    const newBlock = () => ({
+        start_time: '00:00:00',
+        end_time: minuteToHaTimeForSchedule(slot),
+        action_type: 'climate.set_preset_mode',
+        action_payload: { preset_mode: 'comfort' },
+    });
+    if (first.iv.start >= slot) {
+        const withNew = [newBlock(), ...list];
+        return hasOverlappingSameDayBlocks(withNew) ? null : withNew;
+    }
+    if (first.iv.start === 0 && first.iv.end - first.iv.start > slot) {
+        const trimmed = {
+            ...first.b,
+            start_time: minuteToHaTimeForSchedule(slot),
+        };
+        const mapped = list.map((b, j) => (j === first.i ? trimmed : b));
+        const withNew = [newBlock(), ...mapped];
+        return hasOverlappingSameDayBlocks(withNew) ? null : withNew;
+    }
+    return null;
+}
+/**
+ * Indices des plages « même jour » (autres que `excludeIndex`) dont l’intervalle [s,e)
+ * intersecte [startM, endM) (demi-ouvert).
+ */
+function blockIndicesOverlappingIntervalSameDay(blocks, excludeIndex, startM, endM) {
+    const out = [];
+    for (let i = 0; i < (blocks || []).length; i++) {
+        if (i === excludeIndex) {
+            continue;
+        }
+        const iv = sameDayBlockIntervalExclusiveEnd(blocks[i]);
+        if (!iv) {
+            continue;
+        }
+        if (iv.start < endM && iv.end > startM) {
+            out.push(i);
+        }
+    }
+    return out;
+}
+/**
+ * Applique le déplacement d’une plage ; si cela crée un chevauchement avec **une seule** autre plage,
+ * échange les créneaux horaires (l’autre prend l’ancien créneau de la plage déplacée).
+ * Sinon retourne `null` (mouvement refusé).
+ */
+function applyDragMoveWithOptionalSwap(blocks, dragIdx, newStartM, newEndM, origStartM, origEndM) {
+    const list = blocks || [];
+    if (newEndM <= newStartM || origEndM <= origStartM) {
+        return null;
+    }
+    const cur = list[dragIdx];
+    if (!cur || isOvernightBlock(cur)) {
+        return null;
+    }
+    const moved = {
+        ...cur,
+        start_time: minuteToHaTimeForSchedule(newStartM),
+        end_time: minuteToHaTimeForSchedule(newEndM),
+    };
+    const trial = list.map((b, i) => (i === dragIdx ? moved : b));
+    if (!hasOverlappingSameDayBlocks(trial)) {
+        return trial;
+    }
+    const overlaps = blockIndicesOverlappingIntervalSameDay(trial, dragIdx, newStartM, newEndM);
+    if (overlaps.length !== 1) {
+        return null;
+    }
+    const j = overlaps[0];
+    const other = list[j];
+    if (!other || isOvernightBlock(other)) {
+        return null;
+    }
+    const swapped = list.map((b, i) => {
+        if (i === dragIdx) {
+            return moved;
+        }
+        if (i === j) {
+            return {
+                ...other,
+                start_time: minuteToHaTimeForSchedule(origStartM),
+                end_time: minuteToHaTimeForSchedule(origEndM),
+            };
+        }
+        return b;
+    });
+    return hasOverlappingSameDayBlocks(swapped) ? null : swapped;
+}
 function touchBoundariesBetweenBlocks(blocks) {
     const list = blocks || [];
     const segments = blocksToTimelineSegments(list);
@@ -1743,20 +1852,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                 newEnd = MINUTES_PER_DAY;
                 newStart = Math.max(0, newEnd - dur);
             }
-            const blocks = [...this._visualEdit.blocks];
-            const cur = blocks[d.blockIdx];
-            if (!cur) {
+            const resolved = applyDragMoveWithOptionalSwap(this._visualEdit.blocks, d.blockIdx, newStart, newEnd, d.origStartM, d.origEndM);
+            if (!resolved) {
                 return;
             }
-            blocks[d.blockIdx] = {
-                ...cur,
-                start_time: minuteToHaTimeForSchedule(newStart),
-                end_time: minuteToHaTimeForSchedule(newEnd),
-            };
-            if (hasOverlappingSameDayBlocks(blocks)) {
-                return;
-            }
-            this._visualEdit = { ...this._visualEdit, blocks };
+            this._visualEdit = { ...this._visualEdit, blocks: resolved };
             this.requestUpdate();
         };
         this._onSegmentDragUp = (ev) => {
@@ -2058,6 +2158,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             return x ``;
         }
         const blocks = schedule.time_blocks || [];
+        const totalSchedules = Object.keys(this.getSchedulesRecord()).length;
+        const deleteLocked = totalSchedules <= 1;
         return x `
       <div class="schedule">
         <div class="schedule-header">
@@ -2070,6 +2172,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             <button
               type="button"
               class="btn-danger"
+              ?disabled=${deleteLocked}
+              title=${deleteLocked
+            ? 'Créez un autre planning avant de pouvoir supprimer celui-ci.'
+            : `Supprimer le planning « ${schedule.name} »`}
               @click=${() => this.deletePlanning(schedule)}
             >
               Supprimer
@@ -2137,6 +2243,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
     }
     async deletePlanning(schedule) {
+        const schedulesMap = this.getSchedulesRecord();
+        if (Object.keys(schedulesMap).length <= 1) {
+            alert('Impossible de supprimer le dernier planning. Créez d’abord un autre planning (Paramètres → Schedule Manager → Configurer, ou depuis cette carte), puis supprimez celui-ci.');
+            return;
+        }
         if (!confirm(`Supprimer définitivement le planning « ${schedule.name} » ?`)) {
             return;
         }
@@ -2497,19 +2608,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             }
         }
         else {
-            const d = TIMELINE_DRAG_SNAP_MINUTES;
-            nb = {
-                start_time: '00:00:00',
-                end_time: minuteToHaTimeForSchedule(d),
-                action_type: 'climate.set_preset_mode',
-                action_payload: { preset_mode: 'comfort' },
-            };
-            nextBlocks = [nb, ...this._visualEdit.blocks];
-            selectedIndex = 0;
-            if (hasOverlappingSameDayBlocks(nextBlocks)) {
+            const split = tryInsertSlotAtDayStart(this._visualEdit.blocks, TIMELINE_DRAG_SNAP_MINUTES);
+            if (!split) {
                 alert('La journée est déjà entièrement couverte. Supprimez ou raccourcissez une plage avant d’en ajouter une autre.');
                 return;
             }
+            nextBlocks = split;
+            selectedIndex = 0;
+            nb = split[0];
         }
         const fp = blockFingerprint(nb);
         for (const b of this._visualEdit.blocks) {

@@ -32,6 +32,8 @@ import {
   timelineResizeHandlesForSelection,
   timelineScaleTicksForWidth,
   timeStringToMinutes,
+  tryInsertSlotAtDayStart,
+  applyDragMoveWithOptionalSwap,
   type TimelineResizeHandle,
   type TimelineSegment,
 } from './timeline-helpers';
@@ -631,6 +633,8 @@ export class ScheduleManagerCard extends LitElement {
     }
 
     const blocks = schedule.time_blocks || [];
+    const totalSchedules = Object.keys(this.getSchedulesRecord()).length;
+    const deleteLocked = totalSchedules <= 1;
 
     return html`
       <div class="schedule">
@@ -645,6 +649,10 @@ export class ScheduleManagerCard extends LitElement {
             <button
               type="button"
               class="btn-danger"
+              ?disabled=${deleteLocked}
+              title=${deleteLocked
+                ? 'Créez un autre planning avant de pouvoir supprimer celui-ci.'
+                : `Supprimer le planning « ${schedule.name} »`}
               @click=${() => this.deletePlanning(schedule)}
             >
               Supprimer
@@ -712,6 +720,13 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private async deletePlanning(schedule: Schedule) {
+    const schedulesMap = this.getSchedulesRecord();
+    if (Object.keys(schedulesMap).length <= 1) {
+      alert(
+        'Impossible de supprimer le dernier planning. Créez d’abord un autre planning (Paramètres → Schedule Manager → Configurer, ou depuis cette carte), puis supprimez celui-ci.'
+      );
+      return;
+    }
     if (
       !confirm(
         `Supprimer définitivement le planning « ${schedule.name} » ?`
@@ -822,20 +837,18 @@ export class ScheduleManagerCard extends LitElement {
       newStart = Math.max(0, newEnd - dur);
     }
 
-    const blocks = [...this._visualEdit.blocks];
-    const cur = blocks[d.blockIdx];
-    if (!cur) {
+    const resolved = applyDragMoveWithOptionalSwap(
+      this._visualEdit.blocks,
+      d.blockIdx,
+      newStart,
+      newEnd,
+      d.origStartM,
+      d.origEndM
+    );
+    if (!resolved) {
       return;
     }
-    blocks[d.blockIdx] = {
-      ...cur,
-      start_time: minuteToHaTimeForSchedule(newStart),
-      end_time: minuteToHaTimeForSchedule(newEnd),
-    };
-    if (hasOverlappingSameDayBlocks(blocks)) {
-      return;
-    }
-    this._visualEdit = { ...this._visualEdit, blocks };
+    this._visualEdit = { ...this._visualEdit, blocks: resolved };
     this.requestUpdate();
   };
 
@@ -1148,21 +1161,19 @@ export class ScheduleManagerCard extends LitElement {
         return;
       }
     } else {
-      const d = TIMELINE_DRAG_SNAP_MINUTES;
-      nb = {
-        start_time: '00:00:00',
-        end_time: minuteToHaTimeForSchedule(d),
-        action_type: 'climate.set_preset_mode',
-        action_payload: { preset_mode: 'comfort' },
-      };
-      nextBlocks = [nb, ...this._visualEdit.blocks];
-      selectedIndex = 0;
-      if (hasOverlappingSameDayBlocks(nextBlocks)) {
+      const split = tryInsertSlotAtDayStart(
+        this._visualEdit.blocks,
+        TIMELINE_DRAG_SNAP_MINUTES
+      );
+      if (!split) {
         alert(
           'La journée est déjà entièrement couverte. Supprimez ou raccourcissez une plage avant d’en ajouter une autre.'
         );
         return;
       }
+      nextBlocks = split;
+      selectedIndex = 0;
+      nb = split[0];
     }
 
     const fp = blockFingerprint(nb);

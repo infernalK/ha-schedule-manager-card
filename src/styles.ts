@@ -55,6 +55,11 @@ export const styles = css`
     background: rgba(219, 68, 55, 0.12);
   }
 
+  .btn-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
   .subsection-title {
     font-size: 0.85em;
     font-weight: 600;

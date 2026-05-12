@@ -301,6 +301,142 @@ export function suggestGapIntervalMinutes(
   return null;
 }
 
+/**
+ * Journée déjà couverte sans trou utilisable : insère une plage en tête [0, slotM)
+ * soit en décalant le début de la première plage « même jour » qui commence à minuit,
+ * soit si la première plage commence plus tard avec un trou ≥ slot avant elle.
+ */
+export function tryInsertSlotAtDayStart(
+  blocks: TimeBlock[],
+  slotMinutes = TIMELINE_DRAG_SNAP_MINUTES
+): TimeBlock[] | null {
+  const slot = Math.max(1, Math.round(slotMinutes));
+  const list = blocks || [];
+
+  const indexed = list
+    .map((b, i) => ({ i, b, iv: sameDayBlockIntervalExclusiveEnd(b) }))
+    .filter(
+      (x): x is { i: number; b: TimeBlock; iv: { start: number; end: number } } =>
+        x.iv !== null
+    )
+    .sort((a, b) => a.iv.start - b.iv.start || a.iv.end - b.iv.end);
+
+  if (!indexed.length) {
+    return null;
+  }
+
+  const first = indexed[0];
+  const newBlock = (): TimeBlock => ({
+    start_time: '00:00:00',
+    end_time: minuteToHaTimeForSchedule(slot),
+    action_type: 'climate.set_preset_mode',
+    action_payload: { preset_mode: 'comfort' },
+  });
+
+  if (first.iv.start >= slot) {
+    const withNew = [newBlock(), ...list];
+    return hasOverlappingSameDayBlocks(withNew) ? null : withNew;
+  }
+
+  if (first.iv.start === 0 && first.iv.end - first.iv.start > slot) {
+    const trimmed: TimeBlock = {
+      ...first.b,
+      start_time: minuteToHaTimeForSchedule(slot),
+    };
+    const mapped = list.map((b, j) => (j === first.i ? trimmed : b));
+    const withNew = [newBlock(), ...mapped];
+    return hasOverlappingSameDayBlocks(withNew) ? null : withNew;
+  }
+
+  return null;
+}
+
+/**
+ * Indices des plages « même jour » (autres que `excludeIndex`) dont l’intervalle [s,e)
+ * intersecte [startM, endM) (demi-ouvert).
+ */
+export function blockIndicesOverlappingIntervalSameDay(
+  blocks: TimeBlock[],
+  excludeIndex: number,
+  startM: number,
+  endM: number
+): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < (blocks || []).length; i++) {
+    if (i === excludeIndex) {
+      continue;
+    }
+    const iv = sameDayBlockIntervalExclusiveEnd(blocks[i]);
+    if (!iv) {
+      continue;
+    }
+    if (iv.start < endM && iv.end > startM) {
+      out.push(i);
+    }
+  }
+  return out;
+}
+
+/**
+ * Applique le déplacement d’une plage ; si cela crée un chevauchement avec **une seule** autre plage,
+ * échange les créneaux horaires (l’autre prend l’ancien créneau de la plage déplacée).
+ * Sinon retourne `null` (mouvement refusé).
+ */
+export function applyDragMoveWithOptionalSwap(
+  blocks: TimeBlock[],
+  dragIdx: number,
+  newStartM: number,
+  newEndM: number,
+  origStartM: number,
+  origEndM: number
+): TimeBlock[] | null {
+  const list = blocks || [];
+  if (newEndM <= newStartM || origEndM <= origStartM) {
+    return null;
+  }
+  const cur = list[dragIdx];
+  if (!cur || isOvernightBlock(cur)) {
+    return null;
+  }
+
+  const moved: TimeBlock = {
+    ...cur,
+    start_time: minuteToHaTimeForSchedule(newStartM),
+    end_time: minuteToHaTimeForSchedule(newEndM),
+  };
+
+  const trial = list.map((b, i) => (i === dragIdx ? moved : b));
+  if (!hasOverlappingSameDayBlocks(trial)) {
+    return trial;
+  }
+
+  const overlaps = blockIndicesOverlappingIntervalSameDay(trial, dragIdx, newStartM, newEndM);
+  if (overlaps.length !== 1) {
+    return null;
+  }
+  const j = overlaps[0];
+  const other = list[j];
+  if (!other || isOvernightBlock(other)) {
+    return null;
+  }
+
+  const swapped = list.map((b, i) => {
+    if (i === dragIdx) {
+      return moved;
+    }
+    if (i === j) {
+      return {
+        ...other,
+        start_time: minuteToHaTimeForSchedule(origStartM),
+        end_time: minuteToHaTimeForSchedule(origEndM),
+      };
+    }
+    return b;
+  });
+
+  return hasOverlappingSameDayBlocks(swapped) ? null : swapped;
+}
+
 /** Frontière draggable entre deux plages consécutives sur la frise (sans passage minuit). */
 export interface TouchBoundary {
   /** Position du séparateur en % (0–100). */
