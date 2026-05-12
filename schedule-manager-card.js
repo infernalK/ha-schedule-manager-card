@@ -391,6 +391,7 @@ const DEFAULT_BLOCK_DRAFT = {
     actionType: 'set_preset_mode',
     payloadStr: '{"preset_mode":"comfort"}',
 };
+/** Format HH:MM[:SS] pour les services HA (évite `<input type="time">` = crash app Mac Catalyst). */
 function normalizeTimeForHa(t) {
     const s = t.trim();
     if (!s) {
@@ -402,10 +403,9 @@ function normalizeTimeForHa(t) {
     }
     const h = Math.min(23, Math.max(0, parseInt(p[0] ?? '0', 10)));
     const m = Math.min(59, Math.max(0, parseInt(p[1] ?? '0', 10)));
-    const sec =
-        p[2] !== undefined && p[2] !== ''
-            ? Math.min(59, Math.max(0, parseInt(p[2] ?? '0', 10)))
-            : 0;
+    const sec = p[2] !== undefined && p[2] !== ''
+        ? Math.min(59, Math.max(0, parseInt(p[2] ?? '0', 10)))
+        : 0;
     if ([h, m, sec].some((n) => Number.isNaN(n))) {
         return '00:00:00';
     }
