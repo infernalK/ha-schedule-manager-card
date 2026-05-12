@@ -250,7 +250,7 @@ const styles = i$4 `
     line-height: 1.35;
   }
 
-  /* Frise 24 h — variante « thermostat » (barre continue, type intégration HA) */
+  /* Frise 24 h — même principe que scheduler-card (barre flex 60px + time-bar 18px) */
   .timeline-frise {
     margin: 0 0 16px;
     padding: 10px 12px;
@@ -260,95 +260,111 @@ const styles = i$4 `
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    overflow-x: hidden;
-  }
-
-  .timeline-frise--hvac {
-    padding: 12px 14px 14px;
-    border-radius: 12px;
-    background: rgba(30, 30, 30, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .timeline-rail {
-    position: relative;
-    height: 52px;
-    border-radius: 6px;
-    background: rgba(127, 127, 127, 0.18);
     overflow: hidden;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+
+  .sm-scheduler-frise {
+    display: block;
+    max-width: 100%;
+  }
+
+  .sm-scheduler-track {
+    position: relative;
     width: 100%;
     box-sizing: border-box;
   }
 
-  .timeline-rail--continuous {
-    height: 56px;
-    border-radius: 999px;
-    overflow: hidden;
-    background: linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.42) 0%,
-      rgba(0, 0, 0, 0.22) 100%
-    );
-    box-shadow:
-      inset 0 2px 8px rgba(0, 0, 0, 0.45),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-      0 1px 0 rgba(255, 255, 255, 0.05);
-    isolation: isolate;
+  .sm-scheduler-bar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: 100%;
+    height: 60px;
+    box-sizing: border-box;
+    gap: 3px;
   }
 
-  .timeline-segment {
-    position: absolute;
-    top: 0;
-    height: 100%;
-    min-width: 3px;
-    box-sizing: border-box;
-    padding: 2px 6px;
-    color: var(--text-primary-color, #fff);
-    border-right: 1px solid rgba(0, 0, 0, 0.12);
+  .sm-slot {
     display: flex;
+    height: 100%;
+    box-sizing: border-box;
+    cursor: default;
+    color: var(--text-primary-color);
+    font-weight: 500;
     align-items: center;
     justify-content: center;
+    word-break: break-word;
+    white-space: normal;
     overflow: hidden;
+    padding: 2px 4px;
+    /* Couleur de fond = inline (couleur par plage ou teinte par défaut) */
   }
 
-  .timeline-segment--hvac {
-    border-right: 1px solid rgba(255, 255, 255, 0.14);
-    border-left: none;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  .sm-scheduler-track--editor .sm-slot {
+    cursor: pointer;
   }
 
-  /* Extrémités visuelles de la barre (continuité type scheduler-card / pilule) */
-  .timeline-segment--cap-start {
-    border-top-left-radius: 999px;
-    border-bottom-left-radius: 999px;
+  .sm-slot:first-child {
+    border-radius: 10px 0 0 10px;
   }
 
-  .timeline-segment--cap-end {
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
+  .sm-slot:last-child {
+    border-radius: 0 10px 10px 0;
   }
 
-  .timeline-frise--hvac .timeline-segment.is-selected {
-    z-index: 3;
+  .sm-slot:hover {
+    filter: brightness(1.08);
+  }
+
+  .sm-slot.is-selected {
     box-shadow:
       inset 0 0 0 3px rgba(255, 255, 255, 0.95),
-      0 0 0 2px rgba(0, 0, 0, 0.35),
-      0 0 16px rgba(255, 255, 255, 0.25);
-    filter: saturate(1.12) brightness(1.05);
+      0 0 0 1px rgba(0, 0, 0, 0.35);
+    z-index: 2;
   }
 
-  .timeline-segment-label {
+  .sm-slot-label {
     font-size: 0.72rem;
-    font-weight: 600;
     line-height: 1.15;
     text-align: center;
-    white-space: nowrap;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
-    padding: 0 2px;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Barre d’heures (équivalent time-bar du scheduler-card) */
+  .sm-time-bar {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 18px;
+    margin-top: 4px;
+    box-sizing: border-box;
+  }
+
+  .sm-time-bar-label {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--secondary-text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sm-time-bar-label--left {
+    justify-content: flex-start;
+  }
+
+  .sm-time-bar-label--right {
+    justify-content: flex-end;
   }
 
   .timeline-now {
@@ -362,39 +378,6 @@ const styles = i$4 `
     z-index: 5;
     pointer-events: none;
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
-  }
-
-  /* Échelle horaire : grille explicite (le flex faisait fondre les colonnes → texte concaténé). */
-  .timeline-scale-flex {
-    display: grid;
-    align-items: center;
-    width: 100%;
-    max-width: 100%;
-    margin-top: 10px;
-    padding: 4px 2px 0;
-    box-sizing: border-box;
-    column-gap: 8px;
-    row-gap: 4px;
-  }
-
-  .timeline-scale-flex-label {
-    min-width: 0;
-    font-size: 0.72rem;
-    font-weight: 500;
-    color: var(--secondary-text-color);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: center;
-    letter-spacing: 0.02em;
-  }
-
-  .timeline-scale-flex-label:first-child {
-    text-align: left;
-  }
-
-  .timeline-scale-flex-label:last-child {
-    text-align: right;
   }
 
   .sm-frise-heading {
@@ -787,65 +770,49 @@ const styles = i$4 `
     margin-right: auto;
   }
 
-  .sm-editor-rail.timeline-rail--continuous {
-    overflow: visible;
-  }
-
   .sm-editor-frise {
     overflow-x: visible;
     overflow-y: visible;
   }
 
-  .sm-editor-rail .timeline-segment {
-    cursor: pointer;
+  .sm-scheduler-track--editor .sm-slot {
     touch-action: manipulation;
-    z-index: 2;
   }
 
-  .sm-editor-rail .timeline-segment:hover:not(.is-selected) {
-    filter: brightness(1.08);
-  }
-
-  .timeline-boundary-handle {
+  /* Poignées type scheduler-card (.handle + disque sur fond carte) */
+  .sm-scheduler-handle {
     position: absolute;
-    top: 50%;
-    width: 26px;
-    height: 26px;
-    margin-top: -13px;
-    margin-left: -13px;
+    top: 0;
+    bottom: 0;
+    width: 36px;
+    margin-left: -18px;
     padding: 0;
     border: none;
-    border-radius: 11px 11px 3px 11px;
-    transform: rotate(45deg);
-    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.92);
-    box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.22),
-      0 3px 10px rgba(0, 0, 0, 0.35);
+    background: transparent;
     cursor: ew-resize;
     z-index: 10;
     touch-action: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-primary-color, #fff);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
   }
 
-  .timeline-boundary-handle::after {
-    content: '\2039 \203A';
-    letter-spacing: 0.02em;
+  .sm-scheduler-handle-disc {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--card-background-color);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.22),
+      0 2px 8px rgba(0, 0, 0, 0.25);
     pointer-events: none;
-    font-size: 11px;
-    transform: rotate(-45deg);
   }
 
-  .timeline-boundary-handle:hover {
-    filter: brightness(1.12);
+  .sm-scheduler-handle:hover .sm-scheduler-handle-disc {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.95);
     box-shadow:
       0 0 0 2px rgba(255, 255, 255, 0.35),
-      0 4px 12px rgba(0, 0, 0, 0.35);
+      0 3px 10px rgba(0, 0, 0, 0.3);
   }
 
   .sm-select {
@@ -1323,33 +1290,6 @@ ScheduleManagerCardEditor = __decorate([
 
 const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-/** Inline pour forcer la barre horizontale (certains thèmes HA neutralisent le CSS du shadow DOM). */
-function railLayoutInlineStyle() {
-    return [
-        'position:relative',
-        'display:block',
-        'width:100%',
-        'min-height:56px',
-        'height:56px',
-        'overflow:hidden',
-        'border-radius:999px',
-        'box-sizing:border-box',
-    ].join(';');
-}
-function segmentLayoutInlineStyle(leftPct, widthPct, fill) {
-    return [
-        'position:absolute',
-        'top:0',
-        'height:100%',
-        `left:${leftPct}%`,
-        `width:${widthPct}%`,
-        'box-sizing:border-box',
-        'display:flex',
-        'align-items:center',
-        'justify-content:center',
-        `background:${fill}`,
-    ].join(';');
-}
 /** Pastilles de couleur rapides (+ valeur du sélecteur). */
 const BLOCK_COLOR_PRESETS = [
     '#2196F3',
@@ -1708,19 +1648,23 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
       </div>
     `;
     }
-    renderTimelineScale(mode) {
+    /**
+     * Barre d’heures sous la frise (même structure que scheduler-card : flex 18px de haut).
+     */
+    renderSchedulerTimeScale(mode) {
         const ticks = mode === 'editor'
             ? timelineScaleTicksForWidth(this._editorFriseWidth)
             : DEFAULT_TIMELINE_SCALE_TICKS;
         return x `
-      <div
-        class="timeline-scale-flex"
-        style=${o({
-            gridTemplateColumns: `repeat(${ticks.length}, minmax(2.25rem, 1fr))`,
+      <div class="sm-time-bar" aria-hidden="true">
+        ${ticks.map((t, i) => {
+            const cls = i === 0
+                ? 'sm-time-bar-label sm-time-bar-label--left'
+                : i === ticks.length - 1
+                    ? 'sm-time-bar-label sm-time-bar-label--right'
+                    : 'sm-time-bar-label';
+            return x `<span class=${cls}>${t.label}</span>`;
         })}
-        aria-hidden="true"
-      >
-        ${ticks.map((t) => x `<span class="timeline-scale-flex-label">${t.label}</span>`)}
       </div>
     `;
     }
@@ -1728,67 +1672,39 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     sortTimelineSegmentsForPaint(segments) {
         return [...segments].sort((a, b) => a.leftPct !== b.leftPct ? a.leftPct - b.leftPct : b.widthPct - a.widthPct);
     }
-    /** Indices visuellement extrêmes sur la frise (coins arrondis type barre continue). */
-    segmentCapIndices(segments) {
-        if (!segments.length) {
-            return { capStart: new Set(), capEnd: new Set() };
-        }
-        let minLeft = Infinity;
-        let maxRight = -Infinity;
-        let iStart = 0;
-        let iEnd = 0;
-        for (let i = 0; i < segments.length; i++) {
-            const s = segments[i];
-            if (s.leftPct < minLeft) {
-                minLeft = s.leftPct;
-                iStart = i;
-            }
-            const right = s.leftPct + s.widthPct;
-            if (right > maxRight) {
-                maxRight = right;
-                iEnd = i;
-            }
-        }
-        return {
-            capStart: new Set([iStart]),
-            capEnd: new Set([iEnd]),
-        };
+    /** Styles flex par créneau (proportionnel à la journée, comme scheduler-card `computeSlotWidths`). */
+    schedulerSlotFlexStyle(widthPct, fill) {
+        return o({
+            flexGrow: String(widthPct),
+            flexShrink: '1',
+            flexBasis: '0',
+            minWidth: '5px',
+            background: fill,
+        });
     }
     renderDayTimeline(blocks) {
         const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
-        const caps = this.segmentCapIndices(segments);
         const nowPct = nowPercentOfDay();
         return x `
-      <div
-        class="timeline-frise timeline-frise--hvac"
-        role="img"
-        aria-label="Plages sur 24 heures"
-      >
-        <div
-          class="timeline-rail timeline-rail--continuous"
-          style=${railLayoutInlineStyle()}
-        >
-          ${segments.map((s, i) => {
+      <div class="timeline-frise sm-scheduler-frise" role="img" aria-label="Plages sur 24 heures">
+        <div class="sm-scheduler-track">
+          <div class="sm-scheduler-bar">
+            ${segments.map((s) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
-            const capStart = caps.capStart.has(i) ? 'timeline-segment--cap-start' : '';
-            const capEnd = caps.capEnd.has(i) ? 'timeline-segment--cap-end' : '';
             return x `
-              <div
-                class="timeline-segment timeline-segment--hvac ${capStart} ${capEnd}"
-                style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
-                title=${s.label}
-              >
-                <span class="timeline-segment-label">${s.label}</span>
-              </div>
-            `;
+                <div class="sm-slot" style=${this.schedulerSlotFlexStyle(s.widthPct, fill)} title=${s.label}>
+                  <span class="sm-slot-label">${s.label}</span>
+                </div>
+              `;
         })}
+          </div>
           <div
             class="timeline-now"
             style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
           ></div>
         </div>
-        ${this.renderTimelineScale('dashboard')}
+        ${this.renderSchedulerTimeScale('dashboard')}
       </div>
     `;
     }
@@ -1976,7 +1892,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!this._visualEdit) {
             return;
         }
-        const rail = ev.currentTarget.closest('.sm-editor-rail');
+        const rail = ev.currentTarget.closest('.sm-scheduler-track');
         if (!rail) {
             return;
         }
@@ -2438,40 +2354,35 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     }
     renderEditorTimeline(blocks, selectedIndex) {
         const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
-        const caps = this.segmentCapIndices(segments);
         const resizeHandles = allTimelineResizeHandles(blocks);
         const nowPct = nowPercentOfDay();
         return x `
       <div
-        class="timeline-frise sm-editor-frise timeline-frise--hvac"
+        class="timeline-frise sm-scheduler-frise sm-editor-frise"
         role="group"
         aria-label="Plages sur 24 heures — cliquer pour sélectionner, poignées pour ajuster"
       >
         <div class="sm-frise-heading">
           <span class="sm-frise-heading-label">Heure</span>
         </div>
-        <div
-          class="timeline-rail sm-editor-rail timeline-rail--continuous"
-          style=${railLayoutInlineStyle()}
-        >
-          ${segments.map((s, i) => {
+        <div class="sm-scheduler-track sm-scheduler-track--editor">
+          <div class="sm-scheduler-bar">
+            ${segments.map((s) => {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
-            const capStart = caps.capStart.has(i) ? 'timeline-segment--cap-start' : '';
-            const capEnd = caps.capEnd.has(i) ? 'timeline-segment--cap-end' : '';
+            const sel = s.blockIndex === selectedIndex ? 'is-selected' : '';
             return x `
-              <div
-                class="timeline-segment timeline-segment--hvac ${s.blockIndex === selectedIndex
-                ? 'is-selected'
-                : ''} ${capStart} ${capEnd}"
-                style=${segmentLayoutInlineStyle(s.leftPct, s.widthPct, fill)}
-                title=${s.label}
-                @click=${() => this.visualSelectBlock(s.blockIndex)}
-              >
-                <span class="timeline-segment-label">${s.label}</span>
-              </div>
-            `;
+                <div
+                  class="sm-slot ${sel}"
+                  style=${this.schedulerSlotFlexStyle(s.widthPct, fill)}
+                  title=${s.label}
+                  @click=${() => this.visualSelectBlock(s.blockIndex)}
+                >
+                  <span class="sm-slot-label">${s.label}</span>
+                </div>
+              `;
         })}
+          </div>
           ${resizeHandles.map((h) => {
             const label = h.kind === 'junction'
                 ? 'Ajuster la transition entre deux plages'
@@ -2486,16 +2397,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             return x `
               <button
                 type="button"
-                class="timeline-boundary-handle ${h.kind === 'start'
-                ? 'timeline-boundary-handle--edge-start'
-                : h.kind === 'end'
-                    ? 'timeline-boundary-handle--edge-end'
-                    : ''}"
-                style="position:absolute;left:${h.pct}%"
+                class="sm-scheduler-handle"
+                style="left:${h.pct}%"
                 aria-label=${label}
                 title=${title}
                 @pointerdown=${(e) => this.onResizePointerDown(e, h)}
-              ></button>
+              >
+                <span class="sm-scheduler-handle-disc"></span>
+              </button>
             `;
         })}
           <div
@@ -2503,7 +2412,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
           ></div>
         </div>
-        ${this.renderTimelineScale('editor')}
+        ${this.renderSchedulerTimeScale('editor')}
       </div>
     `;
     }

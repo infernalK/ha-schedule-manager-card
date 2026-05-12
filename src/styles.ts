@@ -115,7 +115,7 @@ export const styles = css`
     line-height: 1.35;
   }
 
-  /* Frise 24 h — variante « thermostat » (barre continue, type intégration HA) */
+  /* Frise 24 h — même principe que scheduler-card (barre flex 60px + time-bar 18px) */
   .timeline-frise {
     margin: 0 0 16px;
     padding: 10px 12px;
@@ -125,95 +125,111 @@ export const styles = css`
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    overflow-x: hidden;
-  }
-
-  .timeline-frise--hvac {
-    padding: 12px 14px 14px;
-    border-radius: 12px;
-    background: rgba(30, 30, 30, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .timeline-rail {
-    position: relative;
-    height: 52px;
-    border-radius: 6px;
-    background: rgba(127, 127, 127, 0.18);
     overflow: hidden;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+
+  .sm-scheduler-frise {
+    display: block;
+    max-width: 100%;
+  }
+
+  .sm-scheduler-track {
+    position: relative;
     width: 100%;
     box-sizing: border-box;
   }
 
-  .timeline-rail--continuous {
-    height: 56px;
-    border-radius: 999px;
-    overflow: hidden;
-    background: linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.42) 0%,
-      rgba(0, 0, 0, 0.22) 100%
-    );
-    box-shadow:
-      inset 0 2px 8px rgba(0, 0, 0, 0.45),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-      0 1px 0 rgba(255, 255, 255, 0.05);
-    isolation: isolate;
+  .sm-scheduler-bar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: 100%;
+    height: 60px;
+    box-sizing: border-box;
+    gap: 3px;
   }
 
-  .timeline-segment {
-    position: absolute;
-    top: 0;
-    height: 100%;
-    min-width: 3px;
-    box-sizing: border-box;
-    padding: 2px 6px;
-    color: var(--text-primary-color, #fff);
-    border-right: 1px solid rgba(0, 0, 0, 0.12);
+  .sm-slot {
     display: flex;
+    height: 100%;
+    box-sizing: border-box;
+    cursor: default;
+    color: var(--text-primary-color);
+    font-weight: 500;
     align-items: center;
     justify-content: center;
+    word-break: break-word;
+    white-space: normal;
     overflow: hidden;
+    padding: 2px 4px;
+    /* Couleur de fond = inline (couleur par plage ou teinte par défaut) */
   }
 
-  .timeline-segment--hvac {
-    border-right: 1px solid rgba(255, 255, 255, 0.14);
-    border-left: none;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  .sm-scheduler-track--editor .sm-slot {
+    cursor: pointer;
   }
 
-  /* Extrémités visuelles de la barre (continuité type scheduler-card / pilule) */
-  .timeline-segment--cap-start {
-    border-top-left-radius: 999px;
-    border-bottom-left-radius: 999px;
+  .sm-slot:first-child {
+    border-radius: 10px 0 0 10px;
   }
 
-  .timeline-segment--cap-end {
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
+  .sm-slot:last-child {
+    border-radius: 0 10px 10px 0;
   }
 
-  .timeline-frise--hvac .timeline-segment.is-selected {
-    z-index: 3;
+  .sm-slot:hover {
+    filter: brightness(1.08);
+  }
+
+  .sm-slot.is-selected {
     box-shadow:
       inset 0 0 0 3px rgba(255, 255, 255, 0.95),
-      0 0 0 2px rgba(0, 0, 0, 0.35),
-      0 0 16px rgba(255, 255, 255, 0.25);
-    filter: saturate(1.12) brightness(1.05);
+      0 0 0 1px rgba(0, 0, 0, 0.35);
+    z-index: 2;
   }
 
-  .timeline-segment-label {
+  .sm-slot-label {
     font-size: 0.72rem;
-    font-weight: 600;
     line-height: 1.15;
     text-align: center;
-    white-space: nowrap;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
-    padding: 0 2px;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Barre d’heures (équivalent time-bar du scheduler-card) */
+  .sm-time-bar {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 18px;
+    margin-top: 4px;
+    box-sizing: border-box;
+  }
+
+  .sm-time-bar-label {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--secondary-text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sm-time-bar-label--left {
+    justify-content: flex-start;
+  }
+
+  .sm-time-bar-label--right {
+    justify-content: flex-end;
   }
 
   .timeline-now {
@@ -227,39 +243,6 @@ export const styles = css`
     z-index: 5;
     pointer-events: none;
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
-  }
-
-  /* Échelle horaire : grille explicite (le flex faisait fondre les colonnes → texte concaténé). */
-  .timeline-scale-flex {
-    display: grid;
-    align-items: center;
-    width: 100%;
-    max-width: 100%;
-    margin-top: 10px;
-    padding: 4px 2px 0;
-    box-sizing: border-box;
-    column-gap: 8px;
-    row-gap: 4px;
-  }
-
-  .timeline-scale-flex-label {
-    min-width: 0;
-    font-size: 0.72rem;
-    font-weight: 500;
-    color: var(--secondary-text-color);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: center;
-    letter-spacing: 0.02em;
-  }
-
-  .timeline-scale-flex-label:first-child {
-    text-align: left;
-  }
-
-  .timeline-scale-flex-label:last-child {
-    text-align: right;
   }
 
   .sm-frise-heading {
@@ -652,65 +635,49 @@ export const styles = css`
     margin-right: auto;
   }
 
-  .sm-editor-rail.timeline-rail--continuous {
-    overflow: visible;
-  }
-
   .sm-editor-frise {
     overflow-x: visible;
     overflow-y: visible;
   }
 
-  .sm-editor-rail .timeline-segment {
-    cursor: pointer;
+  .sm-scheduler-track--editor .sm-slot {
     touch-action: manipulation;
-    z-index: 2;
   }
 
-  .sm-editor-rail .timeline-segment:hover:not(.is-selected) {
-    filter: brightness(1.08);
-  }
-
-  .timeline-boundary-handle {
+  /* Poignées type scheduler-card (.handle + disque sur fond carte) */
+  .sm-scheduler-handle {
     position: absolute;
-    top: 50%;
-    width: 26px;
-    height: 26px;
-    margin-top: -13px;
-    margin-left: -13px;
+    top: 0;
+    bottom: 0;
+    width: 36px;
+    margin-left: -18px;
     padding: 0;
     border: none;
-    border-radius: 11px 11px 3px 11px;
-    transform: rotate(45deg);
-    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.92);
-    box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.22),
-      0 3px 10px rgba(0, 0, 0, 0.35);
+    background: transparent;
     cursor: ew-resize;
     z-index: 10;
     touch-action: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-primary-color, #fff);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
   }
 
-  .timeline-boundary-handle::after {
-    content: '\2039 \203A';
-    letter-spacing: 0.02em;
+  .sm-scheduler-handle-disc {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--card-background-color);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.22),
+      0 2px 8px rgba(0, 0, 0, 0.25);
     pointer-events: none;
-    font-size: 11px;
-    transform: rotate(-45deg);
   }
 
-  .timeline-boundary-handle:hover {
-    filter: brightness(1.12);
+  .sm-scheduler-handle:hover .sm-scheduler-handle-disc {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.95);
     box-shadow:
       0 0 0 2px rgba(255, 255, 255, 0.35),
-      0 4px 12px rgba(0, 0, 0, 0.35);
+      0 3px 10px rgba(0, 0, 0, 0.3);
   }
 
   .sm-select {
