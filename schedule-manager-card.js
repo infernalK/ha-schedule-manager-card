@@ -264,6 +264,7 @@ const styles = i$2 `
     gap: 8px;
     padding: 8px;
     border: 1px solid var(--divider-color);
+    border-left: 4px solid var(--block-accent, rgba(127, 127, 127, 0.45));
     border-radius: 4px;
     margin-bottom: 4px;
   }
@@ -318,7 +319,244 @@ const styles = i$2 `
     padding: 2px 6px;
     border-radius: 4px;
   }
+
+  .timeline-hint {
+    font-size: 0.78em;
+    color: var(--secondary-text-color);
+    margin: -4px 0 8px;
+    line-height: 1.35;
+  }
+
+  /* Frise 24 h */
+  .timeline-frise {
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(127, 127, 127, 0.08);
+    border: 1px solid var(--divider-color);
+  }
+
+  .timeline-rail {
+    position: relative;
+    height: 52px;
+    border-radius: 6px;
+    background: rgba(127, 127, 127, 0.18);
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+
+  .timeline-segment {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    min-width: 3px;
+    box-sizing: border-box;
+    padding: 2px 4px;
+    color: var(--text-primary-color, #fff);
+    border-right: 1px solid rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .timeline-segment-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.1;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  .timeline-now {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--accent-color, var(--primary-color));
+    opacity: 0.95;
+    z-index: 2;
+    pointer-events: none;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+  }
+
+  .timeline-ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 0.68rem;
+    color: var(--secondary-text-color);
+  }
+
+  /* Entités (formulaire plage) */
+  .entity-picker-row {
+    grid-column: 1 / -1;
+  }
+
+  .entity-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .entity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 16px;
+    background: rgba(127, 127, 127, 0.2);
+    max-width: 100%;
+  }
+
+  .entity-chip code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+  }
+
+  .entity-chip button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--error-color, #c62828);
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+  }
 `;
+
+/**
+ * Déduit les domaines d’entités « compatibles » avec un type d’action HA.
+ * Si `domain.service` est fourni, un seul domaine ; sinon heuristiques pour les noms de service seuls.
+ */
+function domainsForActionType(actionType) {
+    const t = actionType.trim().toLowerCase();
+    if (!t) {
+        return [];
+    }
+    if (t.includes('.')) {
+        const dom = t.split('.')[0];
+        return dom ? [dom] : [];
+    }
+    const map = {
+        set_preset_mode: ['climate'],
+        set_temperature: ['climate'],
+        set_hvac_mode: ['climate'],
+        turn_on: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
+        turn_off: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
+        toggle: ['switch', 'light', 'input_boolean'],
+        open_cover: ['cover'],
+        close_cover: ['cover'],
+        set_cover_position: ['cover'],
+        stop_cover: ['cover'],
+        lock: ['lock'],
+        unlock: ['lock'],
+        alarm_arm_home: ['alarm_control_panel'],
+        alarm_arm_away: ['alarm_control_panel'],
+        alarm_disarm: ['alarm_control_panel'],
+    };
+    return map[t] ?? [];
+}
+function entityMatchesDomains(entityId, domains) {
+    if (!domains.length) {
+        return true;
+    }
+    const dom = entityId.split('.')[0];
+    return domains.includes(dom);
+}
+
+const MINUTES_PER_DAY = 24 * 60;
+function parseToMinutes(t) {
+    const parts = String(t).split(':').map((p) => Number(p));
+    const h = parts[0] ?? 0;
+    const m = parts[1] ?? 0;
+    const s = parts[2] ?? 0;
+    return h * 60 + m + s / 60;
+}
+function segmentLabel(block) {
+    const p = block.action_payload;
+    if (p && typeof p === 'object') {
+        const rec = p;
+        if (rec.preset_mode !== undefined) {
+            return String(rec.preset_mode);
+        }
+        if (rec.hvac_mode !== undefined) {
+            return String(rec.hvac_mode);
+        }
+        if (rec.position !== undefined) {
+            return `${String(rec.position)}%`;
+        }
+    }
+    const tail = block.action_type.includes('.')
+        ? block.action_type.split('.').pop()
+        : block.action_type;
+    return tail.length > 14 ? `${tail.slice(0, 12)}…` : tail;
+}
+function hueFromLabel(label) {
+    let h = 0;
+    for (let i = 0; i < label.length; i++) {
+        h = (h * 31 + label.charCodeAt(i)) % 360;
+    }
+    return h;
+}
+/** Même teinte que les segments de la frise (pastilles liste / barres). */
+function hueForBlock(block) {
+    const label = segmentLabel(block);
+    return hueFromLabel(`${label}-${block.action_type}`);
+}
+/**
+ * Découpe les plages en segments sur une journée (0:00–24:00), gère le passage minuit.
+ */
+function blocksToTimelineSegments(blocks) {
+    const out = [];
+    const day = MINUTES_PER_DAY;
+    for (const b of blocks || []) {
+        const start = parseToMinutes(b.start_time);
+        const end = parseToMinutes(b.end_time);
+        const label = segmentLabel(b);
+        const hue = hueForBlock(b);
+        if (end > start) {
+            const w = end - start;
+            out.push({
+                leftPct: (start / day) * 100,
+                widthPct: (w / day) * 100,
+                label,
+                hue,
+            });
+        }
+        else if (end < start) {
+            const w1 = day - start;
+            const w2 = end;
+            out.push({
+                leftPct: (start / day) * 100,
+                widthPct: (w1 / day) * 100,
+                label,
+                hue,
+            });
+            out.push({
+                leftPct: 0,
+                widthPct: (w2 / day) * 100,
+                label,
+                hue,
+            });
+        }
+    }
+    return out;
+}
+function nowPercentOfDay() {
+    const d = new Date();
+    const m = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+    return (m / MINUTES_PER_DAY) * 100;
+}
 
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
     setConfig(config) {
@@ -411,8 +649,9 @@ const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 const DEFAULT_BLOCK_DRAFT = {
     start: '08:00',
     end: '09:00',
-    actionType: 'set_preset_mode',
+    actionType: 'climate.set_preset_mode',
     payloadStr: '{"preset_mode":"comfort"}',
+    entityIds: [],
 };
 /** Format HH:MM[:SS] pour les services HA (évite `<input type="time">` = crash app Mac Catalyst). */
 function normalizeTimeForHa(t) {
@@ -445,6 +684,31 @@ function nowMinutes() {
     const d = new Date();
     return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
 }
+function sortKeysDeep(value) {
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.map(sortKeysDeep);
+    }
+    const rec = value;
+    const keys = Object.keys(rec).sort();
+    const out = {};
+    for (const k of keys) {
+        out[k] = sortKeysDeep(rec[k]);
+    }
+    return out;
+}
+function stablePayloadString(payload) {
+    return JSON.stringify(sortKeysDeep(payload ?? {}));
+}
+/** Empêche deux entrées identiques (horaires + action + payload normalisé). */
+function blockFingerprint(block) {
+    const st = normalizeTimeForHa(block.start_time);
+    const et = normalizeTimeForHa(block.end_time);
+    const at = String(block.action_type).trim();
+    return `${st}|${et}|${at}|${stablePayloadString(block.action_payload)}`;
+}
 let ScheduleManagerCard = class ScheduleManagerCard extends s {
     constructor() {
         super(...arguments);
@@ -452,6 +716,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._creating = false;
         /** Brouillon pour le formulaire « ajouter une plage » par planning */
         this._drafts = {};
+        /** Réinitialise le sélecteur d’entités après chaque ajout */
+        this._entityPickerNonce = {};
     }
     static get styles() {
         return styles;
@@ -617,11 +883,65 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     `;
     }
     draftFor(scheduleId) {
-        return this._drafts[scheduleId] ?? DEFAULT_BLOCK_DRAFT;
+        return (this._drafts[scheduleId] ?? {
+            ...DEFAULT_BLOCK_DRAFT,
+            entityIds: [...DEFAULT_BLOCK_DRAFT.entityIds],
+        });
     }
     patchDraft(scheduleId, patch) {
-        const prev = this._drafts[scheduleId] ?? { ...DEFAULT_BLOCK_DRAFT };
+        const prev = this._drafts[scheduleId] ?? {
+            ...DEFAULT_BLOCK_DRAFT,
+            entityIds: [...DEFAULT_BLOCK_DRAFT.entityIds],
+        };
         this._drafts = { ...this._drafts, [scheduleId]: { ...prev, ...patch } };
+    }
+    renderDayTimeline(blocks) {
+        const segments = blocksToTimelineSegments(blocks);
+        const nowPct = nowPercentOfDay();
+        return x `
+      <div class="timeline-frise" role="img" aria-label="Plages sur 24 heures">
+        <div class="timeline-rail">
+          ${segments.map((s) => x `
+              <div
+                class="timeline-segment"
+                style="left:${s.leftPct}%;width:${s.widthPct}%;background:hsl(${s.hue}, 52%, 40%)"
+                title=${s.label}
+              >
+                <span class="timeline-segment-label">${s.label}</span>
+              </div>
+            `)}
+          <div class="timeline-now" style="left:${nowPct}%"></div>
+        </div>
+        <div class="timeline-ticks">
+          <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+        </div>
+      </div>
+    `;
+    }
+    entityFilterForSchedule(scheduleId) {
+        const domains = domainsForActionType(this.draftFor(scheduleId).actionType);
+        return (entityId) => entityMatchesDomains(entityId, domains);
+    }
+    onEntitySelected(scheduleId, ev) {
+        const v = String(ev.detail?.value ?? '').trim();
+        if (!v) {
+            return;
+        }
+        const d = this.draftFor(scheduleId);
+        if (d.entityIds.includes(v)) {
+            return;
+        }
+        this.patchDraft(scheduleId, { entityIds: [...d.entityIds, v] });
+        this._entityPickerNonce = {
+            ...this._entityPickerNonce,
+            [scheduleId]: (this._entityPickerNonce[scheduleId] ?? 0) + 1,
+        };
+    }
+    removeDraftEntity(scheduleId, entityId) {
+        const d = this.draftFor(scheduleId);
+        this.patchDraft(scheduleId, {
+            entityIds: d.entityIds.filter((e) => e !== entityId),
+        });
     }
     blocksToPayload(blocks) {
         return (blocks || []).map((b) => ({
@@ -659,12 +979,24 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
           </div>
         </div>
 
+        ${blocks.length
+            ? x `
+              <div class="subsection-title">Vue 24 h</div>
+              <div class="timeline-hint">
+                Couleurs alignées avec la liste des plages (bande à gauche).
+              </div>
+              ${this.renderDayTimeline(blocks)}
+            `
+            : null}
         <div class="subsection-title">Plages horaires</div>
         ${blocks.length === 0
             ? x `<div class="empty-hint">Aucune plage — ajoutez-en une ci-dessous.</div>`
             : null}
         ${blocks.map((block, index) => x `
-            <div class="time-block ${this.isActiveBlock(block) ? 'active' : ''}">
+            <div
+              class="time-block ${this.isActiveBlock(block) ? 'active' : ''}"
+              style="--block-accent:hsl(${hueForBlock(block)} 52% 40%)"
+            >
               <div class="time-block-col">
                 <span
                   ><strong>${block.start_time}</strong> →
@@ -718,12 +1050,38 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             Type d’action
             <input
               type="text"
-              placeholder="set_preset_mode"
+              placeholder="climate.set_preset_mode"
               .value=${draft.actionType}
               @input=${(e) => this.patchDraft(schedule.id, {
             actionType: e.target.value,
         })}
             />
+          </label>
+          <label class="full-row entity-picker-row">
+            Entités (filtrées selon le domaine du service)
+            <div class="entity-chips">
+              ${draft.entityIds.map((eid) => x `
+                  <span class="entity-chip">
+                    <code>${eid}</code>
+                    <button
+                      type="button"
+                      aria-label="Retirer"
+                      @click=${() => this.removeDraftEntity(schedule.id, eid)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                `)}
+            </div>
+            <ha-entity-picker
+              .hass=${this.hass}
+              .entityFilter=${this.entityFilterForSchedule(schedule.id)}
+              .allowCustomEntity=${true}
+              label="Ajouter une entité"
+              .value=${''}
+              id=${`sm-ep-${schedule.id}-${this._entityPickerNonce[schedule.id] ?? 0}`}
+              @value-changed=${(e) => this.onEntitySelected(schedule.id, e)}
+            ></ha-entity-picker>
           </label>
           <label class="full-row">
             Payload JSON
@@ -839,15 +1197,29 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             alert('Indiquez une heure de début et de fin (ex. 08:00 et 09:30).');
             return;
         }
+        if (d.entityIds.length > 0) {
+            payload = {
+                ...payload,
+                entity_id: d.entityIds.length === 1 ? d.entityIds[0] : [...d.entityIds],
+            };
+        }
         const newBlock = {
             start_time: normalizeTimeForHa(d.start),
             end_time: normalizeTimeForHa(d.end),
             action_type: actionType,
             action_payload: payload,
         };
+        const fpNew = blockFingerprint(newBlock);
+        for (const b of schedule.time_blocks || []) {
+            if (blockFingerprint(b) === fpNew) {
+                alert('Cette plage existe déjà (mêmes horaires, type d’action et payload).');
+                return;
+            }
+        }
         const merged = [...this.blocksToPayload(schedule.time_blocks || []), newBlock];
         try {
             await this.services().updateSchedule(schedule.id, { time_blocks: merged });
+            this.patchDraft(schedule.id, { entityIds: [] });
         }
         catch (e) {
             // eslint-disable-next-line no-console
@@ -897,6 +1269,9 @@ __decorate([
 __decorate([
     t()
 ], ScheduleManagerCard.prototype, "_drafts", void 0);
+__decorate([
+    t()
+], ScheduleManagerCard.prototype, "_entityPickerNonce", void 0);
 ScheduleManagerCard = __decorate([
     e$1('schedule-manager-card')
 ], ScheduleManagerCard);

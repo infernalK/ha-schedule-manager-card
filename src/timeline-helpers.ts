@@ -48,6 +48,12 @@ function hueFromLabel(label: string): number {
   return h;
 }
 
+/** Même teinte que les segments de la frise (pastilles liste / barres). */
+export function hueForBlock(block: TimeBlock): number {
+  const label = segmentLabel(block);
+  return hueFromLabel(`${label}-${block.action_type}`);
+}
+
 /**
  * Découpe les plages en segments sur une journée (0:00–24:00), gère le passage minuit.
  */
@@ -59,7 +65,7 @@ export function blocksToTimelineSegments(blocks: TimeBlock[]): TimelineSegment[]
     const start = parseToMinutes(b.start_time);
     const end = parseToMinutes(b.end_time);
     const label = segmentLabel(b);
-    const hue = hueFromLabel(`${label}-${b.action_type}`);
+    const hue = hueForBlock(b);
 
     if (end > start) {
       const w = end - start;

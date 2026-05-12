@@ -12,7 +12,11 @@ import {
 import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
 import { domainsForActionType, entityMatchesDomains } from './entity-domains';
-import { blocksToTimelineSegments, nowPercentOfDay } from './timeline-helpers';
+import {
+  blocksToTimelineSegments,
+  hueForBlock,
+  nowPercentOfDay,
+} from './timeline-helpers';
 
 import './editor';
 
@@ -61,6 +65,39 @@ function parseTimeToMinutes(t: string): number {
 function nowMinutes(): number {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+}
+
+function sortKeysDeep(value: unknown): unknown {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(sortKeysDeep);
+  }
+  const rec = value as Record<string, unknown>;
+  const keys = Object.keys(rec).sort();
+  const out: Record<string, unknown> = {};
+  for (const k of keys) {
+    out[k] = sortKeysDeep(rec[k]);
+  }
+  return out;
+}
+
+function stablePayloadString(payload: unknown): string {
+  return JSON.stringify(sortKeysDeep(payload ?? {}));
+}
+
+/** Empêche deux entrées identiques (horaires + action + payload normalisé). */
+function blockFingerprint(block: {
+  start_time: string;
+  end_time: string;
+  action_type: string;
+  action_payload?: unknown;
+}): string {
+  const st = normalizeTimeForHa(block.start_time);
+  const et = normalizeTimeForHa(block.end_time);
+  const at = String(block.action_type).trim();
+  return `${st}|${et}|${at}|${stablePayloadString(block.action_payload)}`;
 }
 
 @customElement('schedule-manager-card')
@@ -380,14 +417,25 @@ export class ScheduleManagerCard extends LitElement {
           </div>
         </div>
 
+        ${blocks.length
+          ? html`
+              <div class="subsection-title">Vue 24 h</div>
+              <div class="timeline-hint">
+                Couleurs alignées avec la liste des plages (bande à gauche).
+              </div>
+              ${this.renderDayTimeline(blocks)}
+            `
+          : null}
         <div class="subsection-title">Plages horaires</div>
-        ${blocks.length ? this.renderDayTimeline(blocks) : null}
         ${blocks.length === 0
           ? html`<div class="empty-hint">Aucune plage — ajoutez-en une ci-dessous.</div>`
           : null}
         ${blocks.map(
           (block, index) => html`
-            <div class="time-block ${this.isActiveBlock(block) ? 'active' : ''}">
+            <div
+              class="time-block ${this.isActiveBlock(block) ? 'active' : ''}"
+              style="--block-accent:hsl(${hueForBlock(block)} 52% 40%)"
+            >
               <div class="time-block-col">
                 <span
                   ><strong>${block.start_time}</strong> →
@@ -613,6 +661,15 @@ export class ScheduleManagerCard extends LitElement {
       action_type: actionType,
       action_payload: payload,
     };
+    const fpNew = blockFingerprint(newBlock);
+    for (const b of schedule.time_blocks || []) {
+      if (blockFingerprint(b) === fpNew) {
+        alert(
+          'Cette plage existe déjà (mêmes horaires, type d’action et payload).'
+        );
+        return;
+      }
+    }
     const merged = [...this.blocksToPayload(schedule.time_blocks || []), newBlock];
     try {
       await this.services().updateSchedule(schedule.id, { time_blocks: merged });

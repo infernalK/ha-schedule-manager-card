@@ -142,6 +142,7 @@ export const styles = css`
     gap: 8px;
     padding: 8px;
     border: 1px solid var(--divider-color);
+    border-left: 4px solid var(--block-accent, rgba(127, 127, 127, 0.45));
     border-radius: 4px;
     margin-bottom: 4px;
   }
@@ -197,17 +198,29 @@ export const styles = css`
     border-radius: 4px;
   }
 
+  .timeline-hint {
+    font-size: 0.78em;
+    color: var(--secondary-text-color);
+    margin: -4px 0 8px;
+    line-height: 1.35;
+  }
+
   /* Frise 24 h */
   .timeline-frise {
-    margin: 10px 0 14px;
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(127, 127, 127, 0.08);
+    border: 1px solid var(--divider-color);
   }
 
   .timeline-rail {
     position: relative;
-    height: 44px;
+    height: 52px;
     border-radius: 6px;
-    background: rgba(127, 127, 127, 0.15);
+    background: rgba(127, 127, 127, 0.18);
     overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
   }
 
   .timeline-segment {
