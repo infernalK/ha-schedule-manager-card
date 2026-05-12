@@ -1,5 +1,5 @@
 import { LitElement, html } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { PropertyValues } from 'lit';
 import { CardConfig, HomeAssistant, Schedule, ScheduleGroup, TimeBlock } from './types';
 import { ScheduleManagerServices } from './services';
@@ -27,6 +27,9 @@ export class ScheduleManagerCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @property({ attribute: false }) public config!: CardConfig;
 
+  @state() private _newScheduleName = '';
+  @state() private _creating = false;
+
   static get styles() {
     return styles;
   }
@@ -53,8 +56,11 @@ export class ScheduleManagerCard extends LitElement {
   private getSchedulesRecord(): Record<string, Schedule> {
     const state = this.hass?.states[this.statusEntityId()];
     const attrs = state?.attributes as Record<string, unknown> | undefined;
-    const raw = attrs?.schedules as Record<string, Schedule> | undefined;
-    return raw && typeof raw === 'object' ? raw : {};
+    const raw = attrs?.schedules;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return {};
+    }
+    return raw as Record<string, Schedule>;
   }
 
   private getGroupsRecord(): Record<string, ScheduleGroup> {
@@ -109,13 +115,56 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private renderSchedulesList(scheduleIds: string[], schedulesMap: Record<string, Schedule>) {
+    const totalCount = Object.keys(schedulesMap).length;
     const list =
       scheduleIds.length > 0
         ? scheduleIds.map((id) => schedulesMap[id]).filter(Boolean)
         : Object.values(schedulesMap);
 
     if (!list.length) {
-      return html`<div>Aucun planning à afficher. Créez-en via les services ou précisez des IDs dans la config.</div>`;
+      if (scheduleIds.length > 0 && totalCount > 0) {
+        return html`
+          <div class="empty-hint">
+            Aucun planning ne correspond aux
+            <code class="inline">schedule_ids</code>
+            de la carte. Vérifiez les UUID dans les attributs du capteur
+            <code class="inline">schedules</code>.
+          </div>
+        `;
+      }
+      if (totalCount === 0) {
+        return html`
+          <div class="empty-hint">
+            Aucun planning enregistré pour l’instant. Créez-en un ci-dessous ou via
+            <strong>Outils de développement → Actions</strong> :
+            <code class="inline">schedule_manager.create_schedule</code>
+            (service <code class="inline">name</code> obligatoire).
+          </div>
+          <div class="create-row">
+            <input
+              type="text"
+              placeholder="Nom du planning (ex. Semaine)"
+              .value=${this._newScheduleName}
+              @input=${(e: Event) => {
+                this._newScheduleName = (e.target as HTMLInputElement).value;
+              }}
+              @keydown=${(e: KeyboardEvent) => {
+                if (e.key === 'Enter') {
+                  void this.createScheduleFromInput();
+                }
+              }}
+            />
+            <button
+              type="button"
+              ?disabled=${this._creating || !this._newScheduleName.trim()}
+              @click=${() => this.createScheduleFromInput()}
+            >
+              ${this._creating ? 'Création…' : 'Créer le planning'}
+            </button>
+          </div>
+        `;
+      }
+      return html`<div class="empty-hint">Aucun élément à afficher.</div>`;
     }
 
     return html`${list.map((s) => this.renderSchedule(s, undefined))}`;
@@ -211,6 +260,23 @@ export class ScheduleManagerCard extends LitElement {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('schedule_manager.set_active_schedule failed', e);
+    }
+  }
+
+  private async createScheduleFromInput() {
+    const name = this._newScheduleName.trim();
+    if (!name || this._creating) {
+      return;
+    }
+    this._creating = true;
+    try {
+      await this.services().createSchedule(name);
+      this._newScheduleName = '';
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('schedule_manager.create_schedule failed', e);
+    } finally {
+      this._creating = false;
     }
   }
 
