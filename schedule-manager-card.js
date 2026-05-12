@@ -92,6 +92,9 @@ const t={ATTRIBUTE:1,CHILD:2,PROPERTY:3,BOOLEAN_ATTRIBUTE:4,EVENT:5,ELEMENT:6},e
  * SPDX-License-Identifier: BSD-3-Clause
  */const i="important",n=" !"+i,o=e(class extends i$1{constructor(t$1){var e;if(super(t$1),t$1.type!==t.ATTRIBUTE||"style"!==t$1.name||(null===(e=t$1.strings)||void 0===e?void 0:e.length)>2)throw Error("The `styleMap` directive must be used in the `style` attribute and must be the only part in the attribute.")}render(t){return Object.keys(t).reduce(((e,r)=>{const s=t[r];return null==s?e:e+`${r=r.includes("-")?r:r.replace(/(?:^(webkit|moz|ms|o)|)(?=[A-Z])/g,"-$&").toLowerCase()}:${s};`}),"")}update(e,[r]){const{style:s}=e.element;if(void 0===this.ht){this.ht=new Set;for(const t in r)this.ht.add(t);return this.render(r)}this.ht.forEach((t=>{null==r[t]&&(this.ht.delete(t),t.includes("-")?s.removeProperty(t):s[t]="");}));for(const t in r){const e=r[t];if(null!=e){this.ht.add(t);const r="string"==typeof e&&e.endsWith(n);t.includes("-")||r?s.setProperty(t,r?e.slice(0,-11):e,r?i:""):s[t]=e;}}return T}});
 
+/** Capteur créé par l’intégration Schedule Manager (`attributes.schedules`, `attributes.groups`). */
+const SCHEDULE_MANAGER_STATUS_ENTITY_ID = 'sensor.schedule_manager_status';
+
 class ScheduleManagerServices {
     constructor(hass) {
         this.hass = hass;
@@ -1235,10 +1238,28 @@ function timelineResizeHandlesForSelection(blocks, selectedIndex) {
 }
 
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
+    constructor() {
+        super(...arguments);
+        /** Réduit la liste aux capteurs « Schedule Manager » (nom ou attribut schedules). */
+        this._statusEntityFilter = (entityId) => {
+            if (entityId === SCHEDULE_MANAGER_STATUS_ENTITY_ID) {
+                return true;
+            }
+            if (entityId.includes('schedule_manager')) {
+                return true;
+            }
+            const st = this.hass?.states[entityId];
+            const attrs = st?.attributes;
+            const schedules = attrs?.schedules;
+            return (schedules != null &&
+                typeof schedules === 'object' &&
+                !Array.isArray(schedules));
+        };
+    }
     setConfig(config) {
         this._config = {
-            type: 'custom:schedule-manager-card',
             ...config,
+            type: 'custom:schedule-manager-card',
         };
     }
     render() {
@@ -1248,24 +1269,51 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
         }
         return x `
       <div class="card-config">
-        <ha-entity-picker
-          .hass=${hass}
-          label="Capteur Schedule Manager"
-          .value=${this._config?.status_entity ?? ''}
-          .includeDomains=${['sensor']}
-          .allowCustomEntity=${true}
-          @value-changed=${this._statusEntityChanged}
-        ></ha-entity-picker>
-        <ha-textfield
-          label="ID de groupe (optionnel)"
-          .value=${this._config?.group_id ?? ''}
-          @input=${this._groupIdChanged}
-        ></ha-textfield>
-        <ha-textfield
-          label="IDs de plannings (optionnel, virgules — vide = tous)"
-          .value=${this._config?.schedule_ids?.join(', ') ?? ''}
-          @input=${this._scheduleIdsChanged}
-        ></ha-textfield>
+        <div class="field-block">
+          <ha-entity-picker
+            .hass=${hass}
+            label="Capteur d’état Schedule Manager"
+            .value=${this._config?.status_entity ?? ''}
+            .includeDomains=${['sensor']}
+            .entityFilter=${this._statusEntityFilter}
+            .allowCustomEntity=${true}
+            @value-changed=${this._statusEntityChanged}
+          ></ha-entity-picker>
+          <p class="hint">
+            Choisissez le capteur créé par l’intégration
+            <strong>Schedule Manager</strong>, en principe
+            <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>.
+            Il expose les plannings dans ses attributs — ce n’est pas un capteur « statut » quelconque
+            (Prusa, Pi-hole, etc.). Laissez le champ vide pour utiliser cette valeur par défaut.
+          </p>
+        </div>
+        <div class="field-block">
+          <ha-textfield
+            label="ID de groupe (optionnel)"
+            .value=${this._config?.group_id ?? ''}
+            @input=${this._groupIdChanged}
+          ></ha-textfield>
+          <p class="hint">
+            Renseignez l’UUID d’un <strong>groupe</strong> défini dans Schedule Manager pour n’afficher
+            que ce groupe (excluant la liste ci‑dessous). Sinon laissez vide : la carte affiche une
+            liste de plannings selon le champ suivant.
+          </p>
+        </div>
+        <div class="field-block">
+          <ha-textfield
+            label="Plannings à afficher (optionnel)"
+            .value=${this._config?.schedule_ids?.join(', ') ?? ''}
+            placeholder="Vide = tous les plannings"
+            @input=${this._scheduleIdsChanged}
+          ></ha-textfield>
+          <p class="hint">
+            Une ou plusieurs UUID de plannings, séparées par des virgules.
+            <strong>Vide</strong> = afficher <strong>tous</strong> les plannings du capteur.
+            Les UUID se trouvent sous
+            <code class="inline">schedules</code> dans les attributs du capteur (Outils de développement
+            → États), ou dans le fichier de stockage de l’intégration.
+          </p>
+        </div>
       </div>
     `;
     }
@@ -1310,6 +1358,24 @@ ScheduleManagerCardEditor.styles = i$4 `
       display: block;
       width: 100%;
     }
+    .field-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .hint {
+      margin: 0;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      color: var(--secondary-text-color, rgba(0, 0, 0, 0.54));
+    }
+    code.inline {
+      font-size: 0.85em;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(127, 127, 127, 0.2);
+      word-break: break-all;
+    }
   `;
 __decorate([
     n$2({ attribute: false })
@@ -1321,7 +1387,6 @@ ScheduleManagerCardEditor = __decorate([
     e$2('schedule-manager-card-editor')
 ], ScheduleManagerCardEditor);
 
-const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 /** Pastilles de couleur rapides (+ valeur du sélecteur). */
 const BLOCK_COLOR_PRESETS = [
@@ -1606,7 +1671,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
     }
     statusEntityId() {
-        return this.config?.status_entity?.trim() || DEFAULT_STATUS_ENTITY;
+        return this.config?.status_entity?.trim() || SCHEDULE_MANAGER_STATUS_ENTITY_ID;
     }
     /**
      * La clé de l’objet `attributes.schedules` est l’identifiant canonique côté stockage.

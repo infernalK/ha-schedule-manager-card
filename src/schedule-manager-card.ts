@@ -9,6 +9,7 @@ import {
   ScheduleGroup,
   TimeBlock,
   TimeBlockServicePayload,
+  SCHEDULE_MANAGER_STATUS_ENTITY_ID,
 } from './types';
 import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
@@ -36,8 +37,6 @@ import {
 } from './timeline-helpers';
 
 import './editor';
-
-const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 
 const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 
@@ -335,7 +334,7 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private statusEntityId(): string {
-    return this.config?.status_entity?.trim() || DEFAULT_STATUS_ENTITY;
+    return this.config?.status_entity?.trim() || SCHEDULE_MANAGER_STATUS_ENTITY_ID;
   }
 
   /**

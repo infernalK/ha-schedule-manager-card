@@ -45,6 +45,9 @@ export interface TimeBlockServicePayload {
   id?: string;
 }
 
+/** Capteur créé par l’intégration Schedule Manager (`attributes.schedules`, `attributes.groups`). */
+export const SCHEDULE_MANAGER_STATUS_ENTITY_ID = 'sensor.schedule_manager_status';
+
 export interface CardConfig {
   type: string;
   group_id?: string;
