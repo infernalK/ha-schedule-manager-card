@@ -1294,17 +1294,6 @@ function normalizeTimeForHa(t) {
 function haTimeToHHMM(t) {
     return normalizeTimeForHa(t).slice(0, 5);
 }
-function parseTimeToMinutes(t) {
-    const parts = String(t).split(':').map((p) => Number(p));
-    const h = parts[0] ?? 0;
-    const m = parts[1] ?? 0;
-    const s = parts[2] ?? 0;
-    return h * 60 + m + s / 60;
-}
-function nowMinutes() {
-    const d = new Date();
-    return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
-}
 function sortKeysDeep(value) {
     if (value === null || typeof value !== 'object') {
         return value;
@@ -1431,12 +1420,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         const attrs = state?.attributes;
         const raw = attrs?.groups;
         return raw && typeof raw === 'object' ? raw : {};
-    }
-    getCurrentBlockId() {
-        const state = this.hass?.states[this.statusEntityId()];
-        const attrs = state?.attributes;
-        const cur = attrs?.current_time_block;
-        return cur?.id;
     }
     services() {
         return new ScheduleManagerServices(this.hass);
@@ -1645,39 +1628,15 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             ? x `
               <div class="subsection-title">Vue 24 h</div>
               <div class="timeline-hint">
-                Couleurs alignées avec la liste des plages (bande à gauche).
+                Aperçu graphique — ouvrez la configuration pour modifier les plages.
               </div>
               ${this.renderDayTimeline(blocks)}
             `
-            : null}
-        <div class="subsection-title">Plages horaires</div>
-        ${blocks.length === 0
-            ? x `<div class="empty-hint">Aucune plage — ajoutez-en une ci-dessous.</div>`
-            : null}
-        ${blocks.map((block, index) => x `
-            <div
-              class="time-block ${this.isActiveBlock(block) ? 'active' : ''}"
-              style="--block-accent:${blockTimelineFill(block)}"
-            >
-              <div class="time-block-col">
-                <span
-                  ><strong>${block.start_time}</strong> →
-                  <strong>${block.end_time}</strong></span
-                >
-                <span>${block.action_type}</span>
-                <span class="payload-preview"
-                  >${JSON.stringify(block.action_payload ?? {})}</span
-                >
+            : x `
+              <div class="empty-hint">
+                Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.
               </div>
-              <button
-                type="button"
-                class="block-remove"
-                @click=${() => this.removeBlockAt(schedule, index)}
-              >
-                Retirer
-              </button>
-            </div>
-          `)}
+            `}
 
         ${group?.exclusive
             ? x `
@@ -1692,22 +1651,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             : ''}
       </div>
     `;
-    }
-    isActiveBlock(block) {
-        const curId = this.getCurrentBlockId();
-        if (curId && block.id === curId) {
-            return true;
-        }
-        const start = parseTimeToMinutes(block.start_time);
-        const end = parseTimeToMinutes(block.end_time);
-        const now = nowMinutes();
-        if (end > start) {
-            return now >= start && now < end;
-        }
-        if (end < start) {
-            return now >= start || now < end;
-        }
-        return false;
     }
     async toggleSchedule(scheduleId, enabled) {
         try {
@@ -1742,19 +1685,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         catch (e) {
             // eslint-disable-next-line no-console
             console.error('schedule_manager.delete_schedule failed', e);
-        }
-    }
-    async removeBlockAt(schedule, index) {
-        const next = [...(schedule.time_blocks || [])];
-        next.splice(index, 1);
-        try {
-            await this.services().updateSchedule(schedule.id, {
-                time_blocks: this.blocksToPayload(next),
-            });
-        }
-        catch (e) {
-            // eslint-disable-next-line no-console
-            console.error('schedule_manager.update_schedule failed', e);
         }
     }
     openVisualEditor(schedule) {
