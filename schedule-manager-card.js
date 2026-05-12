@@ -432,6 +432,317 @@ const styles = i$2 `
     line-height: 1;
     padding: 0 2px;
   }
+
+  .btn-open-config {
+    width: 100%;
+    margin: 10px 0 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--primary-color);
+    color: var(--text-primary-color);
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-open-config:hover {
+    filter: brightness(1.06);
+  }
+
+  /* Éditeur plein écran (style config HA) */
+  .sm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: rgba(0, 0, 0, 0.52);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) 12px 24px;
+    overflow: auto;
+    box-sizing: border-box;
+  }
+
+  .sm-modal {
+    width: min(100%, 520px);
+    margin-top: 8px;
+    margin-bottom: 24px;
+    border-radius: 12px;
+    background: var(--card-background-color, var(--ha-card-background, #1e1e1e));
+    border: 1px solid var(--divider-color);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    color: var(--primary-text-color);
+  }
+
+  .sm-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--divider-color);
+  }
+
+  .sm-modal-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+
+  .sm-icon-btn {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--secondary-text-color);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .sm-icon-btn:hover {
+    background: rgba(127, 127, 127, 0.2);
+    color: var(--primary-text-color);
+  }
+
+  .sm-modal-sub {
+    padding: 12px 16px 8px;
+    font-size: 0.82em;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-modal-sub span {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .sm-repeat-days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sm-day {
+    min-width: 2.5rem;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: transparent;
+    color: var(--secondary-text-color);
+    font-size: 0.85em;
+    cursor: pointer;
+  }
+
+  .sm-day.on {
+    border-color: var(--primary-color);
+    background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.18);
+    color: var(--primary-text-color);
+    font-weight: 600;
+  }
+
+  .sm-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 16px 12px;
+    flex-wrap: wrap;
+  }
+
+  .sm-tool-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-size: 0.85em;
+    cursor: pointer;
+  }
+
+  .sm-tool-btn.danger {
+    border-color: rgba(219, 68, 55, 0.45);
+    color: var(--error-color, #ef5350);
+  }
+
+  .sm-tool-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .sm-editor-frise {
+    margin: 0 16px 12px;
+  }
+
+  .sm-modal-body {
+    padding: 0 16px 12px;
+  }
+
+  .sm-form-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 0.78em;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-form-label input[type='text'] {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 1rem;
+  }
+
+  .sm-form-label-last {
+    margin-bottom: 0;
+  }
+
+  .sm-payload-textarea {
+    min-height: 72px;
+    resize: vertical;
+    font-family: inherit;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+  }
+
+  .sm-action-card {
+    margin-top: 4px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--divider-color);
+    background: rgba(127, 127, 127, 0.06);
+  }
+
+  .sm-action-card h4 {
+    margin: 0 0 10px;
+    font-size: 0.88em;
+    font-weight: 600;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-time-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .sm-time-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.78em;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-time-row input {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-family: inherit;
+  }
+
+  .sm-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+    padding: 14px 16px 16px;
+    border-top: 1px solid var(--divider-color);
+  }
+
+  .btn-text {
+    padding: 8px 4px;
+    border: none;
+    background: transparent;
+    font-size: 0.95em;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .btn-text.primary {
+    color: var(--primary-color);
+    font-weight: 600;
+  }
+
+  .btn-text.danger {
+    color: var(--secondary-text-color);
+    margin-right: auto;
+  }
+
+  .timeline-segment.is-selected {
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 255, 255, 0.95),
+      0 0 0 2px rgba(0, 0, 0, 0.35);
+    z-index: 1;
+    cursor: pointer;
+  }
+
+  .sm-editor-rail .timeline-segment {
+    cursor: pointer;
+  }
+
+  .sm-editor-rail .timeline-segment:hover {
+    filter: brightness(1.12);
+  }
+
+  .timeline-boundary-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    margin-left: -7px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.35),
+      0 2px 6px rgba(0, 0, 0, 0.25);
+    cursor: ew-resize;
+    z-index: 4;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(0, 0, 0, 0.45);
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .timeline-boundary-handle::after {
+    content: '◀▶';
+    letter-spacing: -2px;
+    pointer-events: none;
+  }
+
+  .timeline-boundary-handle:hover {
+    background: var(--primary-color, #03a9f4);
+    color: var(--text-primary-color, #fff);
+  }
+
+  .sm-select {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+  }
 `;
 
 /**
@@ -519,7 +830,9 @@ function hueForBlock(block) {
 function blocksToTimelineSegments(blocks) {
     const out = [];
     const day = MINUTES_PER_DAY;
-    for (const b of blocks || []) {
+    const list = blocks || [];
+    for (let bi = 0; bi < list.length; bi++) {
+        const b = list[bi];
         const start = parseToMinutes(b.start_time);
         const end = parseToMinutes(b.end_time);
         const label = segmentLabel(b);
@@ -531,6 +844,7 @@ function blocksToTimelineSegments(blocks) {
                 widthPct: (w / day) * 100,
                 label,
                 hue,
+                blockIndex: bi,
             });
         }
         else if (end < start) {
@@ -541,12 +855,14 @@ function blocksToTimelineSegments(blocks) {
                 widthPct: (w1 / day) * 100,
                 label,
                 hue,
+                blockIndex: bi,
             });
             out.push({
                 leftPct: 0,
                 widthPct: (w2 / day) * 100,
                 label,
                 hue,
+                blockIndex: bi,
             });
         }
     }
@@ -556,6 +872,61 @@ function nowPercentOfDay() {
     const d = new Date();
     const m = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
     return (m / MINUTES_PER_DAY) * 100;
+}
+function minutesToHaTime(totalMinutes) {
+    let m = Math.round(totalMinutes) % MINUTES_PER_DAY;
+    if (m < 0) {
+        m += MINUTES_PER_DAY;
+    }
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
+}
+function isOvernightBlock(b) {
+    const s = parseToMinutes(b.start_time);
+    const e = parseToMinutes(b.end_time);
+    return e < s;
+}
+function touchBoundariesBetweenBlocks(blocks) {
+    const list = blocks || [];
+    const segments = blocksToTimelineSegments(list);
+    if (segments.length < 2) {
+        return [];
+    }
+    const sorted = [...segments].sort((a, b) => a.leftPct - b.leftPct);
+    const eps = 0.12;
+    const out = [];
+    for (let i = 0; i < sorted.length - 1; i++) {
+        const a = sorted[i];
+        const b = sorted[i + 1];
+        const endA = a.leftPct + a.widthPct;
+        if (Math.abs(endA - b.leftPct) > eps) {
+            continue;
+        }
+        if (a.blockIndex === b.blockIndex) {
+            continue;
+        }
+        const L = list[a.blockIndex];
+        const R = list[b.blockIndex];
+        if (!L || !R || isOvernightBlock(L) || isOvernightBlock(R)) {
+            continue;
+        }
+        const minM = Math.floor(parseToMinutes(L.start_time)) + 1;
+        const maxM = Math.ceil(parseToMinutes(R.end_time)) - 1;
+        if (minM >= maxM) {
+            continue;
+        }
+        const boundaryMin = Math.round((parseToMinutes(L.end_time) + parseToMinutes(R.start_time)) / 2);
+        const pct = (boundaryMin / MINUTES_PER_DAY) * 100;
+        out.push({
+            pct,
+            leftBlockIndex: a.blockIndex,
+            rightBlockIndex: b.blockIndex,
+            minMinute: minM,
+            maxMinute: maxM,
+        });
+    }
+    return out;
 }
 
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
@@ -646,13 +1017,47 @@ ScheduleManagerCardEditor = __decorate([
 ], ScheduleManagerCardEditor);
 
 const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
-const DEFAULT_BLOCK_DRAFT = {
-    start: '08:00',
-    end: '09:00',
-    actionType: 'climate.set_preset_mode',
-    payloadStr: '{"preset_mode":"comfort"}',
-    entityIds: [],
-};
+const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+function payloadWithoutEntityId(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return {};
+    }
+    const rec = { ...payload };
+    delete rec.entity_id;
+    return rec;
+}
+function entityIdsFromPayload(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return [];
+    }
+    const e = payload.entity_id;
+    if (typeof e === 'string') {
+        return [e];
+    }
+    if (Array.isArray(e)) {
+        return e.filter((x) => typeof x === 'string');
+    }
+    return [];
+}
+function defaultNewBlock() {
+    return {
+        start_time: '12:00:00',
+        end_time: '13:00:00',
+        action_type: 'climate.set_preset_mode',
+        action_payload: { preset_mode: 'comfort' },
+    };
+}
+function findDuplicateBlockIndex(blocks) {
+    const seen = new Set();
+    for (let i = 0; i < blocks.length; i++) {
+        const fp = blockFingerprint(blocks[i]);
+        if (seen.has(fp)) {
+            return i;
+        }
+        seen.add(fp);
+    }
+    return -1;
+}
 /** Format HH:MM[:SS] pour les services HA (évite `<input type="time">` = crash app Mac Catalyst). */
 function normalizeTimeForHa(t) {
     const s = t.trim();
@@ -672,6 +1077,9 @@ function normalizeTimeForHa(t) {
         return '00:00:00';
     }
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+function haTimeToHHMM(t) {
+    return normalizeTimeForHa(t).slice(0, 5);
 }
 function parseTimeToMinutes(t) {
     const parts = String(t).split(':').map((p) => Number(p));
@@ -714,10 +1122,52 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         super(...arguments);
         this._newScheduleName = '';
         this._creating = false;
-        /** Brouillon pour le formulaire « ajouter une plage » par planning */
-        this._drafts = {};
-        /** Réinitialise le sélecteur d’entités après chaque ajout */
-        this._entityPickerNonce = {};
+        /** Éditeur plein écran (frise + détail plage), style config HA */
+        this._visualEdit = null;
+        this._visualPayloadStr = '';
+        this._visualEntityPickerNonce = 0;
+        /** Glisser-déposer sur la frise (pas @state : évite un render à chaque pixel). */
+        this._boundaryDrag = null;
+        this._onBoundaryMove = (ev) => {
+            const d = this._boundaryDrag;
+            if (!d || !this._visualEdit || ev.pointerId !== d.pointerId) {
+                return;
+            }
+            const rect = d.rail.getBoundingClientRect();
+            const x = Math.max(0, Math.min(rect.width, ev.clientX - rect.left));
+            const pct = (x / rect.width) * 100;
+            let m = Math.round((pct / 100) * MINUTES_PER_DAY);
+            m = Math.max(d.minM, Math.min(d.maxM, m));
+            const ha = minutesToHaTime(m);
+            const blocks = [...this._visualEdit.blocks];
+            const L = blocks[d.leftIdx];
+            const R = blocks[d.rightIdx];
+            if (!L || !R) {
+                return;
+            }
+            blocks[d.leftIdx] = { ...L, end_time: ha };
+            blocks[d.rightIdx] = { ...R, start_time: ha };
+            this._visualEdit = { ...this._visualEdit, blocks };
+            this.requestUpdate();
+        };
+        this._onBoundaryUp = (ev) => {
+            const d = this._boundaryDrag;
+            if (!d) {
+                return;
+            }
+            window.removeEventListener('pointermove', this._onBoundaryMove);
+            window.removeEventListener('pointerup', this._onBoundaryUp);
+            window.removeEventListener('pointercancel', this._onBoundaryUp);
+            if (ev.pointerId === d.pointerId) {
+                try {
+                    d.handle.releasePointerCapture(ev.pointerId);
+                }
+                catch {
+                    /* ignore */
+                }
+            }
+            this._boundaryDrag = null;
+        };
     }
     static get styles() {
         return styles;
@@ -732,6 +1182,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         super.updated(changed);
         if (changed.has('hass') && this.hass) {
             void this.requestUpdate();
+        }
+        if (changed.has('_visualEdit') && this._visualEdit) {
+            requestAnimationFrame(() => {
+                const m = this.shadowRoot?.querySelector('.sm-modal');
+                m?.focus();
+            });
         }
     }
     statusEntityId() {
@@ -791,14 +1247,17 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
       `;
         }
         return x `
-      <ha-card class="card">
-        <div class="card-header">Schedule Manager</div>
-        <div class="card-content">
-          ${groupId
+      <div>
+        <ha-card class="card">
+          <div class="card-header">Schedule Manager</div>
+          <div class="card-content">
+            ${groupId
             ? this.renderGroup(groupsMap[groupId], schedulesMap)
             : this.renderSchedulesList(scheduleIds, schedulesMap)}
-        </div>
-      </ha-card>
+          </div>
+        </ha-card>
+        ${this.renderVisualEditorOverlay()}
+      </div>
     `;
     }
     renderSchedulesList(scheduleIds, schedulesMap) {
@@ -882,19 +1341,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
       </div>
     `;
     }
-    draftFor(scheduleId) {
-        return (this._drafts[scheduleId] ?? {
-            ...DEFAULT_BLOCK_DRAFT,
-            entityIds: [...DEFAULT_BLOCK_DRAFT.entityIds],
-        });
-    }
-    patchDraft(scheduleId, patch) {
-        const prev = this._drafts[scheduleId] ?? {
-            ...DEFAULT_BLOCK_DRAFT,
-            entityIds: [...DEFAULT_BLOCK_DRAFT.entityIds],
-        };
-        this._drafts = { ...this._drafts, [scheduleId]: { ...prev, ...patch } };
-    }
     renderDayTimeline(blocks) {
         const segments = blocksToTimelineSegments(blocks);
         const nowPct = nowPercentOfDay();
@@ -918,31 +1364,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
       </div>
     `;
     }
-    entityFilterForSchedule(scheduleId) {
-        const domains = domainsForActionType(this.draftFor(scheduleId).actionType);
-        return (entityId) => entityMatchesDomains(entityId, domains);
-    }
-    onEntitySelected(scheduleId, ev) {
-        const v = String(ev.detail?.value ?? '').trim();
-        if (!v) {
-            return;
-        }
-        const d = this.draftFor(scheduleId);
-        if (d.entityIds.includes(v)) {
-            return;
-        }
-        this.patchDraft(scheduleId, { entityIds: [...d.entityIds, v] });
-        this._entityPickerNonce = {
-            ...this._entityPickerNonce,
-            [scheduleId]: (this._entityPickerNonce[scheduleId] ?? 0) + 1,
-        };
-    }
-    removeDraftEntity(scheduleId, entityId) {
-        const d = this.draftFor(scheduleId);
-        this.patchDraft(scheduleId, {
-            entityIds: d.entityIds.filter((e) => e !== entityId),
-        });
-    }
     blocksToPayload(blocks) {
         return (blocks || []).map((b) => ({
             start_time: String(b.start_time),
@@ -958,7 +1379,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!schedule) {
             return x ``;
         }
-        const draft = this.draftFor(schedule.id);
         const blocks = schedule.time_blocks || [];
         return x `
       <div class="schedule">
@@ -978,6 +1398,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             </button>
           </div>
         </div>
+
+        <button
+          type="button"
+          class="btn-open-config"
+          @click=${() => this.openVisualEditor(schedule)}
+        >
+          Configurer les plages…
+        </button>
 
         ${blocks.length
             ? x `
@@ -1016,86 +1444,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
               </button>
             </div>
           `)}
-
-        <div class="add-block-form">
-          <label>
-            Début (HH:MM)
-            <input
-              class="time-field"
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder="08:00"
-              maxlength="8"
-              .value=${draft.start}
-              @input=${(e) => this.patchDraft(schedule.id, {
-            start: e.target.value,
-        })}
-            />
-          </label>
-          <label>
-            Fin (HH:MM)
-            <input
-              class="time-field"
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder="09:00"
-              maxlength="8"
-              .value=${draft.end}
-              @input=${(e) => this.patchDraft(schedule.id, { end: e.target.value })}
-            />
-          </label>
-          <label class="full-row">
-            Type d’action
-            <input
-              type="text"
-              placeholder="climate.set_preset_mode"
-              .value=${draft.actionType}
-              @input=${(e) => this.patchDraft(schedule.id, {
-            actionType: e.target.value,
-        })}
-            />
-          </label>
-          <label class="full-row entity-picker-row">
-            Entités (filtrées selon le domaine du service)
-            <div class="entity-chips">
-              ${draft.entityIds.map((eid) => x `
-                  <span class="entity-chip">
-                    <code>${eid}</code>
-                    <button
-                      type="button"
-                      aria-label="Retirer"
-                      @click=${() => this.removeDraftEntity(schedule.id, eid)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                `)}
-            </div>
-            <ha-entity-picker
-              .hass=${this.hass}
-              .entityFilter=${this.entityFilterForSchedule(schedule.id)}
-              .allowCustomEntity=${true}
-              label="Ajouter une entité"
-              .value=${''}
-              id=${`sm-ep-${schedule.id}-${this._entityPickerNonce[schedule.id] ?? 0}`}
-              @value-changed=${(e) => this.onEntitySelected(schedule.id, e)}
-            ></ha-entity-picker>
-          </label>
-          <label class="full-row">
-            Payload JSON
-            <textarea
-              .value=${draft.payloadStr}
-              @input=${(e) => this.patchDraft(schedule.id, {
-            payloadStr: e.target.value,
-        })}
-            ></textarea>
-          </label>
-          <button type="button" class="add-plage" @click=${() => this.addBlockToSchedule(schedule)}>
-            Ajouter la plage
-          </button>
-        </div>
 
         ${group?.exclusive
             ? x `
@@ -1175,56 +1523,571 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             console.error('schedule_manager.update_schedule failed', e);
         }
     }
-    async addBlockToSchedule(schedule) {
-        const d = this.draftFor(schedule.id);
-        let payload;
-        try {
-            payload = JSON.parse(d.payloadStr.trim() || '{}');
-            if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
-                throw new Error('payload doit être un objet JSON');
+    openVisualEditor(schedule) {
+        const blocks = JSON.parse(JSON.stringify(schedule.time_blocks || []));
+        this._visualEdit = {
+            scheduleId: schedule.id,
+            blocks,
+            repeatDays: [
+                ...(schedule.repeat_days && schedule.repeat_days.length > 0
+                    ? schedule.repeat_days
+                    : [0, 1, 2, 3, 4, 5, 6]),
+            ],
+            selectedIndex: 0,
+        };
+        this.syncPayloadStrFromSelection();
+    }
+    closeVisualEditor() {
+        this.endBoundaryDrag();
+        this._visualEdit = null;
+        this._visualPayloadStr = '';
+    }
+    endBoundaryDrag() {
+        const d = this._boundaryDrag;
+        window.removeEventListener('pointermove', this._onBoundaryMove);
+        window.removeEventListener('pointerup', this._onBoundaryUp);
+        window.removeEventListener('pointercancel', this._onBoundaryUp);
+        if (d) {
+            try {
+                d.handle.releasePointerCapture(d.pointerId);
+            }
+            catch {
+                /* ignore */
             }
         }
-        catch {
-            alert('Payload JSON invalide (objet attendu, ex. {"preset_mode":"comfort"})');
+        this._boundaryDrag = null;
+    }
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        this.endBoundaryDrag();
+    }
+    onBoundaryPointerDown(ev, tb) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!this._visualEdit) {
             return;
         }
-        const actionType = d.actionType.trim();
-        if (!actionType) {
-            alert('Indiquez un type d’action.');
+        const rail = ev.currentTarget.closest('.sm-editor-rail');
+        if (!rail) {
             return;
         }
-        if (!d.start.trim() || !d.end.trim()) {
-            alert('Indiquez une heure de début et de fin (ex. 08:00 et 09:30).');
-            return;
-        }
-        if (d.entityIds.length > 0) {
-            payload = {
-                ...payload,
-                entity_id: d.entityIds.length === 1 ? d.entityIds[0] : [...d.entityIds],
-            };
-        }
-        const newBlock = {
-            start_time: normalizeTimeForHa(d.start),
-            end_time: normalizeTimeForHa(d.end),
-            action_type: actionType,
-            action_payload: payload,
+        this.endBoundaryDrag();
+        const handle = ev.currentTarget;
+        this._boundaryDrag = {
+            pointerId: ev.pointerId,
+            leftIdx: tb.leftBlockIndex,
+            rightIdx: tb.rightBlockIndex,
+            minM: tb.minMinute,
+            maxM: tb.maxMinute,
+            rail,
+            handle,
         };
-        const fpNew = blockFingerprint(newBlock);
-        for (const b of schedule.time_blocks || []) {
-            if (blockFingerprint(b) === fpNew) {
-                alert('Cette plage existe déjà (mêmes horaires, type d’action et payload).');
+        handle.setPointerCapture(ev.pointerId);
+        window.addEventListener('pointermove', this._onBoundaryMove);
+        window.addEventListener('pointerup', this._onBoundaryUp);
+        window.addEventListener('pointercancel', this._onBoundaryUp);
+    }
+    syncPayloadStrFromSelection() {
+        if (!this._visualEdit) {
+            this._visualPayloadStr = '{}';
+            return;
+        }
+        const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
+        if (!b) {
+            this._visualPayloadStr = '{}';
+            return;
+        }
+        try {
+            this._visualPayloadStr = JSON.stringify(payloadWithoutEntityId(b.action_payload), null, 2);
+        }
+        catch {
+            this._visualPayloadStr = '{}';
+        }
+    }
+    applyPayloadEditorToVisualBlocks() {
+        if (!this._visualEdit) {
+            return false;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        if (!block) {
+            return true;
+        }
+        try {
+            const raw = this._visualPayloadStr.trim() || '{}';
+            const extra = JSON.parse(raw);
+            if (typeof extra !== 'object' || extra === null || Array.isArray(extra)) {
+                throw new Error('invalid');
+            }
+            delete extra.entity_id;
+            const entityIds = entityIdsFromPayload(block.action_payload);
+            const action_payload = { ...extra };
+            if (entityIds.length === 1) {
+                action_payload.entity_id = entityIds[0];
+            }
+            else if (entityIds.length > 1) {
+                action_payload.entity_id = [...entityIds];
+            }
+            const nextBlocks = [...this._visualEdit.blocks];
+            nextBlocks[sel] = { ...block, action_payload };
+            this._visualEdit = { ...this._visualEdit, blocks: nextBlocks };
+            return true;
+        }
+        catch {
+            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu).');
+            return false;
+        }
+    }
+    visualToggleDay(day) {
+        if (!this._visualEdit) {
+            return;
+        }
+        let days = [...this._visualEdit.repeatDays];
+        if (days.includes(day)) {
+            days = days.filter((d) => d !== day);
+        }
+        else {
+            days = [...days, day].sort((a, b) => a - b);
+        }
+        if (days.length === 0) {
+            alert('Sélectionnez au moins un jour.');
+            return;
+        }
+        this._visualEdit = { ...this._visualEdit, repeatDays: days };
+    }
+    visualSelectBlock(index) {
+        if (!this._visualEdit) {
+            return;
+        }
+        if (!this.applyPayloadEditorToVisualBlocks()) {
+            return;
+        }
+        const max = this._visualEdit.blocks.length - 1;
+        const idx = Math.max(0, Math.min(index, max));
+        this._visualEdit = { ...this._visualEdit, selectedIndex: idx };
+        this.syncPayloadStrFromSelection();
+    }
+    visualPatchSelected(patch) {
+        if (!this._visualEdit) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const cur = this._visualEdit.blocks[sel];
+        if (!cur) {
+            return;
+        }
+        const nextBlocks = [...this._visualEdit.blocks];
+        nextBlocks[sel] = { ...cur, ...patch };
+        this._visualEdit = { ...this._visualEdit, blocks: nextBlocks };
+    }
+    visualAddBlock() {
+        if (!this._visualEdit) {
+            return;
+        }
+        if (!this.applyPayloadEditorToVisualBlocks()) {
+            return;
+        }
+        const nb = defaultNewBlock();
+        const nextBlocks = [...this._visualEdit.blocks, nb];
+        const fp = blockFingerprint(nb);
+        for (const b of this._visualEdit.blocks) {
+            if (blockFingerprint(b) === fp) {
+                alert('Une plage identique existe déjà — modifiez les horaires ou le service.');
                 return;
             }
         }
-        const merged = [...this.blocksToPayload(schedule.time_blocks || []), newBlock];
+        this._visualEdit = {
+            ...this._visualEdit,
+            blocks: nextBlocks,
+            selectedIndex: nextBlocks.length - 1,
+        };
+        this.syncPayloadStrFromSelection();
+        this._visualEntityPickerNonce += 1;
+    }
+    visualRemoveSelected() {
+        if (!this._visualEdit) {
+            return;
+        }
+        if (!this.applyPayloadEditorToVisualBlocks()) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const nextBlocks = this._visualEdit.blocks.filter((_, i) => i !== sel);
+        let nextSel = sel;
+        if (nextSel >= nextBlocks.length) {
+            nextSel = Math.max(0, nextBlocks.length - 1);
+        }
+        this._visualEdit = {
+            ...this._visualEdit,
+            blocks: nextBlocks,
+            selectedIndex: nextSel,
+        };
+        this.syncPayloadStrFromSelection();
+        this._visualEntityPickerNonce += 1;
+    }
+    entityFilterVisualEditor() {
+        if (!this._visualEdit) {
+            return () => true;
+        }
+        const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
+        const domains = domainsForActionType(b?.action_type ?? '');
+        return (entityId) => entityMatchesDomains(entityId, domains);
+    }
+    visualOnEntitySelected(ev) {
+        const v = String(ev.detail?.value ?? '').trim();
+        if (!v || !this._visualEdit) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        if (!block) {
+            return;
+        }
+        const ids = entityIdsFromPayload(block.action_payload);
+        if (ids.includes(v)) {
+            return;
+        }
+        const nextIds = [...ids, v];
+        const base = typeof block.action_payload === 'object' && block.action_payload !== null
+            ? { ...block.action_payload }
+            : {};
+        if (nextIds.length === 1) {
+            base.entity_id = nextIds[0];
+        }
+        else {
+            base.entity_id = nextIds;
+        }
+        this.visualPatchSelected({ action_payload: base });
+        this._visualEntityPickerNonce += 1;
+    }
+    visualRemoveEntity(entityId) {
+        if (!this._visualEdit) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        if (!block) {
+            return;
+        }
+        const ids = entityIdsFromPayload(block.action_payload).filter((e) => e !== entityId);
+        const base = typeof block.action_payload === 'object' && block.action_payload !== null
+            ? { ...block.action_payload }
+            : {};
+        delete base.entity_id;
+        if (ids.length === 1) {
+            base.entity_id = ids[0];
+        }
+        else if (ids.length > 1) {
+            base.entity_id = ids;
+        }
+        this.visualPatchSelected({ action_payload: base });
+    }
+    async saveVisualEditor() {
+        if (!this._visualEdit) {
+            return;
+        }
+        if (!this.applyPayloadEditorToVisualBlocks()) {
+            return;
+        }
+        const { scheduleId, blocks, repeatDays } = this._visualEdit;
+        for (const b of blocks) {
+            if (!String(b.action_type ?? '').trim()) {
+                alert('Chaque plage doit avoir un type d’action (service).');
+                return;
+            }
+        }
+        const dupAt = findDuplicateBlockIndex(blocks);
+        if (dupAt >= 0) {
+            alert(`Deux plages identiques (horaires + action + payload) — modifiez l’entrée n° ${dupAt + 1}.`);
+            return;
+        }
         try {
-            await this.services().updateSchedule(schedule.id, { time_blocks: merged });
-            this.patchDraft(schedule.id, { entityIds: [] });
+            await this.services().updateSchedule(scheduleId, {
+                repeat_days: repeatDays,
+                time_blocks: this.blocksToPayload(blocks),
+            });
+            this.closeVisualEditor();
         }
         catch (e) {
             // eslint-disable-next-line no-console
             console.error('schedule_manager.update_schedule failed', e);
         }
+    }
+    renderClimatePresetSelect(selected) {
+        const modes = this.getClimatePresetModesForSelected();
+        if (!modes?.length) {
+            return x ``;
+        }
+        const cur = String(selected.action_payload?.preset_mode ?? '');
+        const orphan = cur && !modes.includes(cur);
+        return x `
+      <label class="sm-form-label">
+        Mode préréglé
+        <select
+          class="sm-select"
+          .value=${cur}
+          @change=${(e) => this.visualSetPresetMode(e.target.value)}
+        >
+          ${orphan ? x `<option value=${cur}>${cur} (actuel)</option>` : null}
+          ${modes.map((m) => x `<option value=${m}>${m}</option>`)}
+        </select>
+      </label>
+    `;
+    }
+    getClimatePresetModesForSelected() {
+        if (!this.hass || !this._visualEdit) {
+            return null;
+        }
+        const block = this._visualEdit.blocks[this._visualEdit.selectedIndex];
+        if (!block || block.action_type.trim() !== 'climate.set_preset_mode') {
+            return null;
+        }
+        const ids = entityIdsFromPayload(block.action_payload);
+        for (const id of ids) {
+            if (!id.startsWith('climate.')) {
+                continue;
+            }
+            const st = this.hass.states[id];
+            if (!st) {
+                continue;
+            }
+            const pm = st.attributes?.preset_modes;
+            if (Array.isArray(pm) && pm.every((x) => typeof x === 'string')) {
+                return pm;
+            }
+        }
+        return null;
+    }
+    visualSetPresetMode(mode) {
+        if (!this._visualEdit) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        if (!block) {
+            return;
+        }
+        const base = typeof block.action_payload === 'object' && block.action_payload !== null
+            ? { ...block.action_payload }
+            : {};
+        base.preset_mode = mode;
+        this.visualPatchSelected({ action_payload: base });
+        this.syncPayloadStrFromSelection();
+    }
+    renderEditorTimeline(blocks, selectedIndex) {
+        const segments = blocksToTimelineSegments(blocks);
+        const boundaries = touchBoundariesBetweenBlocks(blocks);
+        const nowPct = nowPercentOfDay();
+        return x `
+      <div
+        class="timeline-frise sm-editor-frise"
+        role="group"
+        aria-label="Plages sur 24 heures — cliquer pour sélectionner, poignées pour ajuster"
+      >
+        <div class="timeline-rail sm-editor-rail">
+          ${segments.map((s) => x `
+              <div
+                class="timeline-segment ${s.blockIndex === selectedIndex
+            ? 'is-selected'
+            : ''}"
+                style="left:${s.leftPct}%;width:${s.widthPct}%;background:hsl(${s.hue}, 52%, 40%)"
+                title=${s.label}
+                @click=${() => this.visualSelectBlock(s.blockIndex)}
+              >
+                <span class="timeline-segment-label">${s.label}</span>
+              </div>
+            `)}
+          ${boundaries.map((tb) => x `
+              <button
+                type="button"
+                class="timeline-boundary-handle"
+                style="left:${tb.pct}%"
+                aria-label="Ajuster la transition entre deux plages"
+                title="Glisser pour déplacer la transition"
+                @pointerdown=${(e) => this.onBoundaryPointerDown(e, tb)}
+              ></button>
+            `)}
+          <div class="timeline-now" style="left:${nowPct}%"></div>
+        </div>
+        <div class="timeline-ticks">
+          <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+        </div>
+      </div>
+    `;
+    }
+    renderVisualEditorOverlay() {
+        const v = this._visualEdit;
+        if (!v || !this.hass) {
+            return x ``;
+        }
+        const schedulesMap = this.getSchedulesRecord();
+        const raw = schedulesMap[v.scheduleId];
+        if (!raw) {
+            return x ``;
+        }
+        const schedule = this.withCanonicalId(v.scheduleId, raw);
+        const blocks = v.blocks;
+        const sel = v.selectedIndex;
+        const selected = blocks[sel];
+        return x `
+      <div
+        class="sm-overlay"
+        @click=${(e) => {
+            if (e.target === e.currentTarget) {
+                this.closeVisualEditor();
+            }
+        }}
+      >
+        <div
+        class="sm-modal"
+        tabindex="-1"
+        @click=${(e) => e.stopPropagation()}
+        @keydown=${(e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                this.closeVisualEditor();
+            }
+        }}
+        >
+          <div class="sm-modal-head">
+            <h2>${schedule.name}</h2>
+            <button
+              type="button"
+              class="sm-icon-btn"
+              aria-label="Fermer"
+              @click=${() => this.closeVisualEditor()}
+            >
+              ×
+            </button>
+          </div>
+          <div class="sm-modal-sub">
+            <span>Jours de répétition</span>
+            <div class="sm-repeat-days">
+              ${WEEKDAY_LABELS_FR.map((label, day) => x `
+                  <button
+                    type="button"
+                    class="sm-day ${v.repeatDays.includes(day) ? 'on' : ''}"
+                    @click=${() => this.visualToggleDay(day)}
+                  >
+                    ${label}
+                  </button>
+                `)}
+            </div>
+          </div>
+          <div class="sm-toolbar">
+            <button type="button" class="sm-tool-btn" @click=${() => this.visualAddBlock()}>
+              ＋ Ajouter une plage
+            </button>
+            <button
+              type="button"
+              class="sm-tool-btn danger"
+              ?disabled=${blocks.length === 0}
+              @click=${() => this.visualRemoveSelected()}
+            >
+              Supprimer la plage
+            </button>
+          </div>
+          ${blocks.length ? this.renderEditorTimeline(blocks, sel) : x `
+              <div class="sm-modal-body">
+                <div class="empty-hint">Aucune plage — ajoutez-en une avec le bouton ci-dessus.</div>
+              </div>
+            `}
+          ${selected
+            ? x `
+                <div class="sm-modal-body">
+                  <div class="sm-time-row">
+                    <label>
+                      Heure de début (HH:MM)
+                      <input
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        maxlength="8"
+                        .value=${haTimeToHHMM(selected.start_time)}
+                        @input=${(e) => this.visualPatchSelected({
+                start_time: normalizeTimeForHa(e.target.value),
+            })}
+                      />
+                    </label>
+                    <label>
+                      Heure de fin (HH:MM)
+                      <input
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        maxlength="8"
+                        .value=${haTimeToHHMM(selected.end_time)}
+                        @input=${(e) => this.visualPatchSelected({
+                end_time: normalizeTimeForHa(e.target.value),
+            })}
+                      />
+                    </label>
+                  </div>
+                  <div class="sm-action-card">
+                    <h4>Action pendant cette plage</h4>
+                    <label class="sm-form-label">
+                      Service (domaine.action)
+                      <input
+                        type="text"
+                        placeholder="climate.set_preset_mode"
+                        .value=${selected.action_type}
+                        @input=${(e) => this.visualPatchSelected({
+                action_type: e.target.value,
+            })}
+                      />
+                    </label>
+                    <label class="sm-form-label">
+                      Entités ciblées
+                      <div class="entity-chips">
+                        ${entityIdsFromPayload(selected.action_payload).map((eid) => x `
+                            <span class="entity-chip">
+                              <code>${eid}</code>
+                              <button
+                                type="button"
+                                aria-label="Retirer"
+                                @click=${() => this.visualRemoveEntity(eid)}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          `)}
+                      </div>
+                      <ha-entity-picker
+                        .hass=${this.hass}
+                        .entityFilter=${this.entityFilterVisualEditor()}
+                        .allowCustomEntity=${true}
+                        label="Ajouter une entité"
+                        .value=${''}
+                        id=${`sm-viz-ep-${v.scheduleId}-${sel}-${this._visualEntityPickerNonce}`}
+                        @value-changed=${(e) => this.visualOnEntitySelected(e)}
+                      ></ha-entity-picker>
+                    </label>
+                    ${this.renderClimatePresetSelect(selected)}
+                    <label class="sm-form-label sm-form-label-last">
+                      Payload JSON (sans entity_id — géré par les puces)
+                      <textarea
+                        class="sm-payload-textarea"
+                        .value=${this._visualPayloadStr}
+                        @input=${(e) => {
+                this._visualPayloadStr = e.target.value;
+            }}
+                      ></textarea>
+                    </label>
+                  </div>
+                </div>
+              `
+            : null}
+          <div class="sm-modal-footer">
+            <button type="button" class="btn-text danger" @click=${() => this.closeVisualEditor()}>
+              Annuler
+            </button>
+            <button type="button" class="btn-text primary" @click=${() => this.saveVisualEditor()}>
+              Enregistrer
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
     }
     async createScheduleFromInput() {
         const name = this._newScheduleName.trim();
@@ -1268,10 +2131,13 @@ __decorate([
 ], ScheduleManagerCard.prototype, "_creating", void 0);
 __decorate([
     t()
-], ScheduleManagerCard.prototype, "_drafts", void 0);
+], ScheduleManagerCard.prototype, "_visualEdit", void 0);
 __decorate([
     t()
-], ScheduleManagerCard.prototype, "_entityPickerNonce", void 0);
+], ScheduleManagerCard.prototype, "_visualPayloadStr", void 0);
+__decorate([
+    t()
+], ScheduleManagerCard.prototype, "_visualEntityPickerNonce", void 0);
 ScheduleManagerCard = __decorate([
     e$1('schedule-manager-card')
 ], ScheduleManagerCard);

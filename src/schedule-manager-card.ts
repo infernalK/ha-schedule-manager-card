@@ -15,22 +15,69 @@ import { domainsForActionType, entityMatchesDomains } from './entity-domains';
 import {
   blocksToTimelineSegments,
   hueForBlock,
+  MINUTES_PER_DAY,
+  minutesToHaTime,
   nowPercentOfDay,
+  touchBoundariesBetweenBlocks,
+  type TouchBoundary,
 } from './timeline-helpers';
 
 import './editor';
 
 const DEFAULT_STATUS_ENTITY = 'sensor.schedule_manager_status';
 
-const DEFAULT_BLOCK_DRAFT = {
-  start: '08:00',
-  end: '09:00',
-  actionType: 'climate.set_preset_mode',
-  payloadStr: '{"preset_mode":"comfort"}',
-  entityIds: [] as string[],
-};
+const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 
-type BlockDraft = typeof DEFAULT_BLOCK_DRAFT;
+function payloadWithoutEntityId(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return {};
+  }
+  const rec = { ...(payload as Record<string, unknown>) };
+  delete rec.entity_id;
+  return rec;
+}
+
+function entityIdsFromPayload(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return [];
+  }
+  const e = (payload as Record<string, unknown>).entity_id;
+  if (typeof e === 'string') {
+    return [e];
+  }
+  if (Array.isArray(e)) {
+    return e.filter((x): x is string => typeof x === 'string');
+  }
+  return [];
+}
+
+function defaultNewBlock(): TimeBlock {
+  return {
+    start_time: '12:00:00',
+    end_time: '13:00:00',
+    action_type: 'climate.set_preset_mode',
+    action_payload: { preset_mode: 'comfort' },
+  };
+}
+
+function findDuplicateBlockIndex(blocks: TimeBlock[]): number {
+  const seen = new Set<string>();
+  for (let i = 0; i < blocks.length; i++) {
+    const fp = blockFingerprint(blocks[i]);
+    if (seen.has(fp)) {
+      return i;
+    }
+    seen.add(fp);
+  }
+  return -1;
+}
+
+interface VisualEditState {
+  scheduleId: string;
+  blocks: TimeBlock[];
+  repeatDays: number[];
+  selectedIndex: number;
+}
 
 /** Format HH:MM[:SS] pour les services HA (évite `<input type="time">` = crash app Mac Catalyst). */
 function normalizeTimeForHa(t: string): string {
@@ -52,6 +99,10 @@ function normalizeTimeForHa(t: string): string {
     return '00:00:00';
   }
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+function haTimeToHHMM(t: string): string {
+  return normalizeTimeForHa(t).slice(0, 5);
 }
 
 function parseTimeToMinutes(t: string): number {
@@ -107,10 +158,64 @@ export class ScheduleManagerCard extends LitElement {
 
   @state() private _newScheduleName = '';
   @state() private _creating = false;
-  /** Brouillon pour le formulaire « ajouter une plage » par planning */
-  @state() private _drafts: Record<string, BlockDraft> = {};
-  /** Réinitialise le sélecteur d’entités après chaque ajout */
-  @state() private _entityPickerNonce: Record<string, number> = {};
+  /** Éditeur plein écran (frise + détail plage), style config HA */
+  @state() private _visualEdit: VisualEditState | null = null;
+  @state() private _visualPayloadStr = '';
+  @state() private _visualEntityPickerNonce = 0;
+
+  /** Glisser-déposer sur la frise (pas @state : évite un render à chaque pixel). */
+  private _boundaryDrag:
+    | null
+    | {
+        pointerId: number;
+        leftIdx: number;
+        rightIdx: number;
+        minM: number;
+        maxM: number;
+        rail: HTMLElement;
+        handle: HTMLElement;
+      } = null;
+
+  private _onBoundaryMove = (ev: PointerEvent) => {
+    const d = this._boundaryDrag;
+    if (!d || !this._visualEdit || ev.pointerId !== d.pointerId) {
+      return;
+    }
+    const rect = d.rail.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, ev.clientX - rect.left));
+    const pct = (x / rect.width) * 100;
+    let m = Math.round((pct / 100) * MINUTES_PER_DAY);
+    m = Math.max(d.minM, Math.min(d.maxM, m));
+    const ha = minutesToHaTime(m);
+    const blocks = [...this._visualEdit.blocks];
+    const L = blocks[d.leftIdx];
+    const R = blocks[d.rightIdx];
+    if (!L || !R) {
+      return;
+    }
+    blocks[d.leftIdx] = { ...L, end_time: ha };
+    blocks[d.rightIdx] = { ...R, start_time: ha };
+    this._visualEdit = { ...this._visualEdit, blocks };
+    this.requestUpdate();
+  };
+
+  private _onBoundaryUp = (ev: PointerEvent) => {
+    const d = this._boundaryDrag;
+    if (!d) {
+      return;
+    }
+    window.removeEventListener('pointermove', this._onBoundaryMove);
+    window.removeEventListener('pointerup', this._onBoundaryUp);
+    window.removeEventListener('pointercancel', this._onBoundaryUp);
+    if (ev.pointerId === d.pointerId) {
+      try {
+        d.handle.releasePointerCapture(ev.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+    this._boundaryDrag = null;
+  };
 
   static get styles() {
     return styles;
@@ -128,6 +233,12 @@ export class ScheduleManagerCard extends LitElement {
     super.updated(changed);
     if (changed.has('hass') && this.hass) {
       void this.requestUpdate();
+    }
+    if (changed.has('_visualEdit') && this._visualEdit) {
+      requestAnimationFrame(() => {
+        const m = this.shadowRoot?.querySelector('.sm-modal') as HTMLElement | undefined;
+        m?.focus();
+      });
     }
   }
 
@@ -197,14 +308,17 @@ export class ScheduleManagerCard extends LitElement {
     }
 
     return html`
-      <ha-card class="card">
-        <div class="card-header">Schedule Manager</div>
-        <div class="card-content">
-          ${groupId
-            ? this.renderGroup(groupsMap[groupId], schedulesMap)
-            : this.renderSchedulesList(scheduleIds, schedulesMap)}
-        </div>
-      </ha-card>
+      <div>
+        <ha-card class="card">
+          <div class="card-header">Schedule Manager</div>
+          <div class="card-content">
+            ${groupId
+              ? this.renderGroup(groupsMap[groupId], schedulesMap)
+              : this.renderSchedulesList(scheduleIds, schedulesMap)}
+          </div>
+        </ha-card>
+        ${this.renderVisualEditorOverlay()}
+      </div>
     `;
   }
 
@@ -304,24 +418,6 @@ export class ScheduleManagerCard extends LitElement {
     `;
   }
 
-  private draftFor(scheduleId: string): BlockDraft {
-    return (
-      this._drafts[scheduleId] ?? {
-        ...DEFAULT_BLOCK_DRAFT,
-        entityIds: [...DEFAULT_BLOCK_DRAFT.entityIds],
-      }
-    );
-  }
-
-  private patchDraft(scheduleId: string, patch: Partial<BlockDraft>) {
-    const prev =
-      this._drafts[scheduleId] ?? {
-        ...DEFAULT_BLOCK_DRAFT,
-        entityIds: [...DEFAULT_BLOCK_DRAFT.entityIds],
-      };
-    this._drafts = { ...this._drafts, [scheduleId]: { ...prev, ...patch } };
-  }
-
   private renderDayTimeline(blocks: TimeBlock[]) {
     const segments = blocksToTimelineSegments(blocks);
     const nowPct = nowPercentOfDay();
@@ -348,34 +444,6 @@ export class ScheduleManagerCard extends LitElement {
     `;
   }
 
-  private entityFilterForSchedule(scheduleId: string): (entityId: string) => boolean {
-    const domains = domainsForActionType(this.draftFor(scheduleId).actionType);
-    return (entityId: string) => entityMatchesDomains(entityId, domains);
-  }
-
-  private onEntitySelected(scheduleId: string, ev: CustomEvent<{ value?: string }>) {
-    const v = String(ev.detail?.value ?? '').trim();
-    if (!v) {
-      return;
-    }
-    const d = this.draftFor(scheduleId);
-    if (d.entityIds.includes(v)) {
-      return;
-    }
-    this.patchDraft(scheduleId, { entityIds: [...d.entityIds, v] });
-    this._entityPickerNonce = {
-      ...this._entityPickerNonce,
-      [scheduleId]: (this._entityPickerNonce[scheduleId] ?? 0) + 1,
-    };
-  }
-
-  private removeDraftEntity(scheduleId: string, entityId: string) {
-    const d = this.draftFor(scheduleId);
-    this.patchDraft(scheduleId, {
-      entityIds: d.entityIds.filter((e) => e !== entityId),
-    });
-  }
-
   private blocksToPayload(blocks: TimeBlock[]): TimeBlockServicePayload[] {
     return (blocks || []).map((b) => ({
       start_time: String(b.start_time),
@@ -394,7 +462,6 @@ export class ScheduleManagerCard extends LitElement {
       return html``;
     }
 
-    const draft = this.draftFor(schedule.id);
     const blocks = schedule.time_blocks || [];
 
     return html`
@@ -416,6 +483,14 @@ export class ScheduleManagerCard extends LitElement {
             </button>
           </div>
         </div>
+
+        <button
+          type="button"
+          class="btn-open-config"
+          @click=${() => this.openVisualEditor(schedule)}
+        >
+          Configurer les plages…
+        </button>
 
         ${blocks.length
           ? html`
@@ -456,93 +531,6 @@ export class ScheduleManagerCard extends LitElement {
             </div>
           `
         )}
-
-        <div class="add-block-form">
-          <label>
-            Début (HH:MM)
-            <input
-              class="time-field"
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder="08:00"
-              maxlength="8"
-              .value=${draft.start}
-              @input=${(e: Event) =>
-                this.patchDraft(schedule.id, {
-                  start: (e.target as HTMLInputElement).value,
-                })}
-            />
-          </label>
-          <label>
-            Fin (HH:MM)
-            <input
-              class="time-field"
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder="09:00"
-              maxlength="8"
-              .value=${draft.end}
-              @input=${(e: Event) =>
-                this.patchDraft(schedule.id, { end: (e.target as HTMLInputElement).value })}
-            />
-          </label>
-          <label class="full-row">
-            Type d’action
-            <input
-              type="text"
-              placeholder="climate.set_preset_mode"
-              .value=${draft.actionType}
-              @input=${(e: Event) =>
-                this.patchDraft(schedule.id, {
-                  actionType: (e.target as HTMLInputElement).value,
-                })}
-            />
-          </label>
-          <label class="full-row entity-picker-row">
-            Entités (filtrées selon le domaine du service)
-            <div class="entity-chips">
-              ${draft.entityIds.map(
-                (eid) => html`
-                  <span class="entity-chip">
-                    <code>${eid}</code>
-                    <button
-                      type="button"
-                      aria-label="Retirer"
-                      @click=${() => this.removeDraftEntity(schedule.id, eid)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                `
-              )}
-            </div>
-            <ha-entity-picker
-              .hass=${this.hass}
-              .entityFilter=${this.entityFilterForSchedule(schedule.id)}
-              .allowCustomEntity=${true}
-              label="Ajouter une entité"
-              .value=${''}
-              id=${`sm-ep-${schedule.id}-${this._entityPickerNonce[schedule.id] ?? 0}`}
-              @value-changed=${(e: CustomEvent<{ value?: string }>) =>
-                this.onEntitySelected(schedule.id, e)}
-            ></ha-entity-picker>
-          </label>
-          <label class="full-row">
-            Payload JSON
-            <textarea
-              .value=${draft.payloadStr}
-              @input=${(e: Event) =>
-                this.patchDraft(schedule.id, {
-                  payloadStr: (e.target as HTMLTextAreaElement).value,
-                })}
-            ></textarea>
-          </label>
-          <button type="button" class="add-plage" @click=${() => this.addBlockToSchedule(schedule)}>
-            Ajouter la plage
-          </button>
-        </div>
 
         ${group?.exclusive
           ? html`
@@ -627,57 +615,616 @@ export class ScheduleManagerCard extends LitElement {
     }
   }
 
-  private async addBlockToSchedule(schedule: Schedule) {
-    const d = this.draftFor(schedule.id);
-    let payload: Record<string, unknown>;
-    try {
-      payload = JSON.parse(d.payloadStr.trim() || '{}');
-      if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
-        throw new Error('payload doit être un objet JSON');
-      }
-    } catch {
-      alert('Payload JSON invalide (objet attendu, ex. {"preset_mode":"comfort"})');
-      return;
-    }
-    const actionType = d.actionType.trim();
-    if (!actionType) {
-      alert('Indiquez un type d’action.');
-      return;
-    }
-    if (!d.start.trim() || !d.end.trim()) {
-      alert('Indiquez une heure de début et de fin (ex. 08:00 et 09:30).');
-      return;
-    }
-    if (d.entityIds.length > 0) {
-      payload = {
-        ...payload,
-        entity_id:
-          d.entityIds.length === 1 ? d.entityIds[0] : [...d.entityIds],
-      };
-    }
-    const newBlock: TimeBlockServicePayload = {
-      start_time: normalizeTimeForHa(d.start),
-      end_time: normalizeTimeForHa(d.end),
-      action_type: actionType,
-      action_payload: payload,
+  private openVisualEditor(schedule: Schedule) {
+    const blocks = JSON.parse(
+      JSON.stringify(schedule.time_blocks || [])
+    ) as TimeBlock[];
+    this._visualEdit = {
+      scheduleId: schedule.id,
+      blocks,
+      repeatDays: [
+        ...(schedule.repeat_days && schedule.repeat_days.length > 0
+          ? schedule.repeat_days
+          : [0, 1, 2, 3, 4, 5, 6]),
+      ],
+      selectedIndex: 0,
     };
-    const fpNew = blockFingerprint(newBlock);
-    for (const b of schedule.time_blocks || []) {
-      if (blockFingerprint(b) === fpNew) {
-        alert(
-          'Cette plage existe déjà (mêmes horaires, type d’action et payload).'
-        );
+    this.syncPayloadStrFromSelection();
+  }
+
+  private closeVisualEditor() {
+    this.endBoundaryDrag();
+    this._visualEdit = null;
+    this._visualPayloadStr = '';
+  }
+
+  private endBoundaryDrag() {
+    const d = this._boundaryDrag;
+    window.removeEventListener('pointermove', this._onBoundaryMove);
+    window.removeEventListener('pointerup', this._onBoundaryUp);
+    window.removeEventListener('pointercancel', this._onBoundaryUp);
+    if (d) {
+      try {
+        d.handle.releasePointerCapture(d.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+    this._boundaryDrag = null;
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this.endBoundaryDrag();
+  }
+
+  private onBoundaryPointerDown(ev: PointerEvent, tb: TouchBoundary) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (!this._visualEdit) {
+      return;
+    }
+    const rail = (ev.currentTarget as HTMLElement).closest(
+      '.sm-editor-rail'
+    ) as HTMLElement | null;
+    if (!rail) {
+      return;
+    }
+    this.endBoundaryDrag();
+    const handle = ev.currentTarget as HTMLElement;
+    this._boundaryDrag = {
+      pointerId: ev.pointerId,
+      leftIdx: tb.leftBlockIndex,
+      rightIdx: tb.rightBlockIndex,
+      minM: tb.minMinute,
+      maxM: tb.maxMinute,
+      rail,
+      handle,
+    };
+    handle.setPointerCapture(ev.pointerId);
+    window.addEventListener('pointermove', this._onBoundaryMove);
+    window.addEventListener('pointerup', this._onBoundaryUp);
+    window.addEventListener('pointercancel', this._onBoundaryUp);
+  }
+
+  private syncPayloadStrFromSelection() {
+    if (!this._visualEdit) {
+      this._visualPayloadStr = '{}';
+      return;
+    }
+    const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
+    if (!b) {
+      this._visualPayloadStr = '{}';
+      return;
+    }
+    try {
+      this._visualPayloadStr = JSON.stringify(
+        payloadWithoutEntityId(b.action_payload),
+        null,
+        2
+      );
+    } catch {
+      this._visualPayloadStr = '{}';
+    }
+  }
+
+  private applyPayloadEditorToVisualBlocks(): boolean {
+    if (!this._visualEdit) {
+      return false;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    if (!block) {
+      return true;
+    }
+    try {
+      const raw = this._visualPayloadStr.trim() || '{}';
+      const extra = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof extra !== 'object' || extra === null || Array.isArray(extra)) {
+        throw new Error('invalid');
+      }
+      delete extra.entity_id;
+      const entityIds = entityIdsFromPayload(block.action_payload);
+      const action_payload: Record<string, unknown> = { ...extra };
+      if (entityIds.length === 1) {
+        action_payload.entity_id = entityIds[0];
+      } else if (entityIds.length > 1) {
+        action_payload.entity_id = [...entityIds];
+      }
+      const nextBlocks = [...this._visualEdit.blocks];
+      nextBlocks[sel] = { ...block, action_payload };
+      this._visualEdit = { ...this._visualEdit, blocks: nextBlocks };
+      return true;
+    } catch {
+      alert('Payload JSON invalide pour la plage sélectionnée (objet attendu).');
+      return false;
+    }
+  }
+
+  private visualToggleDay(day: number) {
+    if (!this._visualEdit) {
+      return;
+    }
+    let days = [...this._visualEdit.repeatDays];
+    if (days.includes(day)) {
+      days = days.filter((d) => d !== day);
+    } else {
+      days = [...days, day].sort((a, b) => a - b);
+    }
+    if (days.length === 0) {
+      alert('Sélectionnez au moins un jour.');
+      return;
+    }
+    this._visualEdit = { ...this._visualEdit, repeatDays: days };
+  }
+
+  private visualSelectBlock(index: number) {
+    if (!this._visualEdit) {
+      return;
+    }
+    if (!this.applyPayloadEditorToVisualBlocks()) {
+      return;
+    }
+    const max = this._visualEdit.blocks.length - 1;
+    const idx = Math.max(0, Math.min(index, max));
+    this._visualEdit = { ...this._visualEdit, selectedIndex: idx };
+    this.syncPayloadStrFromSelection();
+  }
+
+  private visualPatchSelected(patch: Partial<TimeBlock>) {
+    if (!this._visualEdit) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const cur = this._visualEdit.blocks[sel];
+    if (!cur) {
+      return;
+    }
+    const nextBlocks = [...this._visualEdit.blocks];
+    nextBlocks[sel] = { ...cur, ...patch } as TimeBlock;
+    this._visualEdit = { ...this._visualEdit, blocks: nextBlocks };
+  }
+
+  private visualAddBlock() {
+    if (!this._visualEdit) {
+      return;
+    }
+    if (!this.applyPayloadEditorToVisualBlocks()) {
+      return;
+    }
+    const nb = defaultNewBlock();
+    const nextBlocks = [...this._visualEdit.blocks, nb];
+    const fp = blockFingerprint(nb);
+    for (const b of this._visualEdit.blocks) {
+      if (blockFingerprint(b) === fp) {
+        alert('Une plage identique existe déjà — modifiez les horaires ou le service.');
         return;
       }
     }
-    const merged = [...this.blocksToPayload(schedule.time_blocks || []), newBlock];
+    this._visualEdit = {
+      ...this._visualEdit,
+      blocks: nextBlocks,
+      selectedIndex: nextBlocks.length - 1,
+    };
+    this.syncPayloadStrFromSelection();
+    this._visualEntityPickerNonce += 1;
+  }
+
+  private visualRemoveSelected() {
+    if (!this._visualEdit) {
+      return;
+    }
+    if (!this.applyPayloadEditorToVisualBlocks()) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const nextBlocks = this._visualEdit.blocks.filter((_, i) => i !== sel);
+    let nextSel = sel;
+    if (nextSel >= nextBlocks.length) {
+      nextSel = Math.max(0, nextBlocks.length - 1);
+    }
+    this._visualEdit = {
+      ...this._visualEdit,
+      blocks: nextBlocks,
+      selectedIndex: nextSel,
+    };
+    this.syncPayloadStrFromSelection();
+    this._visualEntityPickerNonce += 1;
+  }
+
+  private entityFilterVisualEditor(): (entityId: string) => boolean {
+    if (!this._visualEdit) {
+      return () => true;
+    }
+    const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
+    const domains = domainsForActionType(b?.action_type ?? '');
+    return (entityId: string) => entityMatchesDomains(entityId, domains);
+  }
+
+  private visualOnEntitySelected(ev: CustomEvent<{ value?: string }>) {
+    const v = String(ev.detail?.value ?? '').trim();
+    if (!v || !this._visualEdit) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    if (!block) {
+      return;
+    }
+    const ids = entityIdsFromPayload(block.action_payload);
+    if (ids.includes(v)) {
+      return;
+    }
+    const nextIds = [...ids, v];
+    const base =
+      typeof block.action_payload === 'object' && block.action_payload !== null
+        ? { ...(block.action_payload as Record<string, unknown>) }
+        : {};
+    if (nextIds.length === 1) {
+      base.entity_id = nextIds[0];
+    } else {
+      base.entity_id = nextIds;
+    }
+    this.visualPatchSelected({ action_payload: base });
+    this._visualEntityPickerNonce += 1;
+  }
+
+  private visualRemoveEntity(entityId: string) {
+    if (!this._visualEdit) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    if (!block) {
+      return;
+    }
+    const ids = entityIdsFromPayload(block.action_payload).filter((e) => e !== entityId);
+    const base =
+      typeof block.action_payload === 'object' && block.action_payload !== null
+        ? { ...(block.action_payload as Record<string, unknown>) }
+        : {};
+    delete base.entity_id;
+    if (ids.length === 1) {
+      base.entity_id = ids[0];
+    } else if (ids.length > 1) {
+      base.entity_id = ids;
+    }
+    this.visualPatchSelected({ action_payload: base });
+  }
+
+  private async saveVisualEditor() {
+    if (!this._visualEdit) {
+      return;
+    }
+    if (!this.applyPayloadEditorToVisualBlocks()) {
+      return;
+    }
+    const { scheduleId, blocks, repeatDays } = this._visualEdit;
+    for (const b of blocks) {
+      if (!String(b.action_type ?? '').trim()) {
+        alert('Chaque plage doit avoir un type d’action (service).');
+        return;
+      }
+    }
+    const dupAt = findDuplicateBlockIndex(blocks);
+    if (dupAt >= 0) {
+      alert(
+        `Deux plages identiques (horaires + action + payload) — modifiez l’entrée n° ${dupAt + 1}.`
+      );
+      return;
+    }
     try {
-      await this.services().updateSchedule(schedule.id, { time_blocks: merged });
-      this.patchDraft(schedule.id, { entityIds: [] });
+      await this.services().updateSchedule(scheduleId, {
+        repeat_days: repeatDays,
+        time_blocks: this.blocksToPayload(blocks),
+      });
+      this.closeVisualEditor();
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('schedule_manager.update_schedule failed', e);
     }
+  }
+
+  private renderClimatePresetSelect(selected: TimeBlock) {
+    const modes = this.getClimatePresetModesForSelected();
+    if (!modes?.length) {
+      return html``;
+    }
+    const cur = String(
+      (selected.action_payload as Record<string, unknown>)?.preset_mode ?? ''
+    );
+    const orphan = cur && !modes.includes(cur);
+    return html`
+      <label class="sm-form-label">
+        Mode préréglé
+        <select
+          class="sm-select"
+          .value=${cur}
+          @change=${(e: Event) =>
+            this.visualSetPresetMode((e.target as HTMLSelectElement).value)}
+        >
+          ${orphan ? html`<option value=${cur}>${cur} (actuel)</option>` : null}
+          ${modes.map((m) => html`<option value=${m}>${m}</option>`)}
+        </select>
+      </label>
+    `;
+  }
+
+  private getClimatePresetModesForSelected(): string[] | null {
+    if (!this.hass || !this._visualEdit) {
+      return null;
+    }
+    const block = this._visualEdit.blocks[this._visualEdit.selectedIndex];
+    if (!block || block.action_type.trim() !== 'climate.set_preset_mode') {
+      return null;
+    }
+    const ids = entityIdsFromPayload(block.action_payload);
+    for (const id of ids) {
+      if (!id.startsWith('climate.')) {
+        continue;
+      }
+      const st = this.hass.states[id];
+      if (!st) {
+        continue;
+      }
+      const pm = st.attributes?.preset_modes;
+      if (Array.isArray(pm) && pm.every((x): x is string => typeof x === 'string')) {
+        return pm;
+      }
+    }
+    return null;
+  }
+
+  private visualSetPresetMode(mode: string) {
+    if (!this._visualEdit) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    if (!block) {
+      return;
+    }
+    const base =
+      typeof block.action_payload === 'object' && block.action_payload !== null
+        ? { ...(block.action_payload as Record<string, unknown>) }
+        : {};
+    base.preset_mode = mode;
+    this.visualPatchSelected({ action_payload: base });
+    this.syncPayloadStrFromSelection();
+  }
+
+  private renderEditorTimeline(blocks: TimeBlock[], selectedIndex: number) {
+    const segments = blocksToTimelineSegments(blocks);
+    const boundaries = touchBoundariesBetweenBlocks(blocks);
+    const nowPct = nowPercentOfDay();
+    return html`
+      <div
+        class="timeline-frise sm-editor-frise"
+        role="group"
+        aria-label="Plages sur 24 heures — cliquer pour sélectionner, poignées pour ajuster"
+      >
+        <div class="timeline-rail sm-editor-rail">
+          ${segments.map(
+            (s) => html`
+              <div
+                class="timeline-segment ${s.blockIndex === selectedIndex
+                  ? 'is-selected'
+                  : ''}"
+                style="left:${s.leftPct}%;width:${s.widthPct}%;background:hsl(${s.hue}, 52%, 40%)"
+                title=${s.label}
+                @click=${() => this.visualSelectBlock(s.blockIndex)}
+              >
+                <span class="timeline-segment-label">${s.label}</span>
+              </div>
+            `
+          )}
+          ${boundaries.map(
+            (tb) => html`
+              <button
+                type="button"
+                class="timeline-boundary-handle"
+                style="left:${tb.pct}%"
+                aria-label="Ajuster la transition entre deux plages"
+                title="Glisser pour déplacer la transition"
+                @pointerdown=${(e: PointerEvent) => this.onBoundaryPointerDown(e, tb)}
+              ></button>
+            `
+          )}
+          <div class="timeline-now" style="left:${nowPct}%"></div>
+        </div>
+        <div class="timeline-ticks">
+          <span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderVisualEditorOverlay() {
+    const v = this._visualEdit;
+    if (!v || !this.hass) {
+      return html``;
+    }
+    const schedulesMap = this.getSchedulesRecord();
+    const raw = schedulesMap[v.scheduleId];
+    if (!raw) {
+      return html``;
+    }
+    const schedule = this.withCanonicalId(v.scheduleId, raw);
+    const blocks = v.blocks;
+    const sel = v.selectedIndex;
+    const selected = blocks[sel];
+
+    return html`
+      <div
+        class="sm-overlay"
+        @click=${(e: Event) => {
+          if (e.target === e.currentTarget) {
+            this.closeVisualEditor();
+          }
+        }}
+      >
+        <div
+        class="sm-modal"
+        tabindex="-1"
+        @click=${(e: Event) => e.stopPropagation()}
+        @keydown=${(e: KeyboardEvent) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            this.closeVisualEditor();
+          }
+        }}
+        >
+          <div class="sm-modal-head">
+            <h2>${schedule.name}</h2>
+            <button
+              type="button"
+              class="sm-icon-btn"
+              aria-label="Fermer"
+              @click=${() => this.closeVisualEditor()}
+            >
+              ×
+            </button>
+          </div>
+          <div class="sm-modal-sub">
+            <span>Jours de répétition</span>
+            <div class="sm-repeat-days">
+              ${WEEKDAY_LABELS_FR.map(
+                (label, day) => html`
+                  <button
+                    type="button"
+                    class="sm-day ${v.repeatDays.includes(day) ? 'on' : ''}"
+                    @click=${() => this.visualToggleDay(day)}
+                  >
+                    ${label}
+                  </button>
+                `
+              )}
+            </div>
+          </div>
+          <div class="sm-toolbar">
+            <button type="button" class="sm-tool-btn" @click=${() => this.visualAddBlock()}>
+              ＋ Ajouter une plage
+            </button>
+            <button
+              type="button"
+              class="sm-tool-btn danger"
+              ?disabled=${blocks.length === 0}
+              @click=${() => this.visualRemoveSelected()}
+            >
+              Supprimer la plage
+            </button>
+          </div>
+          ${blocks.length ? this.renderEditorTimeline(blocks, sel) : html`
+              <div class="sm-modal-body">
+                <div class="empty-hint">Aucune plage — ajoutez-en une avec le bouton ci-dessus.</div>
+              </div>
+            `}
+          ${selected
+            ? html`
+                <div class="sm-modal-body">
+                  <div class="sm-time-row">
+                    <label>
+                      Heure de début (HH:MM)
+                      <input
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        maxlength="8"
+                        .value=${haTimeToHHMM(selected.start_time)}
+                        @input=${(e: Event) =>
+                          this.visualPatchSelected({
+                            start_time: normalizeTimeForHa(
+                              (e.target as HTMLInputElement).value
+                            ),
+                          })}
+                      />
+                    </label>
+                    <label>
+                      Heure de fin (HH:MM)
+                      <input
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        maxlength="8"
+                        .value=${haTimeToHHMM(selected.end_time)}
+                        @input=${(e: Event) =>
+                          this.visualPatchSelected({
+                            end_time: normalizeTimeForHa(
+                              (e.target as HTMLInputElement).value
+                            ),
+                          })}
+                      />
+                    </label>
+                  </div>
+                  <div class="sm-action-card">
+                    <h4>Action pendant cette plage</h4>
+                    <label class="sm-form-label">
+                      Service (domaine.action)
+                      <input
+                        type="text"
+                        placeholder="climate.set_preset_mode"
+                        .value=${selected.action_type}
+                        @input=${(e: Event) =>
+                          this.visualPatchSelected({
+                            action_type: (e.target as HTMLInputElement).value,
+                          })}
+                      />
+                    </label>
+                    <label class="sm-form-label">
+                      Entités ciblées
+                      <div class="entity-chips">
+                        ${entityIdsFromPayload(selected.action_payload).map(
+                          (eid) => html`
+                            <span class="entity-chip">
+                              <code>${eid}</code>
+                              <button
+                                type="button"
+                                aria-label="Retirer"
+                                @click=${() => this.visualRemoveEntity(eid)}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          `
+                        )}
+                      </div>
+                      <ha-entity-picker
+                        .hass=${this.hass}
+                        .entityFilter=${this.entityFilterVisualEditor()}
+                        .allowCustomEntity=${true}
+                        label="Ajouter une entité"
+                        .value=${''}
+                        id=${`sm-viz-ep-${v.scheduleId}-${sel}-${this._visualEntityPickerNonce}`}
+                        @value-changed=${(e: CustomEvent<{ value?: string }>) =>
+                          this.visualOnEntitySelected(e)}
+                      ></ha-entity-picker>
+                    </label>
+                    ${this.renderClimatePresetSelect(selected)}
+                    <label class="sm-form-label sm-form-label-last">
+                      Payload JSON (sans entity_id — géré par les puces)
+                      <textarea
+                        class="sm-payload-textarea"
+                        .value=${this._visualPayloadStr}
+                        @input=${(e: Event) => {
+                          this._visualPayloadStr = (e.target as HTMLTextAreaElement).value;
+                        }}
+                      ></textarea>
+                    </label>
+                  </div>
+                </div>
+              `
+            : null}
+          <div class="sm-modal-footer">
+            <button type="button" class="btn-text danger" @click=${() => this.closeVisualEditor()}>
+              Annuler
+            </button>
+            <button type="button" class="btn-text primary" @click=${() => this.saveVisualEditor()}>
+              Enregistrer
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   private async createScheduleFromInput() {
