@@ -322,56 +322,66 @@ const styles = i$2 `
 
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
     setConfig(config) {
-        this._config = config;
+        this._config = {
+            type: 'custom:schedule-manager-card',
+            ...config,
+        };
     }
     render() {
+        const hass = this.hass;
+        if (!hass) {
+            return x `<div class="card-config">Chargement du tableau de bord…</div>`;
+        }
         return x `
-      <div class="card-config">
-        <paper-input
-          label="Entité statut (optionnel)"
-          .value=${this._config?.status_entity || ''}
+      <div class="card-config" style="display:flex;flex-direction:column;gap:16px;padding:8px 0">
+        <ha-entity-picker
+          .hass=${hass}
+          label="Capteur Schedule Manager"
+          .value=${this._config?.status_entity ?? ''}
+          .includeDomains=${['sensor']}
+          .allowCustomEntity=${true}
           @value-changed=${this._statusEntityChanged}
-        ></paper-input>
-        <paper-input
+        ></ha-entity-picker>
+        <ha-textfield
           label="ID de groupe (optionnel)"
-          .value=${this._config?.group_id || ''}
-          @value-changed=${this._groupIdChanged}
-        ></paper-input>
-        <paper-input
-          label="IDs de plannings (séparés par des virgules)"
-          .value=${this._config?.schedule_ids?.join(',') || ''}
-          @value-changed=${this._scheduleIdsChanged}
-        ></paper-input>
+          .value=${this._config?.group_id ?? ''}
+          @input=${this._groupIdChanged}
+        ></ha-textfield>
+        <ha-textfield
+          label="IDs de plannings (optionnel, virgules — vide = tous)"
+          .value=${this._config?.schedule_ids?.join(', ') ?? ''}
+          @input=${this._scheduleIdsChanged}
+        ></ha-textfield>
       </div>
     `;
     }
-    _statusEntityChanged(ev) {
-        const value = (ev.detail?.value ?? '').trim();
+    _patchConfig(patch) {
         this._config = {
-            ...(this._config || { type: 'custom:schedule-manager-card' }),
-            status_entity: value || undefined,
+            type: 'custom:schedule-manager-card',
+            ...(this._config ?? {}),
+            ...patch,
         };
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config } }));
+        this.dispatchEvent(new CustomEvent('config-changed', {
+            bubbles: true,
+            composed: true,
+            detail: { config: this._config },
+        }));
+    }
+    _statusEntityChanged(ev) {
+        const value = String(ev.detail?.value ?? '').trim();
+        this._patchConfig({ status_entity: value || undefined });
     }
     _groupIdChanged(ev) {
-        const value = (ev.detail?.value ?? '').trim();
-        this._config = {
-            ...(this._config || { type: 'custom:schedule-manager-card' }),
-            group_id: value || undefined,
-        };
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config } }));
+        const value = (ev.target.value ?? '').trim();
+        this._patchConfig({ group_id: value || undefined });
     }
     _scheduleIdsChanged(ev) {
-        const raw = ev.detail?.value ?? '';
+        const raw = ev.target.value ?? '';
         const ids = String(raw)
             .split(',')
             .map((id) => id.trim())
-            .filter((id) => id);
-        this._config = {
-            ...(this._config || { type: 'custom:schedule-manager-card' }),
-            schedule_ids: ids.length ? ids : undefined,
-        };
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config } }));
+            .filter((id) => id.length > 0);
+        this._patchConfig({ schedule_ids: ids.length ? ids : undefined });
     }
 };
 __decorate([

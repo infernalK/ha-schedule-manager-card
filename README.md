@@ -30,6 +30,8 @@ Après installation HACS : **Paramètres** → **Appareils et services** → **R
 
 ## Configuration
 
+En mode **modifier le tableau de bord**, la carte propose un sélecteur **Capteur Schedule Manager** (`ha-entity-picker`) pour choisir le capteur à utiliser (domaine `sensor`), ainsi que les champs optionnels groupe et IDs de plannings.
+
 Exemple minimal (tous les plannings renvoyés par le capteur) :
 
 ```yaml
