@@ -1,4 +1,4 @@
-import { HomeAssistant } from 'home-assistant-js-websocket';
+import type { HomeAssistant } from './types';
 
 export class ScheduleManagerServices {
   constructor(private hass: HomeAssistant) {}

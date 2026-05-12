@@ -1,8 +1,7 @@
 import { LitElement, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { PropertyValues } from 'lit';
-import { HomeAssistant } from 'home-assistant-js-websocket';
-import { CardConfig, Schedule, ScheduleGroup, TimeBlock } from './types';
+import { CardConfig, HomeAssistant, Schedule, ScheduleGroup, TimeBlock } from './types';
 import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
 

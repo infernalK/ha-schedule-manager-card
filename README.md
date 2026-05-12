@@ -19,7 +19,14 @@ Carte Lovelace pour afficher et piloter les plannings de l’intégration **Sche
 
 ### HACS
 
-Ajoutez le dépôt comme **plugin Lovelace / carte** dans HACS (repository frontend), installez **Schedule Manager Card**, puis rechargez les ressources Lovelace et ajoutez la carte.
+1. Dans HACS : **⋮** (menu) → **Dépôts personnalisés**.
+2. Collez l’URL : `https://github.com/infernalK/ha-schedule-manager-card`
+3. Catégorie : **Tableau de bord** (ou **Lovelace** selon la version de HACS) — **pas** « Intégration ».
+4. Validez, puis onglet **Tableau de bord** → recherchez **Schedule Manager Card** → **Télécharger**.
+
+**Erreur HACS : « Repository structure for main is not compliant »** : HACS vérifie que le fichier indiqué dans `hacs.json` (`schedule-manager-card.js`) **existe bien à la racine de la branche `main` sur GitHub**. Sans ce fichier compilé, l’ajout du dépôt est toujours refusé. Ce dépôt inclut le JS généré ; après un clone, exécutez `npm ci && npm run build`, commitez `schedule-manager-card.js`, puis poussez vers `main`. Vous pouvez aussi lancer l’action **Build bundle** sur GitHub si elle est configurée.
+
+Après installation HACS : **Paramètres** → **Appareils et services** → **Ressources** (ou via le tableau de bord) → vérifiez que la ressource pointe vers le fichier JS de la carte en **module JavaScript**.
 
 ## Configuration
 

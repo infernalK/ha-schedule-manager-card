@@ -1,7 +1,6 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { HomeAssistant } from 'home-assistant-js-websocket';
-import { CardConfig } from './types';
+import type { CardConfig, HomeAssistant } from './types';
 
 @customElement('schedule-manager-card-editor')
 export class ScheduleManagerCardEditor extends LitElement {

@@ -1,8 +1,22 @@
 export interface TimeBlock {
+  id?: string;
   start_time: string;
   end_time: string;
   action_type: string;
   action_payload: any;
+}
+
+/** Sous-ensemble de l’objet `hass` Lovelace (pas de dépendance runtime au paquet websocket). */
+export interface HomeAssistant {
+  states: Record<
+    string,
+    { state: string; attributes: Record<string, unknown> }
+  >;
+  callService(
+    domain: string,
+    service: string,
+    data?: Record<string, unknown>
+  ): Promise<unknown>;
 }
 
 export interface Schedule {
