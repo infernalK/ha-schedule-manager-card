@@ -25,14 +25,14 @@ function editorConfigFingerprint(c?: CardConfig): string {
   });
 }
 
-function editorConfigPropertyChanged(n?: CardConfig, o?: CardConfig): boolean {
-  if (n === o) {
-    return false;
+/** ha-switch / ha-checkbox (WebAwesome) : `target` peut être interne au shadow. */
+function haFormControlCheckedFromChangeEvent(ev: Event): boolean {
+  const host = ev.currentTarget as HTMLElement & { checked?: boolean };
+  if (typeof host.checked === 'boolean') {
+    return host.checked;
   }
-  if (!n || !o) {
-    return true;
-  }
-  return editorConfigFingerprint(n) !== editorConfigFingerprint(o);
+  const inner = ev.target as HTMLElement & { checked?: boolean };
+  return Boolean(inner.checked);
 }
 
 @customElement('schedule-manager-card-editor')
@@ -45,8 +45,12 @@ export class ScheduleManagerCardEditor extends LitElement {
   /** Contexte d’édition Lovelace (chemin de carte, etc.) ; mis à jour à l’ouverture du panneau. */
   @property({ attribute: false }) public context?: unknown;
 
-  @property({ attribute: false, hasChanged: editorConfigPropertyChanged })
-  public config?: CardConfig;
+  /**
+   * Config telle que Lovelace la connaît (aperçu, YAML, etc.).
+   * Pas de `hasChanged` personnalisé : avec une empreinte métier, HA peut pousser une nouvelle
+   * référence d’objet sans déclencher de mise à jour, ce qui laissait l’éditeur et l’aperçu désynchronisés.
+   */
+  @property({ attribute: false }) public config?: CardConfig;
 
   /** Copie éditable ; @state pour que setConfig / _patchConfig déclenchent bien un re-render Lovelace. */
   @state() private _config?: CardConfig;
@@ -138,6 +142,15 @@ export class ScheduleManagerCardEditor extends LitElement {
   `;
 
   setConfig(config: CardConfig) {
+    this._applyIncomingConfigRecord(config);
+    this._userClearedStatusEntity = false;
+    // Référence distincte : évite que Lovelace et Lit partagent la même référence mutable.
+    this.config = { ...(this._config as object) } as CardConfig;
+    this.requestUpdate();
+  }
+
+  /** Normalise une config HA → état local `_config` (sans toucher à `this.config`). */
+  private _applyIncomingConfigRecord(config: CardConfig) {
     const base = this._configWithoutUndefinedKeys(
       config as unknown as Record<string, unknown>
     );
@@ -149,11 +162,13 @@ export class ScheduleManagerCardEditor extends LitElement {
       ...base,
       type: 'custom:schedule-manager-card',
     } as CardConfig;
-    // Référence distincte de `_config` : évite que Lovelace réutilise le même objet sans déclencher les mises à jour.
-    this.config = { ...(this._config as object) } as CardConfig;
-    this._userClearedStatusEntity = false;
-    this._headerTitleDraft = this._config.header_title ?? '';
-    this.requestUpdate();
+    const te = this._headerTitleRef.value;
+    if (document.activeElement !== te) {
+      this._headerTitleDraft = this._config.header_title ?? '';
+    }
+    if (this._config.status_entity?.trim()) {
+      this._userClearedStatusEntity = false;
+    }
   }
 
   /** `hui-element-editor` vit dans le shadow parent ; HA peut ne pas rappeler `setConfig` si `deepEqual` est vrai. */
@@ -195,6 +210,11 @@ export class ScheduleManagerCardEditor extends LitElement {
     queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
   }
 
+  protected firstUpdated(_changed: PropertyValues) {
+    super.firstUpdated(_changed);
+    queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+  }
+
   /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
   private _configWithoutUndefinedKeys(
     c: CardConfig | Record<string, unknown> | undefined
@@ -213,8 +233,15 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   updated(changed: PropertyValues) {
     super.updated(changed);
-    if (changed.has('lovelace') || changed.has('context')) {
-      queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+    // Pas de _pull sur lovelace/context : host.value peut être obsolète et écraser l’édition locale.
+    // Lovelace met parfois à jour `config` sans rappeler `setConfig` (aperçu, réouverture).
+    if (changed.has('config') && this.config) {
+      const prev = changed.get('config') as CardConfig | undefined;
+      if (this.config !== prev) {
+        if (editorConfigFingerprint(this.config) !== editorConfigFingerprint(this._config)) {
+          this._applyIncomingConfigRecord(this.config);
+        }
+      }
     }
     if (changed.has('hass') || changed.has('config') || changed.has('_config')) {
       this._maybeApplyDefaultStatusEntity();
@@ -315,7 +342,7 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   private _onScheduleCheck(ev: Event, scheduleId: string) {
     const t = ev.currentTarget as unknown as { checked: boolean };
-    const checked = t.checked;
+    const checked = haFormControlCheckedFromChangeEvent(ev);
     const allIds = this._allScheduleIds();
     if (allIds.length === 0) {
       return;
@@ -498,29 +525,32 @@ export class ScheduleManagerCardEditor extends LitElement {
         delete merged[k];
       }
     }
-    this._config = merged as unknown as CardConfig;
+    /** Même référence que `detail.config` : le parent HA supprime les clés `undefined` sur cet objet. */
+    const outgoing = { ...(merged as object) } as CardConfig;
+    this._config = outgoing;
     const te = this._headerTitleRef.value;
     if (document.activeElement !== te) {
       this._headerTitleDraft = this._config.header_title ?? '';
     }
+    this.config = outgoing;
     this.dispatchEvent(
       new CustomEvent('config-changed', {
         bubbles: true,
         composed: true,
-        detail: { config: { ...(merged as object) } as CardConfig },
+        detail: { config: outgoing },
       })
     );
   }
 
   private _onShowHeaderChange(ev: Event) {
-    const t = ev.currentTarget as unknown as { checked: boolean };
-    this._patchConfig({ show_header: t.checked ? undefined : false });
+    const checked = haFormControlCheckedFromChangeEvent(ev);
+    this._patchConfig({ show_header: checked ? undefined : false });
   }
 
   private _onShowScheduleEnableToggleChange(ev: Event) {
-    const t = ev.currentTarget as unknown as { checked: boolean };
+    const checked = haFormControlCheckedFromChangeEvent(ev);
     this._patchConfig({
-      show_schedule_enable_toggle: t.checked ? undefined : false,
+      show_schedule_enable_toggle: checked ? undefined : false,
     });
   }
 

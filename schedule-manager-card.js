@@ -2949,14 +2949,14 @@ function editorConfigFingerprint(c) {
         schedule_ids: c.schedule_ids ?? null,
     });
 }
-function editorConfigPropertyChanged(n, o) {
-    if (n === o) {
-        return false;
+/** ha-switch / ha-checkbox (WebAwesome) : `target` peut être interne au shadow. */
+function haFormControlCheckedFromChangeEvent(ev) {
+    const host = ev.currentTarget;
+    if (typeof host.checked === 'boolean') {
+        return host.checked;
     }
-    if (!n || !o) {
-        return true;
-    }
-    return editorConfigFingerprint(n) !== editorConfigFingerprint(o);
+    const inner = ev.target;
+    return Boolean(inner.checked);
 }
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     constructor() {
@@ -2987,6 +2987,14 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         };
     }
     setConfig(config) {
+        this._applyIncomingConfigRecord(config);
+        this._userClearedStatusEntity = false;
+        // Référence distincte : évite que Lovelace et Lit partagent la même référence mutable.
+        this.config = { ...this._config };
+        this.requestUpdate();
+    }
+    /** Normalise une config HA → état local `_config` (sans toucher à `this.config`). */
+    _applyIncomingConfigRecord(config) {
         const base = this._configWithoutUndefinedKeys(config);
         const sid = base.schedule_ids;
         if (Array.isArray(sid)) {
@@ -2996,11 +3004,13 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             ...base,
             type: 'custom:schedule-manager-card',
         };
-        // Référence distincte de `_config` : évite que Lovelace réutilise le même objet sans déclencher les mises à jour.
-        this.config = { ...this._config };
-        this._userClearedStatusEntity = false;
-        this._headerTitleDraft = this._config.header_title ?? '';
-        this.requestUpdate();
+        const te = this._headerTitleRef.value;
+        if (document.activeElement !== te) {
+            this._headerTitleDraft = this._config.header_title ?? '';
+        }
+        if (this._config.status_entity?.trim()) {
+            this._userClearedStatusEntity = false;
+        }
     }
     /** `hui-element-editor` vit dans le shadow parent ; HA peut ne pas rappeler `setConfig` si `deepEqual` est vrai. */
     _editorParentHost() {
@@ -3038,6 +3048,10 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         super.connectedCallback();
         queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
     }
+    firstUpdated(_changed) {
+        super.firstUpdated(_changed);
+        queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+    }
     /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
     _configWithoutUndefinedKeys(c) {
         const out = {};
@@ -3053,8 +3067,15 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     }
     updated(changed) {
         super.updated(changed);
-        if (changed.has('lovelace') || changed.has('context')) {
-            queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+        /** Ne pas re-pull sur lovelace/context : `host.value` peut encore être ancien et écraser l’édition locale. */
+        /** Lovelace met parfois à jour `config` sans rappeler `setConfig` (aperçu, réouverture). */
+        if (changed.has('config') && this.config) {
+            const prev = changed.get('config');
+            if (this.config !== prev) {
+                if (editorConfigFingerprint(this.config) !== editorConfigFingerprint(this._config)) {
+                    this._applyIncomingConfigRecord(this.config);
+                }
+            }
         }
         if (changed.has('hass') || changed.has('config') || changed.has('_config')) {
             this._maybeApplyDefaultStatusEntity();
@@ -3143,7 +3164,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     }
     _onScheduleCheck(ev, scheduleId) {
         const t = ev.currentTarget;
-        const checked = t.checked;
+        const checked = haFormControlCheckedFromChangeEvent(ev);
         const allIds = this._allScheduleIds();
         if (allIds.length === 0) {
             return;
@@ -3293,25 +3314,28 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                 delete merged[k];
             }
         }
-        this._config = merged;
+        /** Même référence que `detail.config` : le parent HA supprime les clés `undefined` sur cet objet. */
+        const outgoing = { ...merged };
+        this._config = outgoing;
         const te = this._headerTitleRef.value;
         if (document.activeElement !== te) {
             this._headerTitleDraft = this._config.header_title ?? '';
         }
+        this.config = outgoing;
         this.dispatchEvent(new CustomEvent('config-changed', {
             bubbles: true,
             composed: true,
-            detail: { config: { ...merged } },
+            detail: { config: outgoing },
         }));
     }
     _onShowHeaderChange(ev) {
-        const t = ev.currentTarget;
-        this._patchConfig({ show_header: t.checked ? undefined : false });
+        const checked = haFormControlCheckedFromChangeEvent(ev);
+        this._patchConfig({ show_header: checked ? undefined : false });
     }
     _onShowScheduleEnableToggleChange(ev) {
-        const t = ev.currentTarget;
+        const checked = haFormControlCheckedFromChangeEvent(ev);
         this._patchConfig({
-            show_schedule_enable_toggle: t.checked ? undefined : false,
+            show_schedule_enable_toggle: checked ? undefined : false,
         });
     }
     _onHeaderTitleInput(ev) {
@@ -3420,7 +3444,7 @@ __decorate([
     n$4({ attribute: false })
 ], ScheduleManagerCardEditor.prototype, "context", void 0);
 __decorate([
-    n$4({ attribute: false, hasChanged: editorConfigPropertyChanged })
+    n$4({ attribute: false })
 ], ScheduleManagerCardEditor.prototype, "config", void 0);
 __decorate([
     t()
@@ -3446,6 +3470,15 @@ const BLOCK_COLOR_PRESETS = [
     '#795548',
     '#607D8B',
 ];
+/** État du toggle après interaction (ha-switch WebAwesome : `target` peut être interne au shadow). */
+function haSwitchCheckedFromChangeEvent(ev) {
+    const host = ev.currentTarget;
+    if (typeof host.checked === 'boolean') {
+        return host.checked;
+    }
+    const inner = ev.target;
+    return Boolean(inner.checked);
+}
 function payloadWithoutEntityId(payload) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
         return {};
@@ -3563,21 +3596,17 @@ function blockFingerprint(block) {
         .map((a) => `${String(a.action_type).trim()}|${stablePayloadString(payloadForDuplicateCheck(a.action_payload))}`);
     return `${st}|${et}|${parts.join('||')}`;
 }
-/** Lit : même référence d’objet `config` mais contenu modifié (aperçu éditeur Lovelace). */
+/** Lit : compare le contenu effectif — si HA réutilise la même référence d’objet, l’aperçu se met quand même à jour. */
 function scheduleManagerCardConfigChanged(next, prev) {
-    if (next === prev) {
-        return false;
-    }
-    if (!next || !prev) {
-        return true;
-    }
-    const snap = (c) => JSON.stringify({
-        status_entity: c.status_entity,
-        header_title: c.header_title,
-        show_header: c.show_header,
-        show_schedule_enable_toggle: c.show_schedule_enable_toggle,
-        schedule_ids: c.schedule_ids ?? null,
-    });
+    const snap = (c) => c
+        ? JSON.stringify({
+            status_entity: c.status_entity,
+            header_title: c.header_title,
+            show_header: c.show_header,
+            show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+            schedule_ids: c.schedule_ids ?? null,
+        })
+        : '';
     return snap(next) !== snap(prev);
 }
 let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
@@ -3815,6 +3844,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     }
     renderSchedulesList(scheduleIds, schedulesMap) {
         const hass = this.hass;
+        if (!hass) {
+            return x ``;
+        }
         const totalCount = Object.keys(schedulesMap).length;
         const list = scheduleIds.length > 0
             ? scheduleIds
@@ -3998,7 +4030,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                 <div class="schedule-actions">
                   <ha-switch
                     .checked=${schedule.enabled}
-                    @change=${(e) => this.toggleSchedule(schedule.id, e.target.checked)}
+                    @change=${(e) => void this.toggleSchedule(schedule.id, haSwitchCheckedFromChangeEvent(e))}
                   ></ha-switch>
                 </div>
               `

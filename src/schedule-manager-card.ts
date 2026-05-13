@@ -74,6 +74,16 @@ const BLOCK_COLOR_PRESETS = [
   '#607D8B',
 ] as const;
 
+/** État du toggle après interaction (ha-switch WebAwesome : `target` peut être interne au shadow). */
+function haSwitchCheckedFromChangeEvent(ev: Event): boolean {
+  const host = ev.currentTarget as HTMLElement & { checked?: boolean };
+  if (typeof host.checked === 'boolean') {
+    return host.checked;
+  }
+  const inner = ev.target as HTMLElement & { checked?: boolean };
+  return Boolean(inner.checked);
+}
+
 function payloadWithoutEntityId(payload: unknown): Record<string, unknown> {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return {};
@@ -219,25 +229,21 @@ function blockFingerprint(block: TimeBlock): string {
   return `${st}|${et}|${parts.join('||')}`;
 }
 
-/** Lit : même référence d’objet `config` mais contenu modifié (aperçu éditeur Lovelace). */
+/** Lit : compare le contenu effectif — si HA réutilise la même référence d’objet, l’aperçu se met quand même à jour. */
 function scheduleManagerCardConfigChanged(
   next: CardConfig | undefined,
   prev: CardConfig | undefined
 ): boolean {
-  if (next === prev) {
-    return false;
-  }
-  if (!next || !prev) {
-    return true;
-  }
-  const snap = (c: CardConfig) =>
-    JSON.stringify({
-      status_entity: c.status_entity,
-      header_title: c.header_title,
-      show_header: c.show_header,
-      show_schedule_enable_toggle: c.show_schedule_enable_toggle,
-      schedule_ids: c.schedule_ids ?? null,
-    });
+  const snap = (c: CardConfig | undefined) =>
+    c
+      ? JSON.stringify({
+          status_entity: c.status_entity,
+          header_title: c.header_title,
+          show_header: c.show_header,
+          show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+          schedule_ids: c.schedule_ids ?? null,
+        })
+      : '';
   return snap(next) !== snap(prev);
 }
 
@@ -702,9 +708,9 @@ export class ScheduleManagerCard extends LitElement {
                   <ha-switch
                     .checked=${schedule.enabled}
                     @change=${(e: Event) =>
-                      this.toggleSchedule(
+                      void this.toggleSchedule(
                         schedule.id,
-                        (e.target as HTMLInputElement).checked
+                        haSwitchCheckedFromChangeEvent(e)
                       )}
                   ></ha-switch>
                 </div>
