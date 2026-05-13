@@ -106,6 +106,8 @@ const i$1=(i,e)=>"method"===e.kind&&e.descriptor&&!("value"in e.descriptor)?{...
 
 /** Capteur créé par l’intégration Schedule Manager (`attributes.schedules`). */
 const SCHEDULE_MANAGER_STATUS_ENTITY_ID = 'sensor.schedule_manager_status';
+/** Titre affiché lorsque `header_title` est vide / absent. */
+const DEFAULT_CARD_HEADER_TITLE = 'Schedule Manager';
 
 function randomActionId() {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -573,20 +575,32 @@ const styles = i$4 `
   }
 
   .btn-open-config {
-    width: 100%;
-    margin: 10px 0 12px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    border: 1px solid var(--divider-color);
-    background: var(--primary-color);
-    color: var(--text-primary-color);
-    font-size: 0.95em;
-    font-weight: 600;
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
+    margin: 4px 0 12px;
+    padding: 6px 2px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--secondary-text-color);
+    font-size: 0.875rem;
+    font-weight: 500;
     cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in srgb, var(--secondary-text-color) 35%, transparent);
+    transition:
+      color 0.15s ease,
+      text-decoration-color 0.15s ease;
   }
 
   .btn-open-config:hover {
-    filter: brightness(1.06);
+    color: var(--primary-color);
+    text-decoration-color: var(--primary-color);
+    filter: none;
   }
 
   /* Éditeur plein écran (style config HA) */
@@ -2701,6 +2715,43 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$1 {
         return x `
       <div class="card-config">
         <div class="field-block">
+          <ha-formfield label="Afficher le titre de la carte">
+            <ha-switch
+              .checked=${this._config?.show_header !== false}
+              @change=${this._onShowHeaderChange}
+            ></ha-switch>
+          </ha-formfield>
+          <p class="hint">
+            Le titre apparaît en haut de la carte (style en-tête Home Assistant). Désactivez-le pour
+            un affichage plus compact.
+          </p>
+        </div>
+        <div class="field-block">
+          <ha-textfield
+            .label=${'Titre affiché'}
+            .placeholder=${DEFAULT_CARD_HEADER_TITLE}
+            .value=${this._config?.header_title ?? ''}
+            .disabled=${this._config?.show_header === false}
+            @value-changed=${this._onHeaderTitleChanged}
+          ></ha-textfield>
+          <p class="hint">
+            Laissez vide pour le titre par défaut :
+            <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>
+          </p>
+        </div>
+        <div class="field-block">
+          <ha-formfield label="Interrupteur actif / inactif par planning">
+            <ha-switch
+              .checked=${this._config?.show_schedule_enable_toggle !== false}
+              @change=${this._onShowScheduleEnableToggleChange}
+            ></ha-switch>
+          </ha-formfield>
+          <p class="hint">
+            Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté
+            intégration).
+          </p>
+        </div>
+        <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
             label="Capteur d’état Schedule Manager"
@@ -2756,16 +2807,36 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$1 {
     `;
     }
     _patchConfig(patch) {
-        this._config = {
+        const merged = {
             type: 'custom:schedule-manager-card',
-            ...(this._config ?? {}),
+            ...this._config,
             ...patch,
         };
+        for (const [key, val] of Object.entries(patch)) {
+            if (val === undefined) {
+                delete merged[key];
+            }
+        }
+        this._config = merged;
         this.dispatchEvent(new CustomEvent('config-changed', {
             bubbles: true,
             composed: true,
             detail: { config: this._config },
         }));
+    }
+    _onShowHeaderChange(ev) {
+        const t = ev.currentTarget;
+        this._patchConfig({ show_header: t.checked ? undefined : false });
+    }
+    _onShowScheduleEnableToggleChange(ev) {
+        const t = ev.currentTarget;
+        this._patchConfig({
+            show_schedule_enable_toggle: t.checked ? undefined : false,
+        });
+    }
+    _onHeaderTitleChanged(ev) {
+        const v = String(ev.detail?.value ?? '').trim();
+        this._patchConfig({ header_title: v ? v : undefined });
     }
     _statusEntityChanged(ev) {
         const value = String(ev.detail?.value ?? '').trim();
@@ -2825,6 +2896,10 @@ ScheduleManagerCardEditor.styles = i$4 `
     }
     ha-formfield {
       --mdc-theme-text-primary-on-background: var(--primary-text-color);
+    }
+    ha-textfield {
+      display: block;
+      width: 100%;
     }
   `;
 __decorate([
@@ -3135,6 +3210,22 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
     statusEntityId() {
         return this.config?.status_entity?.trim() || SCHEDULE_MANAGER_STATUS_ENTITY_ID;
     }
+    _showCardHeader() {
+        return this.config?.show_header !== false;
+    }
+    _cardHeaderTitleText() {
+        const t = this.config?.header_title?.trim();
+        return t || DEFAULT_CARD_HEADER_TITLE;
+    }
+    _renderCardHeader() {
+        if (!this._showCardHeader()) {
+            return x ``;
+        }
+        return x `<div class="card-header">${this._cardHeaderTitleText()}</div>`;
+    }
+    _showScheduleEnableToggle() {
+        return this.config?.show_schedule_enable_toggle !== false;
+    }
     /**
      * La clé de l’objet `attributes.schedules` est l’identifiant canonique côté stockage.
      * Si le champ `id` à l’intérieur diverge (fichier JSON édité, ancien bug), les actions / suppression
@@ -3165,7 +3256,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
         if (!this.hass.states[this.statusEntityId()]) {
             return x `
         <ha-card>
-          <div class="card-header">Schedule Manager</div>
+          ${this._renderCardHeader()}
           <div class="card-content">
             Entité introuvable : <code>${this.statusEntityId()}</code>
           </div>
@@ -3175,7 +3266,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
         return x `
       <div>
         <ha-card class="card">
-          <div class="card-header">Schedule Manager</div>
+          ${this._renderCardHeader()}
           <div class="card-content">
             ${this.renderSchedulesList(scheduleIds, schedulesMap)}
           </div>
@@ -3364,29 +3455,20 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             return x ``;
         }
         const blocks = schedule.time_blocks || [];
-        const totalSchedules = Object.keys(this.getSchedulesRecord()).length;
-        const deleteLocked = totalSchedules <= 1;
         return x `
       <div class="schedule">
         <div class="schedule-header">
           <span>${schedule.name}</span>
-          <div class="schedule-actions">
-            <ha-switch
-              .checked=${schedule.enabled}
-              @change=${(e) => this.toggleSchedule(schedule.id, e.target.checked)}
-            ></ha-switch>
-            <button
-              type="button"
-              class="btn-danger"
-              ?disabled=${deleteLocked}
-              title=${deleteLocked
-            ? 'Créez un autre planning avant de pouvoir supprimer celui-ci.'
-            : `Supprimer le planning « ${schedule.name} »`}
-              @click=${() => this.deletePlanning(schedule)}
-            >
-              Supprimer
-            </button>
-          </div>
+          ${this._showScheduleEnableToggle()
+            ? x `
+                <div class="schedule-actions">
+                  <ha-switch
+                    .checked=${schedule.enabled}
+                    @change=${(e) => this.toggleSchedule(schedule.id, e.target.checked)}
+                  ></ha-switch>
+                </div>
+              `
+            : x ``}
         </div>
 
         <button
@@ -3425,23 +3507,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
         catch (e) {
             // eslint-disable-next-line no-console
             console.error('schedule_manager service call failed', e);
-        }
-    }
-    async deletePlanning(schedule) {
-        const schedulesMap = this.getSchedulesRecord();
-        if (Object.keys(schedulesMap).length <= 1) {
-            alert('Impossible de supprimer le dernier planning. Créez d’abord un autre planning (Paramètres → Schedule Manager → Configurer, ou depuis cette carte), puis supprimez celui-ci.');
-            return;
-        }
-        if (!confirm(`Supprimer définitivement le planning « ${schedule.name} » ?`)) {
-            return;
-        }
-        try {
-            await this.services().deleteSchedule(schedule.id);
-        }
-        catch (e) {
-            // eslint-disable-next-line no-console
-            console.error('schedule_manager.delete_schedule failed', e);
         }
     }
     openVisualEditor(schedule) {

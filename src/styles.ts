@@ -375,20 +375,32 @@ export const styles = css`
   }
 
   .btn-open-config {
-    width: 100%;
-    margin: 10px 0 12px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    border: 1px solid var(--divider-color);
-    background: var(--primary-color);
-    color: var(--text-primary-color);
-    font-size: 0.95em;
-    font-weight: 600;
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
+    margin: 4px 0 12px;
+    padding: 6px 2px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--secondary-text-color);
+    font-size: 0.875rem;
+    font-weight: 500;
     cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in srgb, var(--secondary-text-color) 35%, transparent);
+    transition:
+      color 0.15s ease,
+      text-decoration-color 0.15s ease;
   }
 
   .btn-open-config:hover {
-    filter: brightness(1.06);
+    color: var(--primary-color);
+    text-decoration-color: var(--primary-color);
+    filter: none;
   }
 
   /* Éditeur plein écran (style config HA) */

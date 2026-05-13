@@ -6,6 +6,7 @@ import { styleMap } from 'lit/directives/style-map.js';
 import {
   BlockAction,
   CardConfig,
+  DEFAULT_CARD_HEADER_TITLE,
   HomeAssistant,
   Schedule,
   TimeBlock,
@@ -386,6 +387,26 @@ export class ScheduleManagerCard extends LitElement {
     return this.config?.status_entity?.trim() || SCHEDULE_MANAGER_STATUS_ENTITY_ID;
   }
 
+  private _showCardHeader(): boolean {
+    return this.config?.show_header !== false;
+  }
+
+  private _cardHeaderTitleText(): string {
+    const t = this.config?.header_title?.trim();
+    return t || DEFAULT_CARD_HEADER_TITLE;
+  }
+
+  private _renderCardHeader() {
+    if (!this._showCardHeader()) {
+      return html``;
+    }
+    return html`<div class="card-header">${this._cardHeaderTitleText()}</div>`;
+  }
+
+  private _showScheduleEnableToggle(): boolean {
+    return this.config?.show_schedule_enable_toggle !== false;
+  }
+
   /**
    * La clé de l’objet `attributes.schedules` est l’identifiant canonique côté stockage.
    * Si le champ `id` à l’intérieur diverge (fichier JSON édité, ancien bug), les actions / suppression
@@ -422,7 +443,7 @@ export class ScheduleManagerCard extends LitElement {
     if (!this.hass.states[this.statusEntityId()]) {
       return html`
         <ha-card>
-          <div class="card-header">Schedule Manager</div>
+          ${this._renderCardHeader()}
           <div class="card-content">
             Entité introuvable : <code>${this.statusEntityId()}</code>
           </div>
@@ -433,7 +454,7 @@ export class ScheduleManagerCard extends LitElement {
     return html`
       <div>
         <ha-card class="card">
-          <div class="card-header">Schedule Manager</div>
+          ${this._renderCardHeader()}
           <div class="card-content">
             ${this.renderSchedulesList(scheduleIds, schedulesMap)}
           </div>
@@ -644,31 +665,25 @@ export class ScheduleManagerCard extends LitElement {
     }
 
     const blocks = schedule.time_blocks || [];
-    const totalSchedules = Object.keys(this.getSchedulesRecord()).length;
-    const deleteLocked = totalSchedules <= 1;
 
     return html`
       <div class="schedule">
         <div class="schedule-header">
           <span>${schedule.name}</span>
-          <div class="schedule-actions">
-            <ha-switch
-              .checked=${schedule.enabled}
-              @change=${(e: Event) =>
-                this.toggleSchedule(schedule.id, (e.target as HTMLInputElement).checked)}
-            ></ha-switch>
-            <button
-              type="button"
-              class="btn-danger"
-              ?disabled=${deleteLocked}
-              title=${deleteLocked
-                ? 'Créez un autre planning avant de pouvoir supprimer celui-ci.'
-                : `Supprimer le planning « ${schedule.name} »`}
-              @click=${() => this.deletePlanning(schedule)}
-            >
-              Supprimer
-            </button>
-          </div>
+          ${this._showScheduleEnableToggle()
+            ? html`
+                <div class="schedule-actions">
+                  <ha-switch
+                    .checked=${schedule.enabled}
+                    @change=${(e: Event) =>
+                      this.toggleSchedule(
+                        schedule.id,
+                        (e.target as HTMLInputElement).checked
+                      )}
+                  ></ha-switch>
+                </div>
+              `
+            : html``}
         </div>
 
         <button
@@ -706,29 +721,6 @@ export class ScheduleManagerCard extends LitElement {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('schedule_manager service call failed', e);
-    }
-  }
-
-  private async deletePlanning(schedule: Schedule) {
-    const schedulesMap = this.getSchedulesRecord();
-    if (Object.keys(schedulesMap).length <= 1) {
-      alert(
-        'Impossible de supprimer le dernier planning. Créez d’abord un autre planning (Paramètres → Schedule Manager → Configurer, ou depuis cette carte), puis supprimez celui-ci.'
-      );
-      return;
-    }
-    if (
-      !confirm(
-        `Supprimer définitivement le planning « ${schedule.name} » ?`
-      )
-    ) {
-      return;
-    }
-    try {
-      await this.services().deleteSchedule(schedule.id);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('schedule_manager.delete_schedule failed', e);
     }
   }
 

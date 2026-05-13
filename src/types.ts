@@ -57,4 +57,13 @@ export interface CardConfig {
   schedule_ids?: string[];
   /** Capteur Schedule Manager exposant l’attribut `schedules` (défaut: sensor.schedule_manager_status) */
   status_entity?: string;
+  /** Si `false`, la barre de titre au-dessus du contenu est masquée (défaut: affichée). */
+  show_header?: boolean;
+  /** Texte du titre ; vide ou absent = `DEFAULT_CARD_HEADER_TITLE`. */
+  header_title?: string;
+  /** Si `false`, masque l’interrupteur actif/inactif sur chaque planning (défaut: affiché). */
+  show_schedule_enable_toggle?: boolean;
 }
+
+/** Titre affiché lorsque `header_title` est vide / absent. */
+export const DEFAULT_CARD_HEADER_TITLE = 'Schedule Manager';

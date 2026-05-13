@@ -2,7 +2,10 @@ import { LitElement, html, css } from 'lit';
 import { PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { CardConfig, HomeAssistant } from './types';
-import { SCHEDULE_MANAGER_STATUS_ENTITY_ID } from './types';
+import {
+  DEFAULT_CARD_HEADER_TITLE,
+  SCHEDULE_MANAGER_STATUS_ENTITY_ID,
+} from './types';
 import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 
 @customElement('schedule-manager-card-editor')
@@ -64,6 +67,10 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
     ha-formfield {
       --mdc-theme-text-primary-on-background: var(--primary-text-color);
+    }
+    ha-textfield {
+      display: block;
+      width: 100%;
     }
   `;
 
@@ -221,6 +228,43 @@ export class ScheduleManagerCardEditor extends LitElement {
     return html`
       <div class="card-config">
         <div class="field-block">
+          <ha-formfield label="Afficher le titre de la carte">
+            <ha-switch
+              .checked=${this._config?.show_header !== false}
+              @change=${this._onShowHeaderChange}
+            ></ha-switch>
+          </ha-formfield>
+          <p class="hint">
+            Le titre apparaît en haut de la carte (style en-tête Home Assistant). Désactivez-le pour
+            un affichage plus compact.
+          </p>
+        </div>
+        <div class="field-block">
+          <ha-textfield
+            .label=${'Titre affiché'}
+            .placeholder=${DEFAULT_CARD_HEADER_TITLE}
+            .value=${this._config?.header_title ?? ''}
+            .disabled=${this._config?.show_header === false}
+            @value-changed=${this._onHeaderTitleChanged}
+          ></ha-textfield>
+          <p class="hint">
+            Laissez vide pour le titre par défaut :
+            <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>
+          </p>
+        </div>
+        <div class="field-block">
+          <ha-formfield label="Interrupteur actif / inactif par planning">
+            <ha-switch
+              .checked=${this._config?.show_schedule_enable_toggle !== false}
+              @change=${this._onShowScheduleEnableToggleChange}
+            ></ha-switch>
+          </ha-formfield>
+          <p class="hint">
+            Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté
+            intégration).
+          </p>
+        </div>
+        <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
             label="Capteur d’état Schedule Manager"
@@ -279,11 +323,17 @@ export class ScheduleManagerCardEditor extends LitElement {
   }
 
   private _patchConfig(patch: Partial<CardConfig>) {
-    this._config = {
+    const merged: Record<string, unknown> = {
       type: 'custom:schedule-manager-card',
-      ...(this._config ?? {}),
+      ...(this._config as Record<string, unknown> | undefined),
       ...patch,
     };
+    for (const [key, val] of Object.entries(patch)) {
+      if (val === undefined) {
+        delete merged[key];
+      }
+    }
+    this._config = merged as unknown as CardConfig;
     this.dispatchEvent(
       new CustomEvent('config-changed', {
         bubbles: true,
@@ -291,6 +341,23 @@ export class ScheduleManagerCardEditor extends LitElement {
         detail: { config: this._config },
       })
     );
+  }
+
+  private _onShowHeaderChange(ev: Event) {
+    const t = ev.currentTarget as unknown as { checked: boolean };
+    this._patchConfig({ show_header: t.checked ? undefined : false });
+  }
+
+  private _onShowScheduleEnableToggleChange(ev: Event) {
+    const t = ev.currentTarget as unknown as { checked: boolean };
+    this._patchConfig({
+      show_schedule_enable_toggle: t.checked ? undefined : false,
+    });
+  }
+
+  private _onHeaderTitleChanged(ev: CustomEvent<{ value?: string }>) {
+    const v = String(ev.detail?.value ?? '').trim();
+    this._patchConfig({ header_title: v ? v : undefined });
   }
 
   private _statusEntityChanged(ev: CustomEvent<{ value?: string }>) {
