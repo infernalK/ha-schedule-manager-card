@@ -35,7 +35,7 @@ import {
   servicePrimaryLabel,
   serviceSecondaryHint,
 } from './action-wizard-i18n';
-import { domainsForActionType, entityMatchesDomains } from './entity-domains';
+import { entityCompatibleWithAction } from './entity-domains';
 import {
   blockTimelineFill,
   blocksToTimelineSegments,
@@ -1272,12 +1272,13 @@ export class ScheduleManagerCard extends LitElement {
     return entityIdsFromPayload(action.action_payload)[0] ?? '';
   }
 
-  /** Filtre le sélecteur d’entités selon le domaine du service déjà choisi. */
+  /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
   private entityFilterForConfiguredAction(
     selected: BlockAction
   ): (entityId: string) => boolean {
-    const domains = domainsForActionType(selected.action_type);
-    return (entityId: string) => entityMatchesDomains(entityId, domains);
+    const actionType = String(selected.action_type ?? '').trim();
+    return (entityId: string) =>
+      entityCompatibleWithAction(entityId, actionType);
   }
 
   private visualAppendEntity(
@@ -1655,16 +1656,13 @@ export class ScheduleManagerCard extends LitElement {
             </div>`;
     } else if (step === 'entity' && domainF && svcPick) {
       const actionFull = `${domainF}.${svcPick}`;
-      const compatDomains = domainsForActionType(actionFull);
       let entities = listEntitiesInDomain(hass, domainF).filter(
         (eid) =>
           matches(friendlyEntityName(hass, eid)) || matches(eid)
       );
-      if (compatDomains.length > 0) {
-        entities = entities.filter((eid) =>
-          entityMatchesDomains(eid, compatDomains)
-        );
-      }
+      entities = entities.filter((eid) =>
+        entityCompatibleWithAction(eid, actionFull)
+      );
       body =
         entities.length === 0
           ? html`<p class="sm-ap-empty">

@@ -40,3 +40,35 @@ export function entityMatchesDomains(entityId: string, domains: string[]): boole
   const dom = entityId.split('.')[0];
   return domains.includes(dom);
 }
+
+/**
+ * Indique si une entité peut être associée à une action `domain.service`.
+ * Comportement strict : si la carte ne connaît pas le service, on se rabat sur l’égalité
+ * du domaine de l’entité avec le domaine du service (jamais « tout autoriser »).
+ */
+export function entityCompatibleWithAction(
+  entityId: string,
+  actionType: string
+): boolean {
+  if (!entityId.includes('.')) {
+    return false;
+  }
+  const entityDom = entityId.split('.')[0] ?? '';
+  const t = String(actionType ?? '').trim().toLowerCase();
+  if (!t) {
+    return false;
+  }
+
+  const compat = domainsForActionType(t);
+  if (compat.length > 0) {
+    return compat.includes(entityDom);
+  }
+
+  const firstDot = t.indexOf('.');
+  if (firstDot > 0) {
+    const serviceDomain = t.slice(0, firstDot);
+    return entityDom === serviceDomain;
+  }
+
+  return false;
+}

@@ -1683,12 +1683,30 @@ function domainsForActionType(actionType) {
     };
     return map[t] ?? [];
 }
-function entityMatchesDomains(entityId, domains) {
-    if (!domains.length) {
-        return true;
+/**
+ * Indique si une entité peut être associée à une action `domain.service`.
+ * Comportement strict : si la carte ne connaît pas le service, on se rabat sur l’égalité
+ * du domaine de l’entité avec le domaine du service (jamais « tout autoriser »).
+ */
+function entityCompatibleWithAction(entityId, actionType) {
+    if (!entityId.includes('.')) {
+        return false;
     }
-    const dom = entityId.split('.')[0];
-    return domains.includes(dom);
+    const entityDom = entityId.split('.')[0] ?? '';
+    const t = String(actionType ?? '').trim().toLowerCase();
+    if (!t) {
+        return false;
+    }
+    const compat = domainsForActionType(t);
+    if (compat.length > 0) {
+        return compat.includes(entityDom);
+    }
+    const firstDot = t.indexOf('.');
+    if (firstDot > 0) {
+        const serviceDomain = t.slice(0, firstDot);
+        return entityDom === serviceDomain;
+    }
+    return false;
 }
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -3500,10 +3518,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     primaryEntityFromAction(action) {
         return entityIdsFromPayload(action.action_payload)[0] ?? '';
     }
-    /** Filtre le sélecteur d’entités selon le domaine du service déjà choisi. */
+    /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
     entityFilterForConfiguredAction(selected) {
-        const domains = domainsForActionType(selected.action_type);
-        return (entityId) => entityMatchesDomains(entityId, domains);
+        const actionType = String(selected.action_type ?? '').trim();
+        return (entityId) => entityCompatibleWithAction(entityId, actionType);
     }
     visualAppendEntity(ev, actionIndexOverride) {
         if (!this._visualEdit || !this.hass) {
@@ -3811,11 +3829,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
         else if (step === 'entity' && domainF && svcPick) {
             const actionFull = `${domainF}.${svcPick}`;
-            const compatDomains = domainsForActionType(actionFull);
             let entities = listEntitiesInDomain(hass, domainF).filter((eid) => matches(friendlyEntityName(hass, eid)) || matches(eid));
-            if (compatDomains.length > 0) {
-                entities = entities.filter((eid) => entityMatchesDomains(eid, compatDomains));
-            }
+            entities = entities.filter((eid) => entityCompatibleWithAction(eid, actionFull));
             body =
                 entities.length === 0
                     ? x `<p class="sm-ap-empty">
