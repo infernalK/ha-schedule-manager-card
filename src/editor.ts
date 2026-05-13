@@ -24,8 +24,7 @@ export class ScheduleManagerCardEditor extends LitElement {
       gap: 16px;
       padding: 8px 0;
     }
-    ha-entity-picker,
-    ha-textfield {
+    ha-entity-picker {
       display: block;
       width: 100%;
     }
@@ -188,7 +187,7 @@ export class ScheduleManagerCardEditor extends LitElement {
     });
   }
 
-  /** Réduit la liste aux capteurs « Schedule Manager » (nom ou attribut schedules). */
+  /** Filtre le sélecteur du capteur d’état (entité avec attribut `schedules`). */
   private _statusEntityFilter = (entity: unknown): boolean => {
     const entityId = entityIdFromPickerFilterArgument(entity);
     if (!entityId) {
@@ -239,17 +238,6 @@ export class ScheduleManagerCardEditor extends LitElement {
           </p>
         </div>
         <div class="field-block">
-          <ha-textfield
-            label="ID de groupe (optionnel)"
-            .value=${this._config?.group_id ?? ''}
-            @input=${this._groupIdChanged}
-          ></ha-textfield>
-          <p class="hint">
-            UUID d’un groupe exclusif pour n’afficher que ce groupe. Vide = liste de plannings
-            ci‑dessous.
-          </p>
-        </div>
-        <div class="field-block">
           ${entityMissing
             ? html`
                 <p class="hint">
@@ -269,8 +257,8 @@ export class ScheduleManagerCardEditor extends LitElement {
               : html`
                   <div class="schedule-list-title">Plannings à afficher sur la carte</div>
                   <p class="hint">
-                    Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un
-                    planning (au moins un reste visible).
+                    Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer
+                    un planning (au moins un reste visible).
                   </p>
                   <div class="schedule-list">
                     ${entries.map(
@@ -314,11 +302,6 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
     this._userClearedStatusEntity = false;
     this._patchConfig({ status_entity: value });
-  }
-
-  private _groupIdChanged(ev: Event) {
-    const value = ((ev.target as HTMLInputElement).value ?? '').trim();
-    this._patchConfig({ group_id: value || undefined });
   }
 
 }

@@ -30,7 +30,7 @@ Après installation HACS : **Paramètres** → **Appareils et services** → **R
 
 ## Configuration
 
-En mode **modifier le tableau de bord**, la carte propose un sélecteur **Capteur Schedule Manager** (`ha-entity-picker`) pour choisir le capteur à utiliser (domaine `sensor`), ainsi que les champs optionnels groupe et IDs de plannings.
+En mode **modifier le tableau de bord**, la carte propose un sélecteur **Capteur Schedule Manager** (`ha-entity-picker`) pour choisir le capteur à utiliser (domaine `sensor`), ainsi que le filtre optionnel par **IDs de plannings**.
 
 Exemple minimal (tous les plannings renvoyés par le capteur) :
 
@@ -38,12 +38,10 @@ Exemple minimal (tous les plannings renvoyés par le capteur) :
 type: custom:schedule-manager-card
 ```
 
-Afficher un groupe ou filtrer des plannings :
+Filtrer les plannings affichés :
 
 ```yaml
 type: custom:schedule-manager-card
-group_id: votre_groupe_id
-# ou :
 schedule_ids:
   - id_planning_1
   - id_planning_2
@@ -58,7 +56,6 @@ status_entity: sensor.votre_capteur_schedule_manager
 
 ## Fonctionnalités
 
-- Lecture des plannings et groupes via les attributs du capteur d’état
+- Lecture des plannings via les attributs du capteur d’état
 - Activation / désactivation des plannings
-- Groupe exclusif : bouton pour définir le planning actif
 - Mise en évidence du créneau horaire courant

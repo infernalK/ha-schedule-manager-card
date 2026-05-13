@@ -287,13 +287,55 @@ export const styles = css`
 
   .entity-chip {
     display: inline-flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 10px;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
     font-size: 0.75rem;
     border-radius: 12px;
     background: rgba(127, 127, 127, 0.18);
     max-width: 100%;
+    overflow: hidden;
+  }
+
+  .entity-chip-main {
+    display: flex;
+    align-items: flex-start;
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 12px 0 0 12px;
+  }
+
+  .entity-chip-main:hover {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.12);
+  }
+
+  .entity-chip-remove {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 8px 10px;
+    border: none;
+    border-left: 1px solid var(--divider-color);
+    background: transparent;
+    cursor: pointer;
+    color: var(--error-color, #c62828);
+    font-size: 1rem;
+    line-height: 1;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .entity-chip-remove:hover {
+    background: rgba(var(--rgb-error-color, 198, 40, 40), 0.08);
   }
 
   .entity-chip-text {
@@ -324,16 +366,6 @@ export const styles = css`
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 220px;
-  }
-
-  .entity-chip button {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    color: var(--error-color, #c62828);
-    font-size: 1rem;
-    line-height: 1;
-    padding: 0 2px;
   }
 
   .btn-open-config {
@@ -915,6 +947,15 @@ export const styles = css`
     flex-direction: column;
     gap: 6px;
     margin-top: 4px;
+  }
+
+  .sm-entity-replace-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--divider-color);
   }
 
   .sm-entity-add-heading {

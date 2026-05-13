@@ -8,7 +8,6 @@ import {
   CardConfig,
   HomeAssistant,
   Schedule,
-  ScheduleGroup,
   TimeBlock,
   TimeBlockServicePayload,
   SCHEDULE_MANAGER_STATUS_ENTITY_ID,
@@ -243,6 +242,12 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _quickEntityPickerNonce = 0;
   /** `${blockIdx}-${actionIdx}` quand le panneau d’ajout d’entité (bouton +) est ouvert. */
   @state() private _entityAddPickerOpenKey: string | null = null;
+  /** Panneau « remplacer cette entité » après clic sur une puce. */
+  @state() private _entityPickerReplace: {
+    blockIdx: number;
+    actionIdx: number;
+    oldEntityId: string;
+  } | null = null;
   /** Réglé à l’ouverture de l’assistant : action à mettre à jour (évite décalage avec selectedActionIndex). */
   private _actionWizardTargetActionIndex = 0;
   /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
@@ -370,6 +375,28 @@ export class ScheduleManagerCard extends LitElement {
         this._editorFriseWidth = 0;
       }
     }
+    const pickerUi =
+      changed.has('_entityAddPickerOpenKey') ||
+      changed.has('_entityPickerReplace') ||
+      changed.has('_quickEntityPickerNonce');
+    if (pickerUi && (this._entityAddPickerOpenKey || this._entityPickerReplace)) {
+      requestAnimationFrame(() => this._tryOpenQuickEntityPicker());
+    }
+  }
+
+  /** Ouvre la liste du `ha-entity-picker` (HA récent : `ha-generic-picker`). */
+  private _tryOpenQuickEntityPicker() {
+    const root = this.shadowRoot;
+    if (!root) {
+      return;
+    }
+    const pickers = root.querySelectorAll(
+      'ha-entity-picker.sm-action-entities-quick-picker'
+    );
+    const last = pickers.item(pickers.length - 1) as { open?: () => Promise<void> } | undefined;
+    if (last && typeof last.open === 'function') {
+      void last.open();
+    }
   }
 
   private statusEntityId(): string {
@@ -397,13 +424,6 @@ export class ScheduleManagerCard extends LitElement {
     return raw as Record<string, Schedule>;
   }
 
-  private getGroupsRecord(): Record<string, ScheduleGroup> {
-    const state = this.hass?.states[this.statusEntityId()];
-    const attrs = state?.attributes as Record<string, unknown> | undefined;
-    const raw = attrs?.groups as Record<string, ScheduleGroup> | undefined;
-    return raw && typeof raw === 'object' ? raw : {};
-  }
-
   private services(): ScheduleManagerServices {
     return new ScheduleManagerServices(this.hass);
   }
@@ -413,10 +433,8 @@ export class ScheduleManagerCard extends LitElement {
       return html`<ha-card><div class="card-content">Chargement…</div></ha-card>`;
     }
 
-    const groupId = this.config.group_id?.trim();
     const scheduleIds = this.config.schedule_ids || [];
     const schedulesMap = this.getSchedulesRecord();
-    const groupsMap = this.getGroupsRecord();
 
     if (!this.hass.states[this.statusEntityId()]) {
       return html`
@@ -434,9 +452,7 @@ export class ScheduleManagerCard extends LitElement {
         <ha-card class="card">
           <div class="card-header">Schedule Manager</div>
           <div class="card-content">
-            ${groupId
-              ? this.renderGroup(groupsMap[groupId], schedulesMap)
-              : this.renderSchedulesList(scheduleIds, schedulesMap)}
+            ${this.renderSchedulesList(scheduleIds, schedulesMap)}
           </div>
         </ha-card>
         ${this.renderVisualEditorOverlay()}
@@ -505,43 +521,7 @@ export class ScheduleManagerCard extends LitElement {
       return html`<div class="empty-hint">Aucun élément à afficher.</div>`;
     }
 
-    return html`${list.map((s) => this.renderSchedule(s, undefined))}`;
-  }
-
-  private renderGroup(
-    group: ScheduleGroup | undefined,
-    schedulesMap: Record<string, Schedule>
-  ) {
-    if (!group) {
-      return html`<div>Groupe introuvable.</div>`;
-    }
-
-    const refs = group.schedules || [];
-    const missing = refs.filter((id) => !schedulesMap[id]);
-
-    return html`
-      <div class="group">
-        <h3>${group.name}</h3>
-        ${missing.length
-          ? html`<div class="empty-hint">
-              Références de planning absentes du stockage :
-              <code class="inline">${missing.join(', ')}</code>
-            </div>`
-          : null}
-        ${refs
-          .filter((scheduleId) => schedulesMap[scheduleId])
-          .map((scheduleId) => {
-            const schedule = schedulesMap[scheduleId];
-            if (!schedule) {
-              return html``;
-            }
-            return this.renderSchedule(
-              this.withCanonicalId(scheduleId, schedule),
-              group
-            );
-          })}
-      </div>
-    `;
+    return html`${list.map((s) => this.renderSchedule(s))}`;
   }
 
   /**
@@ -675,7 +655,7 @@ export class ScheduleManagerCard extends LitElement {
     });
   }
 
-  private renderSchedule(schedule: Schedule | undefined, group: ScheduleGroup | undefined) {
+  private renderSchedule(schedule: Schedule | undefined) {
     if (!schedule) {
       return html``;
     }
@@ -729,18 +709,6 @@ export class ScheduleManagerCard extends LitElement {
                 Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.
               </div>
             `}
-
-        ${group?.exclusive
-          ? html`
-              <button
-                type="button"
-                style="margin-top:10px"
-                @click=${() => this.setActiveSchedule(group.id, schedule.id)}
-              >
-                Définir comme actif (groupe exclusif)
-              </button>
-            `
-          : ''}
       </div>
     `;
   }
@@ -755,15 +723,6 @@ export class ScheduleManagerCard extends LitElement {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('schedule_manager service call failed', e);
-    }
-  }
-
-  private async setActiveSchedule(groupId: string, scheduleId: string) {
-    try {
-      await this.services().setActiveSchedule(groupId, scheduleId);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('schedule_manager.set_active_schedule failed', e);
     }
   }
 
@@ -825,7 +784,7 @@ export class ScheduleManagerCard extends LitElement {
     this._visualEdit = null;
     this._actionWizardOpen = false;
     this._quickEntityPickerNonce = 0;
-    this._entityAddPickerOpenKey = null;
+    this.closeEntityAddPicker();
   }
 
   private endBoundaryDrag() {
@@ -1082,7 +1041,7 @@ export class ScheduleManagerCard extends LitElement {
     if (idx === this._visualEdit.selectedIndex) {
       return;
     }
-    this._entityAddPickerOpenKey = null;
+    this.closeEntityAddPicker();
     this._visualEdit = {
       ...this._visualEdit,
       selectedIndex: idx,
@@ -1158,7 +1117,7 @@ export class ScheduleManagerCard extends LitElement {
     if (next === this._visualEdit.selectedActionIndex) {
       return;
     }
-    this._entityAddPickerOpenKey = null;
+    this.closeEntityAddPicker();
     this._visualEdit = {
       ...this._visualEdit,
       selectedActionIndex: next,
@@ -1178,7 +1137,7 @@ export class ScheduleManagerCard extends LitElement {
     const next = { ...b, actions };
     const trial = [...this._visualEdit.blocks];
     trial[bi] = next;
-    this._entityAddPickerOpenKey = null;
+    this.closeEntityAddPicker();
     this._visualEdit = {
       ...this._visualEdit,
       blocks: trial,
@@ -1206,7 +1165,7 @@ export class ScheduleManagerCard extends LitElement {
     } else if (ai < selectedActionIndex) {
       selectedActionIndex -= 1;
     }
-    this._entityAddPickerOpenKey = null;
+    this.closeEntityAddPicker();
     this._visualEdit = { ...this._visualEdit, blocks: trial, selectedActionIndex };
   }
 
@@ -1256,7 +1215,7 @@ export class ScheduleManagerCard extends LitElement {
         return;
       }
     }
-    this._entityAddPickerOpenKey = null;
+    this.closeEntityAddPicker();
     this._visualEdit = {
       ...this._visualEdit,
       blocks: nextBlocks,
@@ -1275,7 +1234,7 @@ export class ScheduleManagerCard extends LitElement {
     if (nextSel >= nextBlocks.length) {
       nextSel = Math.max(0, nextBlocks.length - 1);
     }
-    this._entityAddPickerOpenKey = null;
+    this.closeEntityAddPicker();
     this._visualEdit = {
       ...this._visualEdit,
       blocks: nextBlocks,
@@ -1346,6 +1305,49 @@ export class ScheduleManagerCard extends LitElement {
         ? { ...(action.action_payload as Record<string, unknown>) }
         : {};
     const nextIds = [...ids, v];
+    base.entity_id = nextIds.length === 1 ? nextIds[0] : nextIds;
+    this.visualPatchSelectedAction({ action_payload: base }, ai);
+    this._quickEntityPickerNonce += 1;
+    return true;
+  }
+
+  private visualReplaceEntity(
+    oldEntityId: string,
+    ev: CustomEvent<{ value?: string }>,
+    actionIndexOverride?: number
+  ): boolean {
+    if (!this._visualEdit || !this.hass) {
+      return false;
+    }
+    const raw =
+      ev.detail?.value ??
+      ((ev.target as unknown as { value?: string })?.value ?? '');
+    const v = String(raw).trim();
+    if (!v || v === oldEntityId) {
+      return false;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    const maxAi = Math.max(0, (block?.actions?.length ?? 1) - 1);
+    const ai = Math.min(
+      actionIndexOverride !== undefined
+        ? Math.max(0, Math.min(actionIndexOverride, maxAi))
+        : Math.min(this._visualEdit.selectedActionIndex, maxAi),
+      maxAi
+    );
+    const action = block?.actions?.[ai];
+    if (!block || !action || !String(action.action_type ?? '').trim()) {
+      return false;
+    }
+    const ids = entityIdsFromPayload(action.action_payload);
+    if (!ids.includes(oldEntityId) || ids.includes(v)) {
+      return false;
+    }
+    const nextIds = ids.map((id) => (id === oldEntityId ? v : id));
+    const base =
+      typeof action.action_payload === 'object' && action.action_payload !== null
+        ? { ...(action.action_payload as Record<string, unknown>) }
+        : {};
     base.entity_id = nextIds.length === 1 ? nextIds[0] : nextIds;
     this.visualPatchSelectedAction({ action_payload: base }, ai);
     this._quickEntityPickerNonce += 1;
@@ -1613,12 +1615,21 @@ export class ScheduleManagerCard extends LitElement {
     return this.visualAppendEntity(ev, actionIndex);
   }
 
+  private visualReplaceEntityAt(
+    actionIndex: number,
+    oldEntityId: string,
+    ev: CustomEvent<{ value?: string }>
+  ): boolean {
+    return this.visualReplaceEntity(oldEntityId, ev, actionIndex);
+  }
+
   private entityAddPickerKey(blockIdx: number, actionIdx: number): string {
     return `${blockIdx}-${actionIdx}`;
   }
 
   private closeEntityAddPicker(): void {
     this._entityAddPickerOpenKey = null;
+    this._entityPickerReplace = null;
   }
 
   private toggleEntityAddPicker(blockIdx: number, actionIdx: number): void {
@@ -1627,8 +1638,20 @@ export class ScheduleManagerCard extends LitElement {
       this.closeEntityAddPicker();
       return;
     }
+    this._entityPickerReplace = null;
     this._entityAddPickerOpenKey = k;
     this._quickEntityPickerNonce += 1;
+  }
+
+  private openEntityReplacePicker(blockIdx: number, actionIdx: number, oldEntityId: string) {
+    this._entityAddPickerOpenKey = null;
+    this._entityPickerReplace = { blockIdx, actionIdx, oldEntityId };
+    this._quickEntityPickerNonce += 1;
+  }
+
+  private entityReplacePanelActive(blockIdx: number, actionIdx: number): boolean {
+    const r = this._entityPickerReplace;
+    return Boolean(r && r.blockIdx === blockIdx && r.actionIdx === actionIdx);
   }
 
   private visualRemoveEntityAt(actionIndex: number, entityId: string) {
@@ -1909,21 +1932,32 @@ export class ScheduleManagerCard extends LitElement {
                       <div class="sm-action-entities-quick">
                         <span class="sm-action-entities-quick-title">Entités ciblées</span>
                         <p class="sm-action-entities-quick-hint">
-                          Retirez une entité avec × ou utilisez « + » puis choisissez une entité compatible
-                          avec <code>${action.action_type}</code>.
+                          Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » pour en
+                          ajouter une (compatible avec <code>${action.action_type}</code>).
                         </p>
                         <div class="entity-chips">
                           ${entityIdsFromPayload(action.action_payload).map(
                             (eid) => html`
                               <span class="entity-chip" title=${eid}>
-                                <span class="entity-chip-text">
-                                  <span class="entity-chip-name">${friendlyEntityName(hass, eid)}</span>
-                                  <span class="entity-chip-id">${eid}</span>
-                                </span>
                                 <button
                                   type="button"
+                                  class="entity-chip-main"
+                                  aria-label="Remplacer ${friendlyEntityName(hass, eid)}"
+                                  @click=${() => this.openEntityReplacePicker(blockIdx, i, eid)}
+                                >
+                                  <span class="entity-chip-text">
+                                    <span class="entity-chip-name">${friendlyEntityName(hass, eid)}</span>
+                                    <span class="entity-chip-id">${eid}</span>
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  class="entity-chip-remove"
                                   aria-label="Retirer ${friendlyEntityName(hass, eid)}"
-                                  @click=${() => this.visualRemoveEntityAt(i, eid)}
+                                  @click=${(ev: Event) => {
+                                    ev.stopPropagation();
+                                    this.visualRemoveEntityAt(i, eid);
+                                  }}
                                 >
                                   ×
                                 </button>
@@ -1931,6 +1965,45 @@ export class ScheduleManagerCard extends LitElement {
                             `
                           )}
                         </div>
+                        ${this.entityReplacePanelActive(blockIdx, i) &&
+                        this._entityPickerReplace
+                          ? html`
+                              <div class="sm-entity-replace-block">
+                                <div class="sm-entity-add-row">
+                                  <span class="sm-entity-add-heading">Remplacer l’entité</span>
+                                  <button
+                                    type="button"
+                                    class="sm-entity-add-dismiss"
+                                    aria-label="Fermer le sélecteur"
+                                    @click=${() => this.closeEntityAddPicker()}
+                                  >
+                                    Fermer
+                                  </button>
+                                </div>
+                                <div class="sm-entity-picker-shell sm-entity-picker-shell--popover">
+                                  <ha-entity-picker
+                                    class="sm-action-entities-quick-picker"
+                                    .hass=${hass}
+                                    .includeDomains=${this.includeDomainsForEntityPicker(action)}
+                                    .entityFilter=${this.entityFilterForConfiguredAction(action)}
+                                    .allowCustomEntity=${true}
+                                    label="Choisir une autre entité…"
+                                    .value=${this._entityPickerReplace.oldEntityId}
+                                    id=${`sm-replace-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
+                                    @value-changed=${(e: CustomEvent<{ value?: string }>) => {
+                                      const old = this._entityPickerReplace?.oldEntityId;
+                                      if (!old) {
+                                        return;
+                                      }
+                                      if (this.visualReplaceEntityAt(i, old, e)) {
+                                        this.closeEntityAddPicker();
+                                      }
+                                    }}
+                                  ></ha-entity-picker>
+                                </div>
+                              </div>
+                            `
+                          : null}
                         <div class="sm-entity-add-block">
                           <div class="sm-entity-add-row">
                             <span class="sm-entity-add-heading">Ajouter une entité</span>

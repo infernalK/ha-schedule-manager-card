@@ -68,11 +68,14 @@ export function climateEntityHasPresetModes(
     return false;
   }
   const pm = hass.states[entityId]?.attributes?.preset_modes;
-  return (
-    Array.isArray(pm) &&
-    pm.length > 0 &&
-    pm.every((x): x is string => typeof x === 'string')
-  );
+  // Absent ou non encore exposé : ne pas exclure du sélecteur (sinon liste vide avec certains climats).
+  if (pm === undefined || pm === null) {
+    return true;
+  }
+  if (!Array.isArray(pm) || pm.length === 0) {
+    return false;
+  }
+  return pm.every((x): x is string => typeof x === 'string');
 }
 
 /** Climat avec au moins un mode HVAC exposé (`hvac_modes` non vide). */
@@ -84,11 +87,13 @@ export function climateEntityHasHvacModes(
     return false;
   }
   const hm = hass.states[entityId]?.attributes?.hvac_modes;
-  return (
-    Array.isArray(hm) &&
-    hm.length > 0 &&
-    hm.every((x): x is string => typeof x === 'string')
-  );
+  if (hm === undefined || hm === null) {
+    return true;
+  }
+  if (!Array.isArray(hm) || hm.length === 0) {
+    return false;
+  }
+  return hm.every((x): x is string => typeof x === 'string');
 }
 
 /**

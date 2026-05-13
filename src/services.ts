@@ -15,13 +15,6 @@ export class ScheduleManagerServices {
     await this.callService('schedule_manager', 'disable_schedule', { schedule_id: scheduleId });
   }
 
-  async setActiveSchedule(groupId: string, scheduleId: string) {
-    await this.callService('schedule_manager', 'set_active_schedule', {
-      group_id: groupId,
-      schedule_id: scheduleId,
-    });
-  }
-
   async createSchedule(name: string) {
     const trimmed = name.trim();
     if (!trimmed) {

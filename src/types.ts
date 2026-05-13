@@ -34,15 +34,6 @@ export interface Schedule {
   repeat_days: number[];
 }
 
-export interface ScheduleGroup {
-  id: string;
-  name: string;
-  schedules: string[];
-  exclusive: boolean;
-  active_schedule?: string;
-  enabled: boolean;
-}
-
 /** Une entrée d’action dans le payload service (aligné sur l’intégration HA). */
 export interface BlockActionServicePayload {
   action_type: string;
@@ -58,13 +49,12 @@ export interface TimeBlockServicePayload {
   id?: string;
 }
 
-/** Capteur créé par l’intégration Schedule Manager (`attributes.schedules`, `attributes.groups`). */
+/** Capteur créé par l’intégration Schedule Manager (`attributes.schedules`). */
 export const SCHEDULE_MANAGER_STATUS_ENTITY_ID = 'sensor.schedule_manager_status';
 
 export interface CardConfig {
   type: string;
-  group_id?: string;
   schedule_ids?: string[];
-  /** Capteur Schedule Manager exposant les attributs schedules / groups (défaut: sensor.schedule_manager_status) */
+  /** Capteur Schedule Manager exposant l’attribut `schedules` (défaut: sensor.schedule_manager_status) */
   status_entity?: string;
 }
