@@ -12,6 +12,8 @@ export interface HomeAssistant {
     string,
     { state: string; attributes: Record<string, unknown> }
   >;
+  /** Domaines → services exposés par HA (carte Lovelace). */
+  services?: Record<string, Record<string, unknown>>;
   callService(
     domain: string,
     service: string,

@@ -591,6 +591,57 @@ export const styles = css`
     color: var(--secondary-text-color);
   }
 
+  .sm-field-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.72em;
+    line-height: 1.35;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-field-hint code {
+    font-size: 0.95em;
+    word-break: break-all;
+  }
+
+  .sm-field-hint-warn {
+    color: var(--warning-color, #ff9800);
+  }
+
+  .sm-action-advanced {
+    margin: 10px 0 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px dashed var(--divider-color);
+    background: rgba(127, 127, 127, 0.04);
+  }
+
+  .sm-action-advanced summary {
+    cursor: pointer;
+    font-size: 0.82em;
+    color: var(--secondary-text-color);
+    user-select: none;
+  }
+
+  .sm-form-label-inner {
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+
+  .sm-modal-body-input-full {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+
   .sm-modal-body .sm-time-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

@@ -13,7 +13,13 @@ import {
 } from './types';
 import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
-import { domainsForActionType, entityMatchesDomains } from './entity-domains';
+import {
+  applyDefaultFieldsForService,
+  parseDomainService,
+  pickDefaultService,
+  servicesForDomain,
+  stripPayloadForNewService,
+} from './action-service-helpers';
 import {
   blockTimelineFill,
   blocksToTimelineSegments,
@@ -1214,18 +1220,19 @@ export class ScheduleManagerCard extends LitElement {
     this._visualEntityPickerNonce += 1;
   }
 
-  private entityFilterVisualEditor(): (entityId: string) => boolean {
-    if (!this._visualEdit) {
-      return () => true;
-    }
-    const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
-    const domains = domainsForActionType(b?.action_type ?? '');
-    return (entityId: string) => entityMatchesDomains(entityId, domains);
+  /** Première entité ciblée (flux principal). Les `entity_id` multiples restent possibles via le JSON. */
+  private primaryEntityFromBlock(block: TimeBlock): string {
+    return entityIdsFromPayload(block.action_payload)[0] ?? '';
   }
 
-  private visualOnEntitySelected(ev: CustomEvent<{ value?: string }>) {
-    const v = String(ev.detail?.value ?? '').trim();
-    if (!v || !this._visualEdit) {
+  private visualPrimaryEntityChanged(ev: CustomEvent<{ value?: string }>) {
+    if (!this._visualEdit || !this.hass) {
+      return;
+    }
+    if (!this.mergeJsonPayloadIntoSelectedBlock()) {
+      alert(
+        'Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de changer l’entité.'
+      );
       return;
     }
     const sel = this._visualEdit.selectedIndex;
@@ -1233,26 +1240,82 @@ export class ScheduleManagerCard extends LitElement {
     if (!block) {
       return;
     }
-    const ids = entityIdsFromPayload(block.action_payload);
-    if (ids.includes(v)) {
+    const raw = ev.detail?.value;
+    const entityId = typeof raw === 'string' ? raw.trim() : '';
+
+    if (!entityId) {
+      const base =
+        typeof block.action_payload === 'object' && block.action_payload !== null
+          ? { ...(block.action_payload as Record<string, unknown>) }
+          : {};
+      delete base.entity_id;
+      this.visualPatchSelected({ action_payload: base });
+      this.syncPayloadStrFromSelection();
+      this._visualEntityPickerNonce += 1;
       return;
     }
-    const nextIds = [...ids, v];
-    const base =
-      typeof block.action_payload === 'object' && block.action_payload !== null
-        ? { ...(block.action_payload as Record<string, unknown>) }
-        : {};
-    if (nextIds.length === 1) {
-      base.entity_id = nextIds[0];
-    } else {
-      base.entity_id = nextIds;
+
+    const newDomain = entityId.includes('.') ? entityId.split('.')[0]! : '';
+    if (!newDomain) {
+      return;
     }
-    this.visualPatchSelected({ action_payload: base });
+
+    const services = servicesForDomain(this.hass, newDomain);
+    let serviceName: string;
+
+    if (!services.length) {
+      const parsed = parseDomainService(block.action_type);
+      const fallback =
+        parsed && parsed.domain === newDomain
+          ? parsed.service
+          : pickDefaultService(newDomain, ['turn_on']);
+      serviceName = fallback;
+    } else {
+      const parsed = parseDomainService(block.action_type);
+      if (
+        parsed &&
+        parsed.domain === newDomain &&
+        services.includes(parsed.service)
+      ) {
+        serviceName = parsed.service;
+      } else {
+        serviceName = pickDefaultService(newDomain, services);
+      }
+    }
+
+    let payload = stripPayloadForNewService(
+      block.action_payload,
+      entityId,
+      SCHEDULE_MANAGER_COLOR_KEY
+    );
+    applyDefaultFieldsForService(
+      newDomain,
+      serviceName,
+      entityId,
+      payload,
+      this.hass
+    );
+
+    this.visualPatchSelected({
+      action_type: `${newDomain}.${serviceName}`,
+      action_payload: payload,
+    });
+    this.syncPayloadStrFromSelection();
     this._visualEntityPickerNonce += 1;
   }
 
-  private visualRemoveEntity(entityId: string) {
-    if (!this._visualEdit) {
+  private visualServiceSelectChanged(ev: Event) {
+    if (!this._visualEdit || !this.hass) {
+      return;
+    }
+    if (!this.mergeJsonPayloadIntoSelectedBlock()) {
+      alert(
+        'Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de changer l’action.'
+      );
+      return;
+    }
+    const service = (ev.target as HTMLSelectElement).value.trim();
+    if (!service) {
       return;
     }
     const sel = this._visualEdit.selectedIndex;
@@ -1260,18 +1323,110 @@ export class ScheduleManagerCard extends LitElement {
     if (!block) {
       return;
     }
-    const ids = entityIdsFromPayload(block.action_payload).filter((e) => e !== entityId);
-    const base =
-      typeof block.action_payload === 'object' && block.action_payload !== null
-        ? { ...(block.action_payload as Record<string, unknown>) }
-        : {};
-    delete base.entity_id;
-    if (ids.length === 1) {
-      base.entity_id = ids[0];
-    } else if (ids.length > 1) {
-      base.entity_id = ids;
+    const entityId = this.primaryEntityFromBlock(block);
+    if (!entityId) {
+      alert('Choisissez d’abord une entité.');
+      return;
     }
-    this.visualPatchSelected({ action_payload: base });
+    const domain = entityId.includes('.') ? entityId.split('.')[0]! : '';
+    if (!domain) {
+      return;
+    }
+
+    let payload = stripPayloadForNewService(
+      block.action_payload,
+      entityId,
+      SCHEDULE_MANAGER_COLOR_KEY
+    );
+    applyDefaultFieldsForService(domain, service, entityId, payload, this.hass);
+
+    this.visualPatchSelected({
+      action_type: `${domain}.${service}`,
+      action_payload: payload,
+    });
+    this.syncPayloadStrFromSelection();
+  }
+
+  private renderActionPlanningControls(selected: TimeBlock) {
+    if (!this.hass || !this._visualEdit) {
+      return html``;
+    }
+    const primary = this.primaryEntityFromBlock(selected);
+    const domain = primary.includes('.') ? primary.split('.')[0]! : '';
+    const services = domain ? servicesForDomain(this.hass, domain) : [];
+    const parsed = parseDomainService(selected.action_type);
+    const selectValue =
+      parsed && services.includes(parsed.service) ? parsed.service : '';
+    const unknownService = Boolean(
+      primary &&
+        parsed &&
+        parsed.domain === domain &&
+        domain &&
+        parsed.service &&
+        !services.includes(parsed.service)
+    );
+
+    return html`
+      <label class="sm-form-label">
+        Entité
+        <ha-entity-picker
+          .hass=${this.hass}
+          .allowCustomEntity=${true}
+          label="Choisir une entité"
+          .value=${primary}
+          id=${`sm-viz-ep-primary-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${this._visualEntityPickerNonce}`}
+          @value-changed=${(e: CustomEvent<{ value?: string }>) =>
+            this.visualPrimaryEntityChanged(e)}
+        ></ha-entity-picker>
+        ${!primary
+          ? html`<span class="sm-field-hint">Sélectionnez l’entité à piloter pendant cette plage.</span>`
+          : null}
+      </label>
+
+      <label class="sm-form-label">
+        Action
+        <select
+          class="sm-select"
+          ?disabled=${!primary || services.length === 0}
+          .value=${selectValue}
+          @change=${(e: Event) => this.visualServiceSelectChanged(e)}
+        >
+          <option value="">— Choisir une action —</option>
+          ${services.map(
+            (s) => html`<option value=${s}>${s}</option>`
+          )}
+        </select>
+        ${unknownService
+          ? html`<span class="sm-field-hint"
+              >Service actuel : <code>${selected.action_type}</code> — absent de la liste (manuel ou intégration non chargée).</span
+            >`
+          : null}
+        ${primary && services.length === 0
+          ? html`<span class="sm-field-hint sm-field-hint-warn"
+              >Aucun service exposé pour le domaine « ${domain} » (rechargez l’interface ou vérifiez Home Assistant).</span
+            >`
+          : null}
+      </label>
+
+      <details class="sm-action-advanced">
+        <summary>Service personnalisé (domaine.action)</summary>
+        <label class="sm-form-label sm-form-label-inner">
+          Saisie libre
+          <input
+            type="text"
+            class="sm-modal-body-input-full"
+            placeholder="ex. climate.set_preset_mode"
+            .value=${selected.action_type}
+            @input=${(e: Event) => {
+              this.visualPatchSelected({
+                action_type: (e.target as HTMLInputElement).value,
+              });
+              this.syncPayloadStrFromSelection();
+            }}
+          />
+        </label>
+      </details>
+    `;
   }
 
   private async saveVisualEditor() {
@@ -1679,50 +1834,12 @@ export class ScheduleManagerCard extends LitElement {
                   ${this.renderBlockColorControls(selected)}
                   <div class="sm-action-card">
                     <h4>Action pendant cette plage</h4>
-                    <label class="sm-form-label">
-                      Service (domaine.action)
-                      <input
-                        type="text"
-                        placeholder="climate.set_preset_mode"
-                        .value=${selected.action_type}
-                        @input=${(e: Event) =>
-                          this.visualPatchSelected({
-                            action_type: (e.target as HTMLInputElement).value,
-                          })}
-                      />
-                    </label>
-                    <label class="sm-form-label">
-                      Entités ciblées
-                      <div class="entity-chips">
-                        ${entityIdsFromPayload(selected.action_payload).map(
-                          (eid) => html`
-                            <span class="entity-chip">
-                              <code>${eid}</code>
-                              <button
-                                type="button"
-                                aria-label="Retirer"
-                                @click=${() => this.visualRemoveEntity(eid)}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          `
-                        )}
-                      </div>
-                      <ha-entity-picker
-                        .hass=${this.hass}
-                        .entityFilter=${this.entityFilterVisualEditor()}
-                        .allowCustomEntity=${true}
-                        label="Ajouter une entité"
-                        .value=${''}
-                        id=${`sm-viz-ep-${v.scheduleId}-${sel}-${this._visualEntityPickerNonce}`}
-                        @value-changed=${(e: CustomEvent<{ value?: string }>) =>
-                          this.visualOnEntitySelected(e)}
-                      ></ha-entity-picker>
-                    </label>
+                    ${this.renderActionPlanningControls(selected)}
                     ${this.renderClimatePresetSelect(selected)}
                     <label class="sm-form-label sm-form-label-last">
-                      Payload JSON (sans entity_id — géré par les puces)
+                      Paramètres supplémentaires (JSON, sans
+                      <code>entity_id</code>
+                      — défini ci‑dessus ; plusieurs entités possibles ici si besoin)
                       <textarea
                         class="sm-payload-textarea"
                         .value=${this._visualPayloadStr}

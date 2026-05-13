@@ -729,6 +729,57 @@ const styles = i$4 `
     color: var(--secondary-text-color);
   }
 
+  .sm-field-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.72em;
+    line-height: 1.35;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-field-hint code {
+    font-size: 0.95em;
+    word-break: break-all;
+  }
+
+  .sm-field-hint-warn {
+    color: var(--warning-color, #ff9800);
+  }
+
+  .sm-action-advanced {
+    margin: 10px 0 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px dashed var(--divider-color);
+    background: rgba(127, 127, 127, 0.04);
+  }
+
+  .sm-action-advanced summary {
+    cursor: pointer;
+    font-size: 0.82em;
+    color: var(--secondary-text-color);
+    user-select: none;
+  }
+
+  .sm-form-label-inner {
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+
+  .sm-modal-body-input-full {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+
   .sm-modal-body .sm-time-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -852,44 +903,86 @@ const styles = i$4 `
   }
 `;
 
-/**
- * Déduit les domaines d’entités « compatibles » avec un type d’action HA.
- * Si `domain.service` est fourni, un seul domaine ; sinon heuristiques pour les noms de service seuls.
- */
-function domainsForActionType(actionType) {
-    const t = actionType.trim().toLowerCase();
-    if (!t) {
+/** Décompose `climate.set_preset_mode` → domain + nom court du service. */
+function parseDomainService(actionType) {
+    const t = actionType.trim();
+    if (!t.includes('.')) {
+        return null;
+    }
+    const i = t.indexOf('.');
+    const domain = t.slice(0, i).trim();
+    const service = t.slice(i + 1).trim();
+    if (!domain || !service) {
+        return null;
+    }
+    return { domain, service };
+}
+/** Entités « hass.services » exposées par Lovelace (schéma HA). */
+function servicesForDomain(hass, domain) {
+    const raw = hass.services?.[domain];
+    if (!raw || typeof raw !== 'object') {
         return [];
     }
-    if (t.includes('.')) {
-        const dom = t.split('.')[0];
-        return dom ? [dom] : [];
-    }
-    const map = {
-        set_preset_mode: ['climate'],
-        set_temperature: ['climate'],
-        set_hvac_mode: ['climate'],
-        turn_on: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
-        turn_off: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
-        toggle: ['switch', 'light', 'input_boolean'],
-        open_cover: ['cover'],
-        close_cover: ['cover'],
-        set_cover_position: ['cover'],
-        stop_cover: ['cover'],
-        lock: ['lock'],
-        unlock: ['lock'],
-        alarm_arm_home: ['alarm_control_panel'],
-        alarm_arm_away: ['alarm_control_panel'],
-        alarm_disarm: ['alarm_control_panel'],
-    };
-    return map[t] ?? [];
+    return Object.keys(raw).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
-function entityMatchesDomains(entityId, domains) {
-    if (!domains.length) {
-        return true;
+/** Service par défaut raisonnable quand le domaine ou l’entité change. */
+function pickDefaultService(domain, available) {
+    if (!available.length) {
+        return 'turn_on';
     }
-    const dom = entityId.split('.')[0];
-    return domains.includes(dom);
+    const prefs = {
+        climate: 'set_preset_mode',
+        light: 'turn_on',
+        switch: 'turn_on',
+        fan: 'turn_on',
+        cover: 'open_cover',
+        lock: 'lock',
+        alarm_control_panel: 'alarm_arm_home',
+        input_boolean: 'turn_on',
+        input_select: 'select_option',
+        media_player: 'media_play',
+        vacuum: 'start',
+        water_heater: 'set_temperature',
+        humidifier: 'set_humidity',
+    };
+    const pref = prefs[domain];
+    if (pref && available.includes(pref)) {
+        return pref;
+    }
+    return available[0];
+}
+/** Garde uniquement `entity_id` et la couleur d’affichage (réinitialise le reste au changement de service). */
+function stripPayloadForNewService(prevPayload, entityId, colorKey) {
+    const out = {};
+    if (entityId) {
+        out.entity_id = entityId;
+    }
+    if (prevPayload &&
+        typeof prevPayload === 'object' &&
+        !Array.isArray(prevPayload)) {
+        const c = prevPayload[colorKey];
+        if (typeof c === 'string') {
+            out[colorKey] = c;
+        }
+    }
+    return out;
+}
+/** Préréglages utiles quand on arrive sur certains services courants. */
+function applyDefaultFieldsForService(domain, service, entityId, payload, hass) {
+    if (domain === 'climate' && service === 'set_preset_mode') {
+        if (payload.preset_mode !== undefined) {
+            return;
+        }
+        const st = hass.states[entityId];
+        const modes = st?.attributes?.preset_modes;
+        if (Array.isArray(modes) && modes.length && typeof modes[0] === 'string') {
+            payload.preset_mode = modes[0];
+        }
+        else {
+            payload.preset_mode = 'comfort';
+        }
+        return;
+    }
 }
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -2653,17 +2746,16 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this.syncPayloadStrFromSelection();
         this._visualEntityPickerNonce += 1;
     }
-    entityFilterVisualEditor() {
-        if (!this._visualEdit) {
-            return () => true;
-        }
-        const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
-        const domains = domainsForActionType(b?.action_type ?? '');
-        return (entityId) => entityMatchesDomains(entityId, domains);
+    /** Première entité ciblée (flux principal). Les `entity_id` multiples restent possibles via le JSON. */
+    primaryEntityFromBlock(block) {
+        return entityIdsFromPayload(block.action_payload)[0] ?? '';
     }
-    visualOnEntitySelected(ev) {
-        const v = String(ev.detail?.value ?? '').trim();
-        if (!v || !this._visualEdit) {
+    visualPrimaryEntityChanged(ev) {
+        if (!this._visualEdit || !this.hass) {
+            return;
+        }
+        if (!this.mergeJsonPayloadIntoSelectedBlock()) {
+            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de changer l’entité.');
             return;
         }
         const sel = this._visualEdit.selectedIndex;
@@ -2671,25 +2763,61 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!block) {
             return;
         }
-        const ids = entityIdsFromPayload(block.action_payload);
-        if (ids.includes(v)) {
+        const raw = ev.detail?.value;
+        const entityId = typeof raw === 'string' ? raw.trim() : '';
+        if (!entityId) {
+            const base = typeof block.action_payload === 'object' && block.action_payload !== null
+                ? { ...block.action_payload }
+                : {};
+            delete base.entity_id;
+            this.visualPatchSelected({ action_payload: base });
+            this.syncPayloadStrFromSelection();
+            this._visualEntityPickerNonce += 1;
             return;
         }
-        const nextIds = [...ids, v];
-        const base = typeof block.action_payload === 'object' && block.action_payload !== null
-            ? { ...block.action_payload }
-            : {};
-        if (nextIds.length === 1) {
-            base.entity_id = nextIds[0];
+        const newDomain = entityId.includes('.') ? entityId.split('.')[0] : '';
+        if (!newDomain) {
+            return;
+        }
+        const services = servicesForDomain(this.hass, newDomain);
+        let serviceName;
+        if (!services.length) {
+            const parsed = parseDomainService(block.action_type);
+            const fallback = parsed && parsed.domain === newDomain
+                ? parsed.service
+                : pickDefaultService(newDomain, ['turn_on']);
+            serviceName = fallback;
         }
         else {
-            base.entity_id = nextIds;
+            const parsed = parseDomainService(block.action_type);
+            if (parsed &&
+                parsed.domain === newDomain &&
+                services.includes(parsed.service)) {
+                serviceName = parsed.service;
+            }
+            else {
+                serviceName = pickDefaultService(newDomain, services);
+            }
         }
-        this.visualPatchSelected({ action_payload: base });
+        let payload = stripPayloadForNewService(block.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
+        applyDefaultFieldsForService(newDomain, serviceName, entityId, payload, this.hass);
+        this.visualPatchSelected({
+            action_type: `${newDomain}.${serviceName}`,
+            action_payload: payload,
+        });
+        this.syncPayloadStrFromSelection();
         this._visualEntityPickerNonce += 1;
     }
-    visualRemoveEntity(entityId) {
-        if (!this._visualEdit) {
+    visualServiceSelectChanged(ev) {
+        if (!this._visualEdit || !this.hass) {
+            return;
+        }
+        if (!this.mergeJsonPayloadIntoSelectedBlock()) {
+            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de changer l’action.');
+            return;
+        }
+        const service = ev.target.value.trim();
+        if (!service) {
             return;
         }
         const sel = this._visualEdit.selectedIndex;
@@ -2697,18 +2825,96 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!block) {
             return;
         }
-        const ids = entityIdsFromPayload(block.action_payload).filter((e) => e !== entityId);
-        const base = typeof block.action_payload === 'object' && block.action_payload !== null
-            ? { ...block.action_payload }
-            : {};
-        delete base.entity_id;
-        if (ids.length === 1) {
-            base.entity_id = ids[0];
+        const entityId = this.primaryEntityFromBlock(block);
+        if (!entityId) {
+            alert('Choisissez d’abord une entité.');
+            return;
         }
-        else if (ids.length > 1) {
-            base.entity_id = ids;
+        const domain = entityId.includes('.') ? entityId.split('.')[0] : '';
+        if (!domain) {
+            return;
         }
-        this.visualPatchSelected({ action_payload: base });
+        let payload = stripPayloadForNewService(block.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
+        applyDefaultFieldsForService(domain, service, entityId, payload, this.hass);
+        this.visualPatchSelected({
+            action_type: `${domain}.${service}`,
+            action_payload: payload,
+        });
+        this.syncPayloadStrFromSelection();
+    }
+    renderActionPlanningControls(selected) {
+        if (!this.hass || !this._visualEdit) {
+            return x ``;
+        }
+        const primary = this.primaryEntityFromBlock(selected);
+        const domain = primary.includes('.') ? primary.split('.')[0] : '';
+        const services = domain ? servicesForDomain(this.hass, domain) : [];
+        const parsed = parseDomainService(selected.action_type);
+        const selectValue = parsed && services.includes(parsed.service) ? parsed.service : '';
+        const unknownService = Boolean(primary &&
+            parsed &&
+            parsed.domain === domain &&
+            domain &&
+            parsed.service &&
+            !services.includes(parsed.service));
+        return x `
+      <label class="sm-form-label">
+        Entité
+        <ha-entity-picker
+          .hass=${this.hass}
+          .allowCustomEntity=${true}
+          label="Choisir une entité"
+          .value=${primary}
+          id=${`sm-viz-ep-primary-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${this._visualEntityPickerNonce}`}
+          @value-changed=${(e) => this.visualPrimaryEntityChanged(e)}
+        ></ha-entity-picker>
+        ${!primary
+            ? x `<span class="sm-field-hint">Sélectionnez l’entité à piloter pendant cette plage.</span>`
+            : null}
+      </label>
+
+      <label class="sm-form-label">
+        Action
+        <select
+          class="sm-select"
+          ?disabled=${!primary || services.length === 0}
+          .value=${selectValue}
+          @change=${(e) => this.visualServiceSelectChanged(e)}
+        >
+          <option value="">— Choisir une action —</option>
+          ${services.map((s) => x `<option value=${s}>${s}</option>`)}
+        </select>
+        ${unknownService
+            ? x `<span class="sm-field-hint"
+              >Service actuel : <code>${selected.action_type}</code> — absent de la liste (manuel ou intégration non chargée).</span
+            >`
+            : null}
+        ${primary && services.length === 0
+            ? x `<span class="sm-field-hint sm-field-hint-warn"
+              >Aucun service exposé pour le domaine « ${domain} » (rechargez l’interface ou vérifiez Home Assistant).</span
+            >`
+            : null}
+      </label>
+
+      <details class="sm-action-advanced">
+        <summary>Service personnalisé (domaine.action)</summary>
+        <label class="sm-form-label sm-form-label-inner">
+          Saisie libre
+          <input
+            type="text"
+            class="sm-modal-body-input-full"
+            placeholder="ex. climate.set_preset_mode"
+            .value=${selected.action_type}
+            @input=${(e) => {
+            this.visualPatchSelected({
+                action_type: e.target.value,
+            });
+            this.syncPayloadStrFromSelection();
+        }}
+          />
+        </label>
+      </details>
+    `;
     }
     async saveVisualEditor() {
         if (!this._visualEdit) {
@@ -3082,46 +3288,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                   ${this.renderBlockColorControls(selected)}
                   <div class="sm-action-card">
                     <h4>Action pendant cette plage</h4>
-                    <label class="sm-form-label">
-                      Service (domaine.action)
-                      <input
-                        type="text"
-                        placeholder="climate.set_preset_mode"
-                        .value=${selected.action_type}
-                        @input=${(e) => this.visualPatchSelected({
-                action_type: e.target.value,
-            })}
-                      />
-                    </label>
-                    <label class="sm-form-label">
-                      Entités ciblées
-                      <div class="entity-chips">
-                        ${entityIdsFromPayload(selected.action_payload).map((eid) => x `
-                            <span class="entity-chip">
-                              <code>${eid}</code>
-                              <button
-                                type="button"
-                                aria-label="Retirer"
-                                @click=${() => this.visualRemoveEntity(eid)}
-                              >
-                                ×
-                              </button>
-                            </span>
-                          `)}
-                      </div>
-                      <ha-entity-picker
-                        .hass=${this.hass}
-                        .entityFilter=${this.entityFilterVisualEditor()}
-                        .allowCustomEntity=${true}
-                        label="Ajouter une entité"
-                        .value=${''}
-                        id=${`sm-viz-ep-${v.scheduleId}-${sel}-${this._visualEntityPickerNonce}`}
-                        @value-changed=${(e) => this.visualOnEntitySelected(e)}
-                      ></ha-entity-picker>
-                    </label>
+                    ${this.renderActionPlanningControls(selected)}
                     ${this.renderClimatePresetSelect(selected)}
                     <label class="sm-form-label sm-form-label-last">
-                      Payload JSON (sans entity_id — géré par les puces)
+                      Paramètres supplémentaires (JSON, sans
+                      <code>entity_id</code>
+                      — défini ci‑dessus ; plusieurs entités possibles ici si besoin)
                       <textarea
                         class="sm-payload-textarea"
                         .value=${this._visualPayloadStr}
