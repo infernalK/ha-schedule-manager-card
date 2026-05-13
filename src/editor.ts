@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { PropertyValues } from 'lit';
+import { ref, createRef } from 'lit/directives/ref.js';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { CardConfig, HomeAssistant } from './types';
 import {
@@ -19,6 +20,11 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   /** True si l’utilisateur a vidé le capteur — ne pas réappliquer le défaut automatiquement. */
   @state() private _userClearedStatusEntity = false;
+
+  /** Brouillon titre : évite que les re-renders / ha-textfield réinitialisent la frappe. */
+  @state() private _headerTitleDraft = '';
+
+  private _headerTitleRef = createRef<HTMLInputElement>();
 
   static styles = css`
     .card-config {
@@ -72,6 +78,22 @@ export class ScheduleManagerCardEditor extends LitElement {
       display: block;
       width: 100%;
     }
+    .sm-config-title-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px 16px;
+      font-size: 1rem;
+      font-family: inherit;
+      border-radius: 4px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color, var(--ha-card-background, #fff));
+      color: var(--primary-text-color);
+    }
+    .sm-config-title-input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 1px var(--primary-color);
+    }
   `;
 
   setConfig(config: CardConfig) {
@@ -81,18 +103,44 @@ export class ScheduleManagerCardEditor extends LitElement {
     };
     this.config = this._config;
     this._userClearedStatusEntity = false;
+    this._headerTitleDraft = config.header_title ?? '';
+  }
+
+  /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
+  private _configWithoutUndefinedKeys(
+    c: CardConfig | Record<string, unknown> | undefined
+  ): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    if (!c || typeof c !== 'object') {
+      return out;
+    }
+    for (const [k, v] of Object.entries(c)) {
+      if (v !== undefined) {
+        out[k] = v;
+      }
+    }
+    return out;
   }
 
   protected willUpdate(changed: PropertyValues) {
     super.willUpdate(changed);
     // Certains flux HA posent uniquement la propriété `config` sans rappeler setConfig.
-    // Fusionner avec l’état local : un `config` partiel ne doit pas effacer `schedule_ids`, etc.
+    // Fusionner avec l’état local ; ne jamais fusionner des valeurs `undefined` (sinon écrasement).
     if (changed.has('config') && this.config) {
+      const incoming = this._configWithoutUndefinedKeys(
+        this.config as unknown as Record<string, unknown>
+      ) as unknown as CardConfig;
       this._config = {
         ...(this._config ?? {}),
-        ...this.config,
+        ...incoming,
         type: 'custom:schedule-manager-card',
       };
+      const active = document.activeElement;
+      const titleEl = this._headerTitleRef.value;
+      const typingTitle = titleEl && (active === titleEl || titleEl.contains(active as Node));
+      if (!typingTitle) {
+        this._headerTitleDraft = this._config.header_title ?? '';
+      }
     }
   }
 
@@ -156,16 +204,31 @@ export class ScheduleManagerCardEditor extends LitElement {
     return this._scheduleEntries().map((e) => e.id);
   }
 
+  private _normScheduleId(id: string): string {
+    return String(id).trim().toLowerCase();
+  }
+
   /** Liste explicite de plannings affichés (défini = filtre actif). */
   private _explicitScheduleIds(): string[] | undefined {
-    const raw = this._config?.schedule_ids ?? this.config?.schedule_ids;
+    const raw = (this._config?.schedule_ids ?? this.config?.schedule_ids) as unknown;
     if (raw == null) {
       return undefined;
     }
-    if (!Array.isArray(raw)) {
-      return undefined;
+    if (Array.isArray(raw)) {
+      const ids = raw.map((x) => String(x).trim()).filter(Boolean);
+      return ids.length ? ids : undefined;
     }
-    return raw.length ? raw : undefined;
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (!s) {
+        return undefined;
+      }
+      return s
+        .split(/[\s,]+/)
+        .map((x: string) => x.trim())
+        .filter(Boolean);
+    }
+    return undefined;
   }
 
   /** Filtrage actif uniquement si `schedule_ids` est une liste non vide. */
@@ -174,7 +237,8 @@ export class ScheduleManagerCardEditor extends LitElement {
     if (!explicit || explicit.length === 0) {
       return true;
     }
-    return explicit.includes(scheduleId);
+    const needle = this._normScheduleId(scheduleId);
+    return explicit.some((id) => this._normScheduleId(String(id)) === needle);
   }
 
   private _onScheduleCheck(ev: Event, scheduleId: string) {
@@ -242,16 +306,23 @@ export class ScheduleManagerCardEditor extends LitElement {
     return html`
       <div class="card-config">
         <div class="field-block">
-          <div class="schedule-list-title">Titre de la carte</div>
-          <ha-textfield
-            label="Titre personnalisé (optionnel)"
-            .placeholder=${DEFAULT_CARD_HEADER_TITLE}
-            .value=${this._config?.header_title ?? ''}
-            @value-changed=${this._onHeaderTitleChanged}
-          ></ha-textfield>
+          <label class="schedule-list-title" for="sm-editor-card-title">Titre de la carte</label>
+          <input
+            id="sm-editor-card-title"
+            class="sm-config-title-input"
+            type="text"
+            name="schedule_manager_card_title"
+            autocomplete="off"
+            placeholder=${DEFAULT_CARD_HEADER_TITLE}
+            .value=${this._headerTitleDraft}
+            ${ref(this._headerTitleRef)}
+            @input=${this._onHeaderTitleInput}
+            @blur=${this._onHeaderTitleBlur}
+          />
           <p class="hint">
-            Saisissez le texte affiché dans l’en-tête de la carte. Laissez vide pour utiliser le
-            libellé par défaut (<code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>).
+            Saisissez le texte de l’en-tête puis cliquez en dehors du champ (ou Tab) pour
+            l’enregistrer dans la configuration. Vide =
+            <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>.
           </p>
           <ha-formfield label="Afficher le titre sur la carte">
             <ha-switch
@@ -346,7 +417,16 @@ export class ScheduleManagerCardEditor extends LitElement {
         delete merged[key];
       }
     }
+    for (const k of Object.keys(merged)) {
+      if (merged[k] === undefined) {
+        delete merged[k];
+      }
+    }
     this._config = merged as unknown as CardConfig;
+    const te = this._headerTitleRef.value;
+    if (document.activeElement !== te) {
+      this._headerTitleDraft = this._config.header_title ?? '';
+    }
     this.dispatchEvent(
       new CustomEvent('config-changed', {
         bubbles: true,
@@ -368,8 +448,13 @@ export class ScheduleManagerCardEditor extends LitElement {
     });
   }
 
-  private _onHeaderTitleChanged(ev: CustomEvent<{ value?: string }>) {
-    const v = String(ev.detail?.value ?? '').trim();
+  private _onHeaderTitleInput(ev: Event) {
+    const t = ev.target as HTMLInputElement;
+    this._headerTitleDraft = t.value;
+  }
+
+  private _onHeaderTitleBlur() {
+    const v = this._headerTitleDraft.trim();
     this._patchConfig({ header_title: v ? v : undefined });
   }
 
