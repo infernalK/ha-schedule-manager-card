@@ -31,12 +31,12 @@ import {
   entityIcon,
   friendlyEntityName,
   listEntitiesInDomain,
+  listEntityIdsForAction,
   listSelectableDomains,
   servicePrimaryLabel,
   serviceSecondaryHint,
 } from './action-wizard-i18n';
 import { entityCompatibleWithAction } from './entity-domains';
-import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 import {
   blockTimelineFill,
   blocksToTimelineSegments,
@@ -1230,21 +1230,6 @@ export class ScheduleManagerCard extends LitElement {
     return entityIdsFromPayload(action.action_payload)[0] ?? '';
   }
 
-  /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
-  private entityFilterForConfiguredAction(
-    selected: BlockAction
-  ): (entity: unknown) => boolean {
-    const actionType = String(selected.action_type ?? '').trim();
-    const hass = this.hass;
-    return (entity: unknown) => {
-      const entityId = entityIdFromPickerFilterArgument(entity);
-      if (!entityId) {
-        return false;
-      }
-      return entityCompatibleWithAction(entityId, actionType, hass);
-    };
-  }
-
   /** Entités `hass.states` compatibles avec l’action, hors `excludeEntityIds` (déjà ciblées). */
   private compatibleEntityChoicesForAction(
     action: BlockAction,
@@ -1255,33 +1240,10 @@ export class ScheduleManagerCard extends LitElement {
       return [];
     }
     const actionType = String(action.action_type ?? '').trim();
-    const parsed = parseDomainService(actionType);
-    const domainPrefix = parsed?.domain ? `${parsed.domain}.` : null;
-    const filterFn = this.entityFilterForConfiguredAction(action);
     const omit = new Set(excludeEntityIds.filter((id) => id.includes('.')));
-    const out: { id: string; name: string }[] = [];
-    for (const id of Object.keys(hass.states)) {
-      if (!id.includes('.') || omit.has(id)) {
-        continue;
-      }
-      if (domainPrefix && !id.startsWith(domainPrefix)) {
-        continue;
-      }
-      const st = hass.states[id];
-      const ok = filterFn({
-        entity_id: id,
-        state: st.state,
-        attributes: st.attributes,
-      });
-      if (!ok) {
-        continue;
-      }
-      out.push({ id, name: friendlyEntityName(hass, id) });
-    }
-    out.sort((a, b) =>
-      a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }) || a.id.localeCompare(b.id)
-    );
-    return out;
+    return listEntityIdsForAction(hass, actionType)
+      .filter((id) => !omit.has(id))
+      .map((id) => ({ id, name: friendlyEntityName(hass, id) }));
   }
 
   private quickPickEntityAppend(actionIndex: number, entityId: string) {

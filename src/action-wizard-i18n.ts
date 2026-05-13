@@ -1,4 +1,6 @@
 import type { HomeAssistant } from './types';
+import { parseDomainService } from './action-service-helpers';
+import { domainsForActionType, entityCompatibleWithAction } from './entity-domains';
 
 /** Libellé FR pour un domaine (navigation type « Thermostat », « Lumière »). */
 export function domainLabelFr(domain: string): string {
@@ -158,4 +160,44 @@ export function listEntitiesInDomain(hass: HomeAssistant, domain: string): strin
         sensitivity: 'base',
       })
     );
+}
+
+/**
+ * Identifiants d’entités proposés pour une action `domain.service` (même logique que l’assistant
+ * « Choisir une action » : domaine(s) du service + filtre de compatibilité).
+ */
+export function listEntityIdsForAction(hass: HomeAssistant, actionType: string): string[] {
+  const t = actionType.trim().toLowerCase();
+  if (!t) {
+    return [];
+  }
+  const parsed = parseDomainService(t);
+  if (parsed) {
+    return listEntitiesInDomain(hass, parsed.domain).filter((eid) =>
+      entityCompatibleWithAction(eid, t, hass)
+    );
+  }
+  const doms = domainsForActionType(t);
+  if (!doms.length) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of doms) {
+    for (const eid of listEntitiesInDomain(hass, d)) {
+      if (seen.has(eid)) {
+        continue;
+      }
+      if (entityCompatibleWithAction(eid, t, hass)) {
+        seen.add(eid);
+        out.push(eid);
+      }
+    }
+  }
+  out.sort((a, b) =>
+    friendlyEntityName(hass, a).localeCompare(friendlyEntityName(hass, b), 'fr', {
+      sensitivity: 'base',
+    })
+  );
+  return out;
 }

@@ -1752,6 +1752,124 @@ function applyDefaultFieldsForService(domain, service, entityId, payload, hass) 
     }
 }
 
+/**
+ * Déduit les domaines d’entités « compatibles » avec un type d’action HA.
+ * Si `domain.service` est fourni, un seul domaine ; sinon heuristiques pour les noms de service seuls.
+ */
+function domainsForActionType(actionType) {
+    const t = actionType.trim().toLowerCase();
+    if (!t) {
+        return [];
+    }
+    if (t.includes('.')) {
+        const dom = t.split('.')[0];
+        return dom ? [dom] : [];
+    }
+    const map = {
+        set_preset_mode: ['climate'],
+        set_temperature: ['climate'],
+        set_hvac_mode: ['climate'],
+        turn_on: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
+        turn_off: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
+        toggle: ['switch', 'light', 'input_boolean'],
+        open_cover: ['cover'],
+        close_cover: ['cover'],
+        set_cover_position: ['cover'],
+        stop_cover: ['cover'],
+        lock: ['lock'],
+        unlock: ['lock'],
+        alarm_arm_home: ['alarm_control_panel'],
+        alarm_arm_away: ['alarm_control_panel'],
+        alarm_disarm: ['alarm_control_panel'],
+    };
+    return map[t] ?? [];
+}
+function isClimateSetPresetModeAction(actionType) {
+    const t = String(actionType ?? '').trim().toLowerCase();
+    if (t === 'set_preset_mode') {
+        return true;
+    }
+    return t === 'climate.set_preset_mode';
+}
+function isClimateSetHvacModeAction(actionType) {
+    const t = String(actionType ?? '').trim().toLowerCase();
+    if (t === 'set_hvac_mode') {
+        return true;
+    }
+    return t === 'climate.set_hvac_mode';
+}
+/** Climat avec au moins un mode préréglé exposé par HA (sinon `set_preset_mode` n’a pas de sens). */
+function climateEntityHasPresetModes(hass, entityId) {
+    if (!entityId.startsWith('climate.')) {
+        return false;
+    }
+    const pm = hass.states[entityId]?.attributes?.preset_modes;
+    // Absent ou non encore exposé : ne pas exclure du sélecteur (sinon liste vide avec certains climats).
+    if (pm === undefined || pm === null) {
+        return true;
+    }
+    if (!Array.isArray(pm) || pm.length === 0) {
+        return false;
+    }
+    return pm.every((x) => typeof x === 'string');
+}
+/** Climat avec au moins un mode HVAC exposé (`hvac_modes` non vide). */
+function climateEntityHasHvacModes(hass, entityId) {
+    if (!entityId.startsWith('climate.')) {
+        return false;
+    }
+    const hm = hass.states[entityId]?.attributes?.hvac_modes;
+    if (hm === undefined || hm === null) {
+        return true;
+    }
+    if (!Array.isArray(hm) || hm.length === 0) {
+        return false;
+    }
+    return hm.every((x) => typeof x === 'string');
+}
+/**
+ * Indique si une entité peut être associée à une action `domain.service`.
+ * Comportement strict : si la carte ne connaît pas le service, on se rabat sur l’égalité
+ * du domaine de l’entité avec le domaine du service (jamais « tout autoriser »).
+ *
+ * @param hass — si fourni, filtres supplémentaires pour certains services climate
+ *   (`preset_modes` / `hvac_modes` non vides).
+ */
+function entityCompatibleWithAction(entityId, actionType, hass) {
+    if (!entityId.includes('.')) {
+        return false;
+    }
+    const entityDom = entityId.split('.')[0] ?? '';
+    const t = String(actionType ?? '').trim().toLowerCase();
+    if (!t) {
+        return false;
+    }
+    let baseOk = false;
+    const compat = domainsForActionType(t);
+    if (compat.length > 0) {
+        baseOk = compat.includes(entityDom);
+    }
+    else {
+        const firstDot = t.indexOf('.');
+        if (firstDot > 0) {
+            const serviceDomain = t.slice(0, firstDot);
+            baseOk = entityDom === serviceDomain;
+        }
+    }
+    if (!baseOk) {
+        return false;
+    }
+    if (hass && entityDom === 'climate') {
+        if (isClimateSetPresetModeAction(t)) {
+            return climateEntityHasPresetModes(hass, entityId);
+        }
+        if (isClimateSetHvacModeAction(t)) {
+            return climateEntityHasHvacModes(hass, entityId);
+        }
+    }
+    return true;
+}
+
 /** Libellé FR pour un domaine (navigation type « Thermostat », « Lumière »). */
 function domainLabelFr(domain) {
     const map = {
@@ -1900,140 +2018,40 @@ function listEntitiesInDomain(hass, domain) {
         sensitivity: 'base',
     }));
 }
-
 /**
- * Déduit les domaines d’entités « compatibles » avec un type d’action HA.
- * Si `domain.service` est fourni, un seul domaine ; sinon heuristiques pour les noms de service seuls.
+ * Identifiants d’entités proposés pour une action `domain.service` (même logique que l’assistant
+ * « Choisir une action » : domaine(s) du service + filtre de compatibilité).
  */
-function domainsForActionType(actionType) {
+function listEntityIdsForAction(hass, actionType) {
     const t = actionType.trim().toLowerCase();
     if (!t) {
         return [];
     }
-    if (t.includes('.')) {
-        const dom = t.split('.')[0];
-        return dom ? [dom] : [];
+    const parsed = parseDomainService(t);
+    if (parsed) {
+        return listEntitiesInDomain(hass, parsed.domain).filter((eid) => entityCompatibleWithAction(eid, t, hass));
     }
-    const map = {
-        set_preset_mode: ['climate'],
-        set_temperature: ['climate'],
-        set_hvac_mode: ['climate'],
-        turn_on: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
-        turn_off: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
-        toggle: ['switch', 'light', 'input_boolean'],
-        open_cover: ['cover'],
-        close_cover: ['cover'],
-        set_cover_position: ['cover'],
-        stop_cover: ['cover'],
-        lock: ['lock'],
-        unlock: ['lock'],
-        alarm_arm_home: ['alarm_control_panel'],
-        alarm_arm_away: ['alarm_control_panel'],
-        alarm_disarm: ['alarm_control_panel'],
-    };
-    return map[t] ?? [];
-}
-function isClimateSetPresetModeAction(actionType) {
-    const t = String(actionType ?? '').trim().toLowerCase();
-    if (t === 'set_preset_mode') {
-        return true;
+    const doms = domainsForActionType(t);
+    if (!doms.length) {
+        return [];
     }
-    return t === 'climate.set_preset_mode';
-}
-function isClimateSetHvacModeAction(actionType) {
-    const t = String(actionType ?? '').trim().toLowerCase();
-    if (t === 'set_hvac_mode') {
-        return true;
-    }
-    return t === 'climate.set_hvac_mode';
-}
-/** Climat avec au moins un mode préréglé exposé par HA (sinon `set_preset_mode` n’a pas de sens). */
-function climateEntityHasPresetModes(hass, entityId) {
-    if (!entityId.startsWith('climate.')) {
-        return false;
-    }
-    const pm = hass.states[entityId]?.attributes?.preset_modes;
-    // Absent ou non encore exposé : ne pas exclure du sélecteur (sinon liste vide avec certains climats).
-    if (pm === undefined || pm === null) {
-        return true;
-    }
-    if (!Array.isArray(pm) || pm.length === 0) {
-        return false;
-    }
-    return pm.every((x) => typeof x === 'string');
-}
-/** Climat avec au moins un mode HVAC exposé (`hvac_modes` non vide). */
-function climateEntityHasHvacModes(hass, entityId) {
-    if (!entityId.startsWith('climate.')) {
-        return false;
-    }
-    const hm = hass.states[entityId]?.attributes?.hvac_modes;
-    if (hm === undefined || hm === null) {
-        return true;
-    }
-    if (!Array.isArray(hm) || hm.length === 0) {
-        return false;
-    }
-    return hm.every((x) => typeof x === 'string');
-}
-/**
- * Indique si une entité peut être associée à une action `domain.service`.
- * Comportement strict : si la carte ne connaît pas le service, on se rabat sur l’égalité
- * du domaine de l’entité avec le domaine du service (jamais « tout autoriser »).
- *
- * @param hass — si fourni, filtres supplémentaires pour certains services climate
- *   (`preset_modes` / `hvac_modes` non vides).
- */
-function entityCompatibleWithAction(entityId, actionType, hass) {
-    if (!entityId.includes('.')) {
-        return false;
-    }
-    const entityDom = entityId.split('.')[0] ?? '';
-    const t = String(actionType ?? '').trim().toLowerCase();
-    if (!t) {
-        return false;
-    }
-    let baseOk = false;
-    const compat = domainsForActionType(t);
-    if (compat.length > 0) {
-        baseOk = compat.includes(entityDom);
-    }
-    else {
-        const firstDot = t.indexOf('.');
-        if (firstDot > 0) {
-            const serviceDomain = t.slice(0, firstDot);
-            baseOk = entityDom === serviceDomain;
+    const seen = new Set();
+    const out = [];
+    for (const d of doms) {
+        for (const eid of listEntitiesInDomain(hass, d)) {
+            if (seen.has(eid)) {
+                continue;
+            }
+            if (entityCompatibleWithAction(eid, t, hass)) {
+                seen.add(eid);
+                out.push(eid);
+            }
         }
     }
-    if (!baseOk) {
-        return false;
-    }
-    if (hass && entityDom === 'climate') {
-        if (isClimateSetPresetModeAction(t)) {
-            return climateEntityHasPresetModes(hass, entityId);
-        }
-        if (isClimateSetHvacModeAction(t)) {
-            return climateEntityHasHvacModes(hass, entityId);
-        }
-    }
-    return true;
-}
-
-/**
- * HA ≥ 2024 : `ha-entity-picker.entityFilter` reçoit un `HassEntity` (objet avec `entity_id`),
- * pas uniquement une chaîne `entity_id`.
- */
-function entityIdFromPickerFilterArgument(raw) {
-    if (typeof raw === 'string' && raw.includes('.')) {
-        return raw;
-    }
-    if (raw && typeof raw === 'object' && 'entity_id' in raw) {
-        const id = raw.entity_id;
-        if (typeof id === 'string' && id.includes('.')) {
-            return id;
-        }
-    }
-    return '';
+    out.sort((a, b) => friendlyEntityName(hass, a).localeCompare(friendlyEntityName(hass, b), 'fr', {
+        sensitivity: 'base',
+    }));
+    return out;
 }
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -2515,6 +2533,23 @@ function timelineResizeHandlesForSelection(blocks, selectedIndex) {
         }
         return h.blockIndex === selectedIndex;
     });
+}
+
+/**
+ * HA ≥ 2024 : `ha-entity-picker.entityFilter` reçoit un `HassEntity` (objet avec `entity_id`),
+ * pas uniquement une chaîne `entity_id`.
+ */
+function entityIdFromPickerFilterArgument(raw) {
+    if (typeof raw === 'string' && raw.includes('.')) {
+        return raw;
+    }
+    if (raw && typeof raw === 'object' && 'entity_id' in raw) {
+        const id = raw.entity_id;
+        if (typeof id === 'string' && id.includes('.')) {
+            return id;
+        }
+    }
+    return '';
 }
 
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$1 {
@@ -3810,18 +3845,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
     primaryEntityFromAction(action) {
         return entityIdsFromPayload(action.action_payload)[0] ?? '';
     }
-    /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
-    entityFilterForConfiguredAction(selected) {
-        const actionType = String(selected.action_type ?? '').trim();
-        const hass = this.hass;
-        return (entity) => {
-            const entityId = entityIdFromPickerFilterArgument(entity);
-            if (!entityId) {
-                return false;
-            }
-            return entityCompatibleWithAction(entityId, actionType, hass);
-        };
-    }
     /** Entités `hass.states` compatibles avec l’action, hors `excludeEntityIds` (déjà ciblées). */
     compatibleEntityChoicesForAction(action, excludeEntityIds) {
         const hass = this.hass;
@@ -3829,31 +3852,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             return [];
         }
         const actionType = String(action.action_type ?? '').trim();
-        const parsed = parseDomainService(actionType);
-        const domainPrefix = parsed?.domain ? `${parsed.domain}.` : null;
-        const filterFn = this.entityFilterForConfiguredAction(action);
         const omit = new Set(excludeEntityIds.filter((id) => id.includes('.')));
-        const out = [];
-        for (const id of Object.keys(hass.states)) {
-            if (!id.includes('.') || omit.has(id)) {
-                continue;
-            }
-            if (domainPrefix && !id.startsWith(domainPrefix)) {
-                continue;
-            }
-            const st = hass.states[id];
-            const ok = filterFn({
-                entity_id: id,
-                state: st.state,
-                attributes: st.attributes,
-            });
-            if (!ok) {
-                continue;
-            }
-            out.push({ id, name: friendlyEntityName(hass, id) });
-        }
-        out.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }) || a.id.localeCompare(b.id));
-        return out;
+        return listEntityIdsForAction(hass, actionType)
+            .filter((id) => !omit.has(id))
+            .map((id) => ({ id, name: friendlyEntityName(hass, id) }));
     }
     quickPickEntityAppend(actionIndex, entityId) {
         const ev = new CustomEvent('value-changed', {
