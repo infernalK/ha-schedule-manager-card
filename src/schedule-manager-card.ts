@@ -1,4 +1,5 @@
 import { LitElement, html } from 'lit';
+import { live } from 'lit/directives/live.js';
 import { customElement, property, state } from 'lit/decorators.js';
 import { PropertyValues } from 'lit';
 import { styleMap } from 'lit/directives/style-map.js';
@@ -239,6 +240,8 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _actionWizardEntityId: string | null = null;
   /** Réinitialise le sélecteur rapide d’entités après ajout. */
   @state() private _quickEntityPickerNonce = 0;
+  /** Réglé à l’ouverture de l’assistant : action à mettre à jour (évite décalage avec selectedActionIndex). */
+  private _actionWizardTargetActionIndex = 0;
   /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
   @state() private _editorFriseWidth = 0;
 
@@ -1382,10 +1385,8 @@ export class ScheduleManagerCard extends LitElement {
       return;
     }
     const sel = this._visualEdit.selectedIndex;
-    const ai = Math.min(
-      this._visualEdit.selectedActionIndex,
-      Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1)
-    );
+    const maxAi = Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1);
+    const ai = Math.min(Math.max(0, this._actionWizardTargetActionIndex), maxAi);
     const block = this._visualEdit.blocks[sel];
     const curAction = block?.actions?.[ai];
     if (!block || !curAction) {
@@ -1407,10 +1408,13 @@ export class ScheduleManagerCard extends LitElement {
       applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
     }
 
-    this.visualPatchSelectedAction({
-      action_type: `${domain}.${serviceShort}`,
-      action_payload: payload,
-    });
+    this.visualPatchSelectedAction(
+      {
+        action_type: `${domain}.${serviceShort}`,
+        action_payload: payload,
+      },
+      ai
+    );
     this.closeActionWizard();
   }
 
@@ -1418,6 +1422,13 @@ export class ScheduleManagerCard extends LitElement {
     if (!this._visualEdit || !this.hass) {
       return;
     }
+    const bi = this._visualEdit.selectedIndex;
+    const n = this._visualEdit.blocks[bi]?.actions?.length ?? 0;
+    const maxAi = Math.max(0, n - 1);
+    this._actionWizardTargetActionIndex = Math.min(
+      Math.max(0, this._visualEdit.selectedActionIndex),
+      maxAi
+    );
     this._actionWizardOpen = true;
     this._actionWizardStep = 'domain';
     this._actionWizardSearch = '';
@@ -1934,7 +1945,7 @@ export class ScheduleManagerCard extends LitElement {
         continue;
       }
       const pm = st.attributes?.preset_modes;
-      if (Array.isArray(pm) && pm.every((x): x is string => typeof x === 'string')) {
+      if (Array.isArray(pm) && pm.length > 0 && pm.every((x): x is string => typeof x === 'string')) {
         return pm;
       }
     }
@@ -1955,7 +1966,7 @@ export class ScheduleManagerCard extends LitElement {
         Mode préréglé
         <select
           class="sm-select"
-          .value=${cur}
+          .value=${live(cur)}
           @change=${(e: Event) =>
             this.visualSetPresetModeAt(
               actionIndex,

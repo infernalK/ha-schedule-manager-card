@@ -51,6 +51,14 @@ function isClimateSetPresetModeAction(actionType: string): boolean {
   return t === 'climate.set_preset_mode';
 }
 
+function isClimateSetHvacModeAction(actionType: string): boolean {
+  const t = String(actionType ?? '').trim().toLowerCase();
+  if (t === 'set_hvac_mode') {
+    return true;
+  }
+  return t === 'climate.set_hvac_mode';
+}
+
 /** Climat avec au moins un mode préréglé exposé par HA (sinon `set_preset_mode` n’a pas de sens). */
 export function climateEntityHasPresetModes(
   hass: HomeAssistant,
@@ -67,13 +75,29 @@ export function climateEntityHasPresetModes(
   );
 }
 
+/** Climat avec au moins un mode HVAC exposé (`hvac_modes` non vide). */
+export function climateEntityHasHvacModes(
+  hass: HomeAssistant,
+  entityId: string
+): boolean {
+  if (!entityId.startsWith('climate.')) {
+    return false;
+  }
+  const hm = hass.states[entityId]?.attributes?.hvac_modes;
+  return (
+    Array.isArray(hm) &&
+    hm.length > 0 &&
+    hm.every((x): x is string => typeof x === 'string')
+  );
+}
+
 /**
  * Indique si une entité peut être associée à une action `domain.service`.
  * Comportement strict : si la carte ne connaît pas le service, on se rabat sur l’égalité
  * du domaine de l’entité avec le domaine du service (jamais « tout autoriser »).
  *
- * @param hass — si fourni, filtre supplémentaire pour `climate.set_preset_mode` : uniquement
- *   les entités `climate.*` qui exposent `preset_modes` non vide.
+ * @param hass — si fourni, filtres supplémentaires pour certains services climate
+ *   (`preset_modes` / `hvac_modes` non vides).
  */
 export function entityCompatibleWithAction(
   entityId: string,
@@ -105,12 +129,13 @@ export function entityCompatibleWithAction(
     return false;
   }
 
-  if (
-    hass &&
-    entityDom === 'climate' &&
-    isClimateSetPresetModeAction(t)
-  ) {
-    return climateEntityHasPresetModes(hass, entityId);
+  if (hass && entityDom === 'climate') {
+    if (isClimateSetPresetModeAction(t)) {
+      return climateEntityHasPresetModes(hass, entityId);
+    }
+    if (isClimateSetHvacModeAction(t)) {
+      return climateEntityHasHvacModes(hass, entityId);
+    }
   }
 
   return true;
