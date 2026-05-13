@@ -889,6 +889,7 @@ export const styles = css`
 
   .sm-action-block-wizard {
     align-self: flex-start;
+    margin-top: 4px;
   }
 
   .sm-action-add-another-btn {

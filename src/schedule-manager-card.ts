@@ -1859,18 +1859,6 @@ export class ScheduleManagerCard extends LitElement {
                     : null}
                 </div>
                 ${hasAction ? this.renderActionSummary(action) : null}
-                <button
-                  type="button"
-                  class="sm-action-primary-btn sm-action-block-wizard"
-                  @click=${() => this.openActionWizardAt(i)}
-                >
-                  ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
-                </button>
-                ${unknownService
-                  ? html`<p class="sm-field-hint">
-                      Action personnalisée : <code>${action.action_type}</code>
-                    </p>`
-                  : null}
                 ${hasAction
                   ? html`
                       <div class="sm-action-entities-quick">
@@ -1916,6 +1904,18 @@ export class ScheduleManagerCard extends LitElement {
                     `
                   : null}
                 ${this.renderClimatePresetForAction(action, i)}
+                ${unknownService
+                  ? html`<p class="sm-field-hint">
+                      Action personnalisée : <code>${action.action_type}</code>
+                    </p>`
+                  : null}
+                <button
+                  type="button"
+                  class="sm-action-primary-btn sm-action-block-wizard"
+                  @click=${() => this.openActionWizardAt(i)}
+                >
+                  ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
+                </button>
               </div>
             `;
           })}

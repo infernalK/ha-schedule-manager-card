@@ -1093,6 +1093,7 @@ const styles = i$4 `
 
   .sm-action-block-wizard {
     align-self: flex-start;
+    margin-top: 4px;
   }
 
   .sm-action-add-another-btn {
@@ -3686,7 +3687,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             action_payload: payload,
         }, ai);
         this.closeActionWizard();
-        this.requestUpdate();
     }
     openActionWizard() {
         if (!this._visualEdit || !this.hass) {
@@ -4074,18 +4074,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
                 : null}
                 </div>
                 ${hasAction ? this.renderActionSummary(action) : null}
-                <button
-                  type="button"
-                  class="sm-action-primary-btn sm-action-block-wizard"
-                  @click=${() => this.openActionWizardAt(i)}
-                >
-                  ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
-                </button>
-                ${unknownService
-                ? x `<p class="sm-field-hint">
-                      Action personnalisée : <code>${action.action_type}</code>
-                    </p>`
-                : null}
                 ${hasAction
                 ? x `
                       <div class="sm-action-entities-quick">
@@ -4128,6 +4116,18 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
                     `
                 : null}
                 ${this.renderClimatePresetForAction(action, i)}
+                ${unknownService
+                ? x `<p class="sm-field-hint">
+                      Action personnalisée : <code>${action.action_type}</code>
+                    </p>`
+                : null}
+                <button
+                  type="button"
+                  class="sm-action-primary-btn sm-action-block-wizard"
+                  @click=${() => this.openActionWizardAt(i)}
+                >
+                  ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
+                </button>
               </div>
             `;
         })}
