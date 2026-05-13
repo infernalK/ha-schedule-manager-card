@@ -3067,8 +3067,8 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     }
     updated(changed) {
         super.updated(changed);
-        /** Ne pas re-pull sur lovelace/context : `host.value` peut encore être ancien et écraser l’édition locale. */
-        /** Lovelace met parfois à jour `config` sans rappeler `setConfig` (aperçu, réouverture). */
+        // Pas de _pull sur lovelace/context : host.value peut être obsolète et écraser l’édition locale.
+        // Lovelace met parfois à jour `config` sans rappeler `setConfig` (aperçu, réouverture).
         if (changed.has('config') && this.config) {
             const prev = changed.get('config');
             if (this.config !== prev) {
