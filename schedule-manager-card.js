@@ -3815,6 +3815,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     }
     renderSchedulesList(scheduleIds, schedulesMap) {
         const hass = this.hass;
+        if (!hass) {
+            return x ``;
+        }
         const totalCount = Object.keys(schedulesMap).length;
         const list = scheduleIds.length > 0
             ? scheduleIds
