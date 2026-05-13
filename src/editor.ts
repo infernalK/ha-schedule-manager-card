@@ -9,11 +9,39 @@ import {
 } from './types';
 import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 
+function editorConfigPropertyChanged(n?: CardConfig, o?: CardConfig): boolean {
+  if (n === o) {
+    return false;
+  }
+  if (!n || !o) {
+    return true;
+  }
+  return (
+    JSON.stringify({
+      type: n.type,
+      status_entity: n.status_entity,
+      header_title: n.header_title,
+      show_header: n.show_header,
+      show_schedule_enable_toggle: n.show_schedule_enable_toggle,
+      schedule_ids: n.schedule_ids ?? null,
+    }) !==
+    JSON.stringify({
+      type: o.type,
+      status_entity: o.status_entity,
+      header_title: o.header_title,
+      show_header: o.show_header,
+      show_schedule_enable_toggle: o.show_schedule_enable_toggle,
+      schedule_ids: o.schedule_ids ?? null,
+    })
+  );
+}
+
 @customElement('schedule-manager-card-editor')
 export class ScheduleManagerCardEditor extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
-  @property({ attribute: false }) public config?: CardConfig;
+  @property({ attribute: false, hasChanged: editorConfigPropertyChanged })
+  public config?: CardConfig;
 
   /** Copie éditable ; @state pour que setConfig / _patchConfig déclenchent bien un re-render Lovelace. */
   @state() private _config?: CardConfig;
@@ -94,16 +122,33 @@ export class ScheduleManagerCardEditor extends LitElement {
       border-color: var(--primary-color);
       box-shadow: 0 0 0 1px var(--primary-color);
     }
+    .sm-sub-label {
+      display: block;
+      margin-top: 12px;
+      margin-bottom: 4px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--primary-text-color);
+    }
   `;
 
   setConfig(config: CardConfig) {
+    const base = this._configWithoutUndefinedKeys(
+      config as unknown as Record<string, unknown>
+    );
+    const sid = base.schedule_ids;
+    if (Array.isArray(sid)) {
+      base.schedule_ids = [...sid];
+    }
     this._config = {
-      ...config,
+      ...base,
       type: 'custom:schedule-manager-card',
-    };
-    this.config = this._config;
+    } as CardConfig;
+    // Référence distincte de `_config` : évite que Lovelace réutilise le même objet sans déclencher les mises à jour.
+    this.config = { ...(this._config as object) } as CardConfig;
     this._userClearedStatusEntity = false;
-    this._headerTitleDraft = config.header_title ?? '';
+    this._headerTitleDraft = this._config.header_title ?? '';
+    this.requestUpdate();
   }
 
   /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
@@ -306,24 +351,7 @@ export class ScheduleManagerCardEditor extends LitElement {
     return html`
       <div class="card-config">
         <div class="field-block">
-          <label class="schedule-list-title" for="sm-editor-card-title">Titre de la carte</label>
-          <input
-            id="sm-editor-card-title"
-            class="sm-config-title-input"
-            type="text"
-            name="schedule_manager_card_title"
-            autocomplete="off"
-            placeholder=${DEFAULT_CARD_HEADER_TITLE}
-            .value=${this._headerTitleDraft}
-            ${ref(this._headerTitleRef)}
-            @input=${this._onHeaderTitleInput}
-            @blur=${this._onHeaderTitleBlur}
-          />
-          <p class="hint">
-            Saisissez le texte de l’en-tête puis cliquez en dehors du champ (ou Tab) pour
-            l’enregistrer dans la configuration. Vide =
-            <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>.
-          </p>
+          <div class="schedule-list-title">Titre de la carte</div>
           <ha-formfield label="Afficher le titre sur la carte">
             <ha-switch
               .checked=${this._config?.show_header !== false}
@@ -331,9 +359,37 @@ export class ScheduleManagerCardEditor extends LitElement {
             ></ha-switch>
           </ha-formfield>
           <p class="hint">
-            Désactivez pour masquer complètement la barre de titre (le texte ci-dessus reste
-            enregistré si vous la réactivez plus tard).
+            Désactivé = pas de barre de titre sur la carte. Le libellé personnalisé reste mémorisé
+            pour une réactivation ultérieure.
           </p>
+          ${this._config?.show_header !== false
+            ? html`
+                <label class="sm-sub-label" for="sm-editor-card-title"
+                  >Titre personnalisé (optionnel)</label
+                >
+                <input
+                  id="sm-editor-card-title"
+                  class="sm-config-title-input"
+                  type="text"
+                  name="schedule_manager_card_title"
+                  autocomplete="off"
+                  placeholder=${DEFAULT_CARD_HEADER_TITLE}
+                  .value=${this._headerTitleDraft}
+                  ${ref(this._headerTitleRef)}
+                  @input=${this._onHeaderTitleInput}
+                  @blur=${this._onHeaderTitleBlur}
+                />
+                <p class="hint">
+                  Saisissez le texte puis cliquez en dehors du champ (ou Tab) pour l’appliquer à
+                  la configuration et à l’aperçu. Vide =
+                  <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>.
+                </p>
+              `
+            : html`
+                <p class="hint">
+                  Réactivez « Afficher le titre sur la carte » pour modifier le libellé.
+                </p>
+              `}
         </div>
         <div class="field-block">
           <ha-formfield label="Interrupteur actif / inactif par planning">
@@ -431,7 +487,7 @@ export class ScheduleManagerCardEditor extends LitElement {
       new CustomEvent('config-changed', {
         bubbles: true,
         composed: true,
-        detail: { config: this._config },
+        detail: { config: { ...(merged as object) } as CardConfig },
       })
     );
   }

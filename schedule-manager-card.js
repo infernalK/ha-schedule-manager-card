@@ -2588,6 +2588,30 @@ function entityIdFromPickerFilterArgument(raw) {
     return '';
 }
 
+function editorConfigPropertyChanged(n, o) {
+    if (n === o) {
+        return false;
+    }
+    if (!n || !o) {
+        return true;
+    }
+    return (JSON.stringify({
+        type: n.type,
+        status_entity: n.status_entity,
+        header_title: n.header_title,
+        show_header: n.show_header,
+        show_schedule_enable_toggle: n.show_schedule_enable_toggle,
+        schedule_ids: n.schedule_ids ?? null,
+    }) !==
+        JSON.stringify({
+            type: o.type,
+            status_entity: o.status_entity,
+            header_title: o.header_title,
+            show_header: o.show_header,
+            show_schedule_enable_toggle: o.show_schedule_enable_toggle,
+            schedule_ids: o.schedule_ids ?? null,
+        }));
+}
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     constructor() {
         super(...arguments);
@@ -2617,13 +2641,20 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         };
     }
     setConfig(config) {
+        const base = this._configWithoutUndefinedKeys(config);
+        const sid = base.schedule_ids;
+        if (Array.isArray(sid)) {
+            base.schedule_ids = [...sid];
+        }
         this._config = {
-            ...config,
+            ...base,
             type: 'custom:schedule-manager-card',
         };
-        this.config = this._config;
+        // Référence distincte de `_config` : évite que Lovelace réutilise le même objet sans déclencher les mises à jour.
+        this.config = { ...this._config };
         this._userClearedStatusEntity = false;
-        this._headerTitleDraft = config.header_title ?? '';
+        this._headerTitleDraft = this._config.header_title ?? '';
+        this.requestUpdate();
     }
     /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
     _configWithoutUndefinedKeys(c) {
@@ -2779,24 +2810,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         return x `
       <div class="card-config">
         <div class="field-block">
-          <label class="schedule-list-title" for="sm-editor-card-title">Titre de la carte</label>
-          <input
-            id="sm-editor-card-title"
-            class="sm-config-title-input"
-            type="text"
-            name="schedule_manager_card_title"
-            autocomplete="off"
-            placeholder=${DEFAULT_CARD_HEADER_TITLE}
-            .value=${this._headerTitleDraft}
-            ${n(this._headerTitleRef)}
-            @input=${this._onHeaderTitleInput}
-            @blur=${this._onHeaderTitleBlur}
-          />
-          <p class="hint">
-            Saisissez le texte de l’en-tête puis cliquez en dehors du champ (ou Tab) pour
-            l’enregistrer dans la configuration. Vide =
-            <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>.
-          </p>
+          <div class="schedule-list-title">Titre de la carte</div>
           <ha-formfield label="Afficher le titre sur la carte">
             <ha-switch
               .checked=${this._config?.show_header !== false}
@@ -2804,9 +2818,37 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             ></ha-switch>
           </ha-formfield>
           <p class="hint">
-            Désactivez pour masquer complètement la barre de titre (le texte ci-dessus reste
-            enregistré si vous la réactivez plus tard).
+            Désactivé = pas de barre de titre sur la carte. Le libellé personnalisé reste mémorisé
+            pour une réactivation ultérieure.
           </p>
+          ${this._config?.show_header !== false
+            ? x `
+                <label class="sm-sub-label" for="sm-editor-card-title"
+                  >Titre personnalisé (optionnel)</label
+                >
+                <input
+                  id="sm-editor-card-title"
+                  class="sm-config-title-input"
+                  type="text"
+                  name="schedule_manager_card_title"
+                  autocomplete="off"
+                  placeholder=${DEFAULT_CARD_HEADER_TITLE}
+                  .value=${this._headerTitleDraft}
+                  ${n(this._headerTitleRef)}
+                  @input=${this._onHeaderTitleInput}
+                  @blur=${this._onHeaderTitleBlur}
+                />
+                <p class="hint">
+                  Saisissez le texte puis cliquez en dehors du champ (ou Tab) pour l’appliquer à
+                  la configuration et à l’aperçu. Vide =
+                  <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>.
+                </p>
+              `
+            : x `
+                <p class="hint">
+                  Réactivez « Afficher le titre sur la carte » pour modifier le libellé.
+                </p>
+              `}
         </div>
         <div class="field-block">
           <ha-formfield label="Interrupteur actif / inactif par planning">
@@ -2900,7 +2942,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         this.dispatchEvent(new CustomEvent('config-changed', {
             bubbles: true,
             composed: true,
-            detail: { config: this._config },
+            detail: { config: { ...merged } },
         }));
     }
     _onShowHeaderChange(ev) {
@@ -3000,12 +3042,20 @@ ScheduleManagerCardEditor.styles = i$4 `
       border-color: var(--primary-color);
       box-shadow: 0 0 0 1px var(--primary-color);
     }
+    .sm-sub-label {
+      display: block;
+      margin-top: 12px;
+      margin-bottom: 4px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--primary-text-color);
+    }
   `;
 __decorate([
     n$4({ attribute: false })
 ], ScheduleManagerCardEditor.prototype, "hass", void 0);
 __decorate([
-    n$4({ attribute: false })
+    n$4({ attribute: false, hasChanged: editorConfigPropertyChanged })
 ], ScheduleManagerCardEditor.prototype, "config", void 0);
 __decorate([
     t()
@@ -3148,6 +3198,23 @@ function blockFingerprint(block) {
         .sort((a, b) => a.id.localeCompare(b.id))
         .map((a) => `${String(a.action_type).trim()}|${stablePayloadString(payloadForDuplicateCheck(a.action_payload))}`);
     return `${st}|${et}|${parts.join('||')}`;
+}
+/** Lit : même référence d’objet `config` mais contenu modifié (aperçu éditeur Lovelace). */
+function scheduleManagerCardConfigChanged(next, prev) {
+    if (next === prev) {
+        return false;
+    }
+    if (!next || !prev) {
+        return true;
+    }
+    const snap = (c) => JSON.stringify({
+        status_entity: c.status_entity,
+        header_title: c.header_title,
+        show_header: c.show_header,
+        show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+        schedule_ids: c.schedule_ids ?? null,
+    });
+    return snap(next) !== snap(prev);
 }
 let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     constructor() {
@@ -5228,7 +5295,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         if (!config.type) {
             throw new Error('Type must be defined');
         }
-        this.config = config;
+        // Nouvelle référence : aperçu + mises à jour quand HA rappelle setConfig avec le même objet.
+        this.config = { ...config, type: config.type };
+        this.requestUpdate();
     }
     getCardSize() {
         return 3;
@@ -5238,7 +5307,10 @@ __decorate([
     n$4({ attribute: false })
 ], ScheduleManagerCard.prototype, "hass", void 0);
 __decorate([
-    n$4({ attribute: false })
+    n$4({
+        attribute: false,
+        hasChanged: scheduleManagerCardConfigChanged,
+    })
 ], ScheduleManagerCard.prototype, "config", void 0);
 __decorate([
     t()

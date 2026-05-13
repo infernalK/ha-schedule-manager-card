@@ -223,10 +223,36 @@ function blockFingerprint(block: TimeBlock): string {
   return `${st}|${et}|${parts.join('||')}`;
 }
 
+/** Lit : même référence d’objet `config` mais contenu modifié (aperçu éditeur Lovelace). */
+function scheduleManagerCardConfigChanged(
+  next: CardConfig | undefined,
+  prev: CardConfig | undefined
+): boolean {
+  if (next === prev) {
+    return false;
+  }
+  if (!next || !prev) {
+    return true;
+  }
+  const snap = (c: CardConfig) =>
+    JSON.stringify({
+      status_entity: c.status_entity,
+      header_title: c.header_title,
+      show_header: c.show_header,
+      show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+      schedule_ids: c.schedule_ids ?? null,
+    });
+  return snap(next) !== snap(prev);
+}
+
 @customElement('schedule-manager-card')
 export class ScheduleManagerCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
-  @property({ attribute: false }) public config!: CardConfig;
+  @property({
+    attribute: false,
+    hasChanged: scheduleManagerCardConfigChanged,
+  })
+  public config!: CardConfig;
 
   @state() private _newScheduleName = '';
   @state() private _creating = false;
@@ -2602,7 +2628,9 @@ export class ScheduleManagerCard extends LitElement {
     if (!config.type) {
       throw new Error('Type must be defined');
     }
-    this.config = config;
+    // Nouvelle référence : aperçu + mises à jour quand HA rappelle setConfig avec le même objet.
+    this.config = { ...config, type: config.type } as CardConfig;
+    this.requestUpdate();
   }
 
   getCardSize() {
