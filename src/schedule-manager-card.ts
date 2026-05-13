@@ -1367,8 +1367,8 @@ export class ScheduleManagerCard extends LitElement {
     );
 
     return html`
-      <label class="sm-form-label">
-        Entité
+      <div class="sm-form-label">
+        <span>Entité</span>
         <ha-entity-picker
           .hass=${this.hass}
           .allowCustomEntity=${true}
@@ -1381,7 +1381,7 @@ export class ScheduleManagerCard extends LitElement {
         ${!primary
           ? html`<span class="sm-field-hint">Sélectionnez l’entité à piloter pendant cette plage.</span>`
           : null}
-      </label>
+      </div>
 
       <label class="sm-form-label">
         Action
@@ -1594,15 +1594,24 @@ export class ScheduleManagerCard extends LitElement {
     const custom = this.hasCustomBlockColor(block);
     return html`
       <div class="sm-form-label sm-color-field">
-        <span class="sm-color-field-title">Couleur sur la frise</span>
+        <span class="sm-color-field-title">Couleur du créneau sur la ligne horaire</span>
+        <p class="sm-color-field-hint">
+          Teinte affichée pour la plage sélectionnée sur la frise « Heure » ci‑dessus (pas la couleur
+          de la pièce dans Home Assistant).
+        </p>
         <div class="sm-color-row">
-          <input
-            type="color"
-            class="sm-color-native"
-            .value=${pickerVal}
-            @input=${(e: Event) =>
-              this.visualSetBlockColor((e.target as HTMLInputElement).value)}
-          />
+          <label class="sm-color-system-label">
+            <span class="sm-color-system-text">Nuancier du navigateur</span>
+            <input
+              type="color"
+              class="sm-color-native"
+              .value=${pickerVal}
+              title="Ouvrir le sélecteur de couleur du système"
+              aria-label="Choisir une couleur précise avec le nuancier du navigateur"
+              @input=${(e: Event) =>
+                this.visualSetBlockColor((e.target as HTMLInputElement).value)}
+            />
+          </label>
           <div class="sm-color-presets" aria-hidden="true">
             ${BLOCK_COLOR_PRESETS.map(
               (hex) => html`

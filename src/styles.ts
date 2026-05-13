@@ -356,7 +356,9 @@ export const styles = css`
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
     color: var(--primary-text-color);
     box-sizing: border-box;
-    overflow-x: hidden;
+    /* visible : évite de recadrer les listes déroulantes de ha-entity-picker (overflow hidden les masque parfois) */
+    overflow-x: visible;
+    overflow-y: visible;
   }
 
   .sm-modal-head {
@@ -476,9 +478,18 @@ export const styles = css`
 
   .sm-color-field-title {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-size: 0.78em;
     color: var(--secondary-text-color);
+    font-weight: 600;
+  }
+
+  .sm-color-field-hint {
+    margin: 0 0 10px;
+    font-size: 0.72em;
+    line-height: 1.4;
+    color: var(--secondary-text-color);
+    opacity: 0.92;
   }
 
   .sm-color-row {
@@ -489,14 +500,46 @@ export const styles = css`
     gap: 10px;
   }
 
+  .sm-color-system-label {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    flex-shrink: 0;
+    cursor: pointer;
+    max-width: min(100%, 160px);
+  }
+
+  .sm-color-system-text {
+    font-size: 0.72em;
+    line-height: 1.25;
+    color: var(--secondary-text-color);
+  }
+
+  /* Pastille ronde : évite l’effet « gros rectangle bleu » du nuancier natif par défaut */
   .sm-color-native {
-    width: 52px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     padding: 0;
-    border: 1px solid var(--divider-color);
-    border-radius: 8px;
+    border: 2px solid var(--divider-color);
+    border-radius: 50%;
     cursor: pointer;
     background: var(--card-background-color);
+    box-sizing: border-box;
+  }
+
+  .sm-color-native::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+
+  .sm-color-native::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+  }
+
+  .sm-color-native::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
   }
 
   .sm-color-presets {
@@ -549,6 +592,19 @@ export const styles = css`
     margin-bottom: 10px;
     font-size: 0.78em;
     color: var(--secondary-text-color);
+  }
+
+  /*
+   * Sans display:block + largeur, ha-entity-picker (élément personnalisé) peut
+   * rester en ligne à largeur/hauteur nulles dans une colonne flex — invisible dans le modal.
+   */
+  .sm-form-label ha-entity-picker,
+  .sm-action-card ha-entity-picker {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 56px;
   }
 
   .sm-form-label input[type='text'] {

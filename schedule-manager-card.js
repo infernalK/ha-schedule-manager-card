@@ -494,7 +494,9 @@ const styles = i$4 `
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
     color: var(--primary-text-color);
     box-sizing: border-box;
-    overflow-x: hidden;
+    /* visible : évite de recadrer les listes déroulantes de ha-entity-picker (overflow hidden les masque parfois) */
+    overflow-x: visible;
+    overflow-y: visible;
   }
 
   .sm-modal-head {
@@ -614,9 +616,18 @@ const styles = i$4 `
 
   .sm-color-field-title {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-size: 0.78em;
     color: var(--secondary-text-color);
+    font-weight: 600;
+  }
+
+  .sm-color-field-hint {
+    margin: 0 0 10px;
+    font-size: 0.72em;
+    line-height: 1.4;
+    color: var(--secondary-text-color);
+    opacity: 0.92;
   }
 
   .sm-color-row {
@@ -627,14 +638,46 @@ const styles = i$4 `
     gap: 10px;
   }
 
+  .sm-color-system-label {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    flex-shrink: 0;
+    cursor: pointer;
+    max-width: min(100%, 160px);
+  }
+
+  .sm-color-system-text {
+    font-size: 0.72em;
+    line-height: 1.25;
+    color: var(--secondary-text-color);
+  }
+
+  /* Pastille ronde : évite l’effet « gros rectangle bleu » du nuancier natif par défaut */
   .sm-color-native {
-    width: 52px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     padding: 0;
-    border: 1px solid var(--divider-color);
-    border-radius: 8px;
+    border: 2px solid var(--divider-color);
+    border-radius: 50%;
     cursor: pointer;
     background: var(--card-background-color);
+    box-sizing: border-box;
+  }
+
+  .sm-color-native::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+
+  .sm-color-native::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+  }
+
+  .sm-color-native::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
   }
 
   .sm-color-presets {
@@ -687,6 +730,19 @@ const styles = i$4 `
     margin-bottom: 10px;
     font-size: 0.78em;
     color: var(--secondary-text-color);
+  }
+
+  /*
+   * Sans display:block + largeur, ha-entity-picker (élément personnalisé) peut
+   * rester en ligne à largeur/hauteur nulles dans une colonne flex — invisible dans le modal.
+   */
+  .sm-form-label ha-entity-picker,
+  .sm-action-card ha-entity-picker {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 56px;
   }
 
   .sm-form-label input[type='text'] {
@@ -2858,8 +2914,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             parsed.service &&
             !services.includes(parsed.service));
         return x `
-      <label class="sm-form-label">
-        Entité
+      <div class="sm-form-label">
+        <span>Entité</span>
         <ha-entity-picker
           .hass=${this.hass}
           .allowCustomEntity=${true}
@@ -2871,7 +2927,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         ${!primary
             ? x `<span class="sm-field-hint">Sélectionnez l’entité à piloter pendant cette plage.</span>`
             : null}
-      </label>
+      </div>
 
       <label class="sm-form-label">
         Action
@@ -3064,14 +3120,23 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         const custom = this.hasCustomBlockColor(block);
         return x `
       <div class="sm-form-label sm-color-field">
-        <span class="sm-color-field-title">Couleur sur la frise</span>
+        <span class="sm-color-field-title">Couleur du créneau sur la ligne horaire</span>
+        <p class="sm-color-field-hint">
+          Teinte affichée pour la plage sélectionnée sur la frise « Heure » ci‑dessus (pas la couleur
+          de la pièce dans Home Assistant).
+        </p>
         <div class="sm-color-row">
-          <input
-            type="color"
-            class="sm-color-native"
-            .value=${pickerVal}
-            @input=${(e) => this.visualSetBlockColor(e.target.value)}
-          />
+          <label class="sm-color-system-label">
+            <span class="sm-color-system-text">Nuancier du navigateur</span>
+            <input
+              type="color"
+              class="sm-color-native"
+              .value=${pickerVal}
+              title="Ouvrir le sélecteur de couleur du système"
+              aria-label="Choisir une couleur précise avec le nuancier du navigateur"
+              @input=${(e) => this.visualSetBlockColor(e.target.value)}
+            />
+          </label>
           <div class="sm-color-presets" aria-hidden="true">
             ${BLOCK_COLOR_PRESETS.map((hex) => x `
                 <button
