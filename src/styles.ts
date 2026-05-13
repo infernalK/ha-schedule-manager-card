@@ -622,7 +622,8 @@ export const styles = css`
    * rester en ligne à largeur/hauteur nulles dans une colonne flex — invisible dans le modal.
    */
   .sm-form-label ha-entity-picker,
-  .sm-action-card ha-entity-picker {
+  .sm-action-card ha-entity-picker,
+  .sm-entity-picker-shell ha-entity-picker {
     display: block;
     width: 100%;
     max-width: 100%;
@@ -1044,6 +1045,25 @@ export const styles = css`
 
   .sm-action-primary-btn:hover {
     text-decoration: underline;
+  }
+
+  .sm-entity-picker-shell {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 52px;
+    box-sizing: border-box;
+    border: 1px solid var(--divider-color);
+    border-radius: 8px;
+    padding: 4px 6px;
+    background: var(--ha-card-background, var(--card-background-color));
+  }
+
+  .sm-entity-picker-shell ha-entity-picker {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
   }
 
   .sm-action-entities-quick {

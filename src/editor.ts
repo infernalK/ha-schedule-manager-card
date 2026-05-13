@@ -3,6 +3,7 @@ import { PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { CardConfig, HomeAssistant } from './types';
 import { SCHEDULE_MANAGER_STATUS_ENTITY_ID } from './types';
+import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 
 @customElement('schedule-manager-card-editor')
 export class ScheduleManagerCardEditor extends LitElement {
@@ -175,7 +176,11 @@ export class ScheduleManagerCardEditor extends LitElement {
   }
 
   /** Réduit la liste aux capteurs « Schedule Manager » (nom ou attribut schedules). */
-  private _statusEntityFilter = (entityId: string): boolean => {
+  private _statusEntityFilter = (entity: unknown): boolean => {
+    const entityId = entityIdFromPickerFilterArgument(entity);
+    if (!entityId) {
+      return false;
+    }
     if (entityId === SCHEDULE_MANAGER_STATUS_ENTITY_ID) {
       return true;
     }

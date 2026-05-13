@@ -37,6 +37,7 @@ import {
   serviceSecondaryHint,
 } from './action-wizard-i18n';
 import { entityCompatibleWithAction } from './entity-domains';
+import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 import {
   blockTimelineFill,
   blocksToTimelineSegments,
@@ -1275,14 +1276,25 @@ export class ScheduleManagerCard extends LitElement {
     return entityIdsFromPayload(action.action_payload)[0] ?? '';
   }
 
+  /** Domaine HA pour restreindre le picker (complète entityFilter). */
+  private includeDomainsForEntityPicker(action: BlockAction): string[] | undefined {
+    const parsed = parseDomainService(String(action.action_type ?? '').trim());
+    return parsed?.domain ? [parsed.domain] : undefined;
+  }
+
   /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
   private entityFilterForConfiguredAction(
     selected: BlockAction
-  ): (entityId: string) => boolean {
+  ): (entity: unknown) => boolean {
     const actionType = String(selected.action_type ?? '').trim();
     const hass = this.hass;
-    return (entityId: string) =>
-      entityCompatibleWithAction(entityId, actionType, hass);
+    return (entity: unknown) => {
+      const entityId = entityIdFromPickerFilterArgument(entity);
+      if (!entityId) {
+        return false;
+      }
+      return entityCompatibleWithAction(entityId, actionType, hass);
+    };
   }
 
   private visualAppendEntity(
@@ -1888,17 +1900,20 @@ export class ScheduleManagerCard extends LitElement {
                         </div>
                         <div class="sm-entity-add-block">
                           <span class="sm-entity-add-heading">Ajouter une entité</span>
-                          <ha-entity-picker
-                            class="sm-action-entities-quick-picker"
-                            .hass=${hass}
-                            .entityFilter=${this.entityFilterForConfiguredAction(action)}
-                            .allowCustomEntity=${true}
-                            label="Rechercher ou choisir une entité…"
-                            .value=${''}
-                            id=${`sm-quick-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
-                            @value-changed=${(e: CustomEvent<{ value?: string }>) =>
-                              this.visualAppendEntityAt(i, e)}
-                          ></ha-entity-picker>
+                          <div class="sm-entity-picker-shell">
+                            <ha-entity-picker
+                              class="sm-action-entities-quick-picker"
+                              .hass=${hass}
+                              .includeDomains=${this.includeDomainsForEntityPicker(action)}
+                              .entityFilter=${this.entityFilterForConfiguredAction(action)}
+                              .allowCustomEntity=${true}
+                              label="Rechercher ou choisir une entité…"
+                              .value=${''}
+                              id=${`sm-quick-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
+                              @value-changed=${(e: CustomEvent<{ value?: string }>) =>
+                                this.visualAppendEntityAt(i, e)}
+                            ></ha-entity-picker>
+                          </div>
                         </div>
                       </div>
                     `
