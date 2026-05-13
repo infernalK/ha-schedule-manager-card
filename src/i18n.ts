@@ -287,7 +287,7 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'editor.show_title_switch': 'Show title on card',
     'editor.custom_title_optional': 'Custom title (optional)',
     'editor.title_apply_hint':
-      'Enter text then click outside the field (or Tab) to apply to configuration and preview. Empty =',
+      'Enter text then click outside the field (or Tab) to apply to configuration. Empty =',
     'editor.title_disabled_hint': 'Turn “Show title on card” back on to edit the label.',
     'editor.schedule_toggle_label': 'Per-schedule on/off switch',
     'editor.schedule_toggle_hint':
@@ -425,7 +425,7 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'editor.show_title_switch': 'Afficher le titre sur la carte',
     'editor.custom_title_optional': 'Titre personnalisé (optionnel)',
     'editor.title_apply_hint':
-      'Saisissez le texte puis cliquez en dehors du champ (ou Tab) pour l’appliquer à la configuration et à l’aperçu. Vide =',
+      'Saisissez le texte puis cliquez en dehors du champ (ou Tab) pour l’appliquer à la configuration. Vide =',
     'editor.title_disabled_hint':
       'Réactivez « Afficher le titre sur la carte » pour modifier le libellé.',
     'editor.schedule_toggle_label': 'Interrupteur actif / inactif par planning',
