@@ -479,13 +479,36 @@ const styles = i$4 `
 
   .entity-chip {
     display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
     font-size: 0.75rem;
-    border-radius: 16px;
-    background: rgba(127, 127, 127, 0.2);
+    border-radius: 12px;
+    background: rgba(127, 127, 127, 0.18);
     max-width: 100%;
+  }
+
+  .entity-chip-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .entity-chip-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--primary-text-color);
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .entity-chip-id {
+    font-size: 0.68rem;
+    color: var(--secondary-text-color);
+    word-break: break-all;
+    line-height: 1.2;
   }
 
   .entity-chip code {
@@ -1009,6 +1032,91 @@ const styles = i$4 `
     margin-bottom: 8px;
   }
 
+  .sm-actions-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sm-action-block {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--divider-color);
+    background: rgba(var(--rgb-primary-text-color, 221, 221, 221), 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .sm-action-block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .sm-action-block-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--primary-text-color);
+  }
+
+  .sm-action-block-remove {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+    border: 1px solid var(--divider-color);
+    background: transparent;
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .sm-action-block-remove:hover {
+    color: var(--error-color, #c62828);
+    border-color: var(--error-color, #c62828);
+  }
+
+  .sm-action-block-wizard {
+    align-self: flex-start;
+  }
+
+  .sm-action-add-another-btn {
+    align-self: stretch;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px dashed var(--divider-color);
+    background: transparent;
+    color: var(--primary-color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  .sm-action-add-another-btn:hover {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.08);
+  }
+
+  .sm-entity-add-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .sm-entity-add-heading {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-text-color);
+  }
+
+  .sm-action-climate-preset {
+    margin-top: 4px;
+  }
+
   .sm-actions-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -1526,7 +1634,7 @@ function listSelectableDomains(hass) {
     const svc = hass.services || {};
     const doms = new Set();
     for (const eid of Object.keys(hass.states)) {
-        const d = eid.includes('.') ? eid.split('.')[0] : '';
+        const d = eid.includes('.') ? eid.split('.')[0] ?? '' : '';
         if (!d || !svc[d] || Object.keys(svc[d]).length === 0) {
             continue;
         }
@@ -1667,8 +1775,9 @@ function segmentLabelOne(action) {
             return `${String(rec.position)}%`;
         }
     }
+    const segs = action.action_type.split('.');
     const tail = action.action_type.includes('.')
-        ? action.action_type.split('.').pop()
+        ? segs[segs.length - 1] ?? action.action_type
         : action.action_type;
     return tail.length > 14 ? `${tail.slice(0, 12)}…` : tail;
 }
@@ -1680,9 +1789,9 @@ function segmentLabel(block) {
     }
     const labels = configured.map((a) => segmentLabelOne(a));
     if (labels.length === 1) {
-        return labels[0];
+        return labels[0] ?? '—';
     }
-    const first = labels[0];
+    const first = labels[0] ?? '—';
     const suffix = ` +${labels.length - 1}`;
     const maxMain = Math.max(4, 14 - suffix.length);
     if (first.length > maxMain) {
@@ -2160,7 +2269,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s {
             return;
         }
         const explicit = this._config?.schedule_ids;
-        let selected = new Set(explicit && explicit.length > 0 ? explicit : allIds);
+        const selected = new Set(explicit && explicit.length > 0 ? explicit : allIds);
         if (checked) {
             selected.add(scheduleId);
         }
@@ -2757,6 +2866,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             .filter((scheduleId) => schedulesMap[scheduleId])
             .map((scheduleId) => {
             const schedule = schedulesMap[scheduleId];
+            if (!schedule) {
+                return x ``;
+            }
             return this.renderSchedule(this.withCanonicalId(scheduleId, schedule), group);
         })}
       </div>
@@ -3451,7 +3563,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!this._visualEdit || !this.hass || !entityId.includes('.')) {
             return;
         }
-        const domain = entityId.split('.')[0];
+        const domain = entityId.split('.')[0] ?? '';
+        if (!domain) {
+            return;
+        }
         const sel = this._visualEdit.selectedIndex;
         const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1));
         const block = this._visualEdit.blocks[sel];
@@ -3459,7 +3574,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!block || !curAction) {
             return;
         }
-        let payload = stripPayloadForNewService(curAction.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
+        const payload = stripPayloadForNewService(curAction.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
         if (domain === 'climate' &&
             serviceShort === 'set_preset_mode' &&
             climatePresetMode !== undefined) {
@@ -3519,7 +3634,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!id) {
             return;
         }
-        const dom = id.includes('.') ? id.split('.')[0] : '';
+        const dom = id.includes('.') ? id.split('.')[0] ?? '' : '';
         if (serviceShort === 'set_preset_mode' && dom === 'climate') {
             const modes = this.climatePresetModesForEntityId(id);
             if (modes && modes.length > 0) {
@@ -3552,10 +3667,18 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             return x ``;
         }
         const hass = this.hass;
+        if (!hass) {
+            return x ``;
+        }
         const primary = this.primaryEntityFromAction(selected);
         const parsed = parseDomainService(selected.action_type);
+        const primaryDomain = primary.includes('.')
+            ? primary.split('.')[0] ?? ''
+            : '';
         const icon = primary
-            ? entityIcon(hass, primary) ?? domainIcon(primary.split('.')[0])
+            ? entityIcon(hass, primary) ??
+                (primaryDomain ? domainIcon(primaryDomain) : undefined) ??
+                'mdi:gesture-tap-button'
             : 'mdi:gesture-tap-button';
         const title = primary
             ? friendlyEntityName(hass, primary)
@@ -3583,8 +3706,30 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!t) {
             return `Action ${index + 1}`;
         }
-        const tail = t.includes('.') ? t.split('.').pop() : t;
+        const segs = t.split('.');
+        const tail = t.includes('.') ? segs[segs.length - 1] ?? t : t;
         return tail.length > 20 ? `${tail.slice(0, 18)}…` : tail;
+    }
+    /** Une seule action encore sans service : pas de liste — uniquement le bouton principal. */
+    isSinglePlaceholderAction(selected) {
+        const actions = selected.actions || [];
+        return (actions.length === 1 && !String(actions[0]?.action_type ?? '').trim());
+    }
+    openActionWizardAt(actionIndex) {
+        this.visualSelectAction(actionIndex);
+        this.openActionWizard();
+    }
+    visualAppendEntityAt(actionIndex, ev) {
+        this.visualSelectAction(actionIndex);
+        this.visualAppendEntity(ev);
+    }
+    visualRemoveEntityAt(actionIndex, entityId) {
+        this.visualSelectAction(actionIndex);
+        this.visualRemoveEntityChip(entityId);
+    }
+    visualSetPresetModeAt(actionIndex, mode) {
+        this.visualSelectAction(actionIndex);
+        this.visualSetPresetMode(mode);
     }
     renderActionWizardOverlay() {
         if (!this._actionWizardOpen || !this.hass || !this._visualEdit) {
@@ -3645,7 +3790,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             </div>`;
         }
         else if (step === 'service' && entityPick) {
-            const dom = entityPick.includes('.') ? entityPick.split('.')[0] : '';
+            const dom = entityPick.includes('.') ? entityPick.split('.')[0] ?? '' : '';
             const svcList = servicesForDomain(hass, dom).filter((s) => matches(s) ||
                 matches(servicePrimaryLabel(dom, s)) ||
                 matches(serviceSecondaryHint(dom, s)));
@@ -3764,100 +3909,162 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!this.hass || !this._visualEdit) {
             return x ``;
         }
-        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, selected.actions.length - 1));
-        const cur = selected.actions[ai];
-        const primary = this.primaryEntityFromAction(cur);
-        const parsed = parseDomainService(cur.action_type);
-        const dom = primary.includes('.') ? primary.split('.')[0] : '';
-        const hasAction = Boolean(String(cur.action_type ?? '').trim());
-        const unknownService = Boolean(hasAction &&
-            primary &&
-            parsed &&
-            dom &&
-            parsed.domain === dom &&
-            !servicesForDomain(this.hass, parsed.domain).includes(parsed.service));
-        return x `
-      <div class="sm-action-entry">
-        <div class="sm-actions-toolbar" role="tablist" aria-label="Actions du créneau">
-          ${selected.actions.map((a, i) => x `
-              <div class="sm-action-tab-wrap">
-                <button
-                  type="button"
-                  role="tab"
-                  class="sm-action-tab ${i === ai ? 'is-active' : ''}"
-                  aria-selected=${i === ai}
-                  @click=${() => this.visualSelectAction(i)}
-                >
-                  ${this.formatActionTabTitle(a, i)}
-                </button>
-                ${selected.actions.length > 1
-            ? x `
-                      <button
-                        type="button"
-                        class="sm-action-tab-remove"
-                        aria-label="Supprimer cette action"
-                        title="Supprimer cette action"
-                        @click=${() => this.visualRemoveAction(i)}
-                      >
-                        ×
-                      </button>
-                    `
-            : null}
-              </div>
-            `)}
+        const hass = this.hass;
+        if (this.isSinglePlaceholderAction(selected)) {
+            return x `
+        <div class="sm-action-entry">
           <button
             type="button"
-            class="sm-action-tab sm-action-tab--add"
-            @click=${() => this.visualAddAction()}
+            class="sm-action-primary-btn"
+            @click=${() => this.openActionWizardAt(0)}
           >
-            + Action
+            + Choisir une action
           </button>
         </div>
-        ${this.renderActionSummary(cur)}
-        <button type="button" class="sm-action-primary-btn" @click=${() => this.openActionWizard()}>
-          ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
-        </button>
-        ${unknownService
-            ? x `<p class="sm-field-hint">
-              Action personnalisée : <code>${cur.action_type}</code>
-            </p>`
-            : null}
-        ${hasAction
-            ? x `
-              <div class="sm-action-entities-quick">
-                <span class="sm-action-entities-quick-title">Entités ciblées</span>
-                <p class="sm-action-entities-quick-hint">
-                  Ajoutez ou retirez des entités sans refaire l’assistant — uniquement celles compatibles
-                  avec <code>${cur.action_type}</code>.
-                </p>
-                <div class="entity-chips">
-                  ${entityIdsFromPayload(cur.action_payload).map((eid) => x `
-                      <span class="entity-chip">
-                        <code>${eid}</code>
+      `;
+        }
+        const scheduleKey = this._visualEdit.scheduleId;
+        const blockIdx = this._visualEdit.selectedIndex;
+        return x `
+      <div class="sm-action-entry">
+        <div class="sm-actions-stack" role="list" aria-label="Liste des actions du créneau">
+          ${selected.actions.map((action, i) => {
+            const primary = this.primaryEntityFromAction(action);
+            const parsed = parseDomainService(action.action_type);
+            const dom = primary.includes('.') ? primary.split('.')[0] ?? '' : '';
+            const hasAction = Boolean(String(action.action_type ?? '').trim());
+            const unknownService = Boolean(hasAction &&
+                primary &&
+                parsed &&
+                dom &&
+                parsed.domain === dom &&
+                !servicesForDomain(hass, parsed.domain).includes(parsed.service));
+            return x `
+              <div class="sm-action-block" role="listitem">
+                <div class="sm-action-block-head">
+                  <span class="sm-action-block-title">${this.formatActionTabTitle(action, i)}</span>
+                  ${selected.actions.length > 1
+                ? x `
                         <button
                           type="button"
-                          aria-label="Retirer cette entité"
-                          @click=${() => this.visualRemoveEntityChip(eid)}
+                          class="sm-action-block-remove"
+                          aria-label="Supprimer cette action"
+                          title="Supprimer cette action"
+                          @click=${() => this.visualRemoveAction(i)}
                         >
-                          ×
+                          Supprimer
                         </button>
-                      </span>
-                    `)}
+                      `
+                : null}
                 </div>
-                <ha-entity-picker
-                  class="sm-action-entities-quick-picker"
-                  .hass=${this.hass}
-                  .entityFilter=${this.entityFilterForConfiguredAction(cur)}
-                  .allowCustomEntity=${true}
-                  label="Ajouter une entité"
-                  .value=${''}
-                  id=${`sm-quick-ep-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${ai}-${this._quickEntityPickerNonce}`}
-                  @value-changed=${(e) => this.visualAppendEntity(e)}
-                ></ha-entity-picker>
+                ${hasAction ? this.renderActionSummary(action) : null}
+                <button
+                  type="button"
+                  class="sm-action-primary-btn sm-action-block-wizard"
+                  @click=${() => this.openActionWizardAt(i)}
+                >
+                  ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
+                </button>
+                ${unknownService
+                ? x `<p class="sm-field-hint">
+                      Action personnalisée : <code>${action.action_type}</code>
+                    </p>`
+                : null}
+                ${hasAction
+                ? x `
+                      <div class="sm-action-entities-quick">
+                        <span class="sm-action-entities-quick-title">Entités ciblées</span>
+                        <p class="sm-action-entities-quick-hint">
+                          Retirez une entité avec × ou ajoutez-en une avec la liste ci-dessous (compatible
+                          avec <code>${action.action_type}</code>).
+                        </p>
+                        <div class="entity-chips">
+                          ${entityIdsFromPayload(action.action_payload).map((eid) => x `
+                              <span class="entity-chip" title=${eid}>
+                                <span class="entity-chip-text">
+                                  <span class="entity-chip-name">${friendlyEntityName(hass, eid)}</span>
+                                  <span class="entity-chip-id">${eid}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  aria-label="Retirer ${friendlyEntityName(hass, eid)}"
+                                  @click=${() => this.visualRemoveEntityAt(i, eid)}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            `)}
+                        </div>
+                        <div class="sm-entity-add-block">
+                          <span class="sm-entity-add-heading">Ajouter une entité</span>
+                          <ha-entity-picker
+                            class="sm-action-entities-quick-picker"
+                            .hass=${hass}
+                            .entityFilter=${this.entityFilterForConfiguredAction(action)}
+                            .allowCustomEntity=${true}
+                            label="Rechercher ou choisir une entité…"
+                            .value=${''}
+                            id=${`sm-quick-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
+                            @value-changed=${(e) => this.visualAppendEntityAt(i, e)}
+                          ></ha-entity-picker>
+                        </div>
+                      </div>
+                    `
+                : null}
+                ${this.renderClimatePresetForAction(action, i)}
               </div>
-            `
-            : null}
+            `;
+        })}
+        </div>
+        <button
+          type="button"
+          class="sm-action-add-another-btn"
+          @click=${() => this.visualAddAction()}
+        >
+          + Ajouter une autre action
+        </button>
       </div>
+    `;
+    }
+    getClimatePresetModesForAction(action) {
+        if (!this.hass || action.action_type.trim() !== 'climate.set_preset_mode') {
+            return null;
+        }
+        const ids = entityIdsFromPayload(action.action_payload);
+        for (const id of ids) {
+            if (!id.startsWith('climate.')) {
+                continue;
+            }
+            const st = this.hass.states[id];
+            if (!st) {
+                continue;
+            }
+            const pm = st.attributes?.preset_modes;
+            if (Array.isArray(pm) && pm.every((x) => typeof x === 'string')) {
+                return pm;
+            }
+        }
+        return null;
+    }
+    renderClimatePresetForAction(action, actionIndex) {
+        const modes = this.getClimatePresetModesForAction(action);
+        if (!modes?.length) {
+            return x ``;
+        }
+        const cur = String(action.action_payload?.preset_mode ?? '');
+        const orphan = cur && !modes.includes(cur);
+        return x `
+      <label class="sm-form-label sm-form-label-last sm-action-climate-preset">
+        Mode préréglé
+        <select
+          class="sm-select"
+          .value=${cur}
+          @change=${(e) => this.visualSetPresetModeAt(actionIndex, e.target.value)}
+        >
+          ${orphan ? x `<option value=${cur}>${cur} (actuel)</option>` : null}
+          ${modes.map((m) => x `<option value=${m}>${m}</option>`)}
+        </select>
+      </label>
     `;
     }
     async saveVisualEditor() {
@@ -3892,55 +4099,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             // eslint-disable-next-line no-console
             console.error('schedule_manager.update_schedule failed', e);
         }
-    }
-    renderClimatePresetSelect(selected) {
-        const modes = this.getClimatePresetModesForSelected();
-        if (!modes?.length) {
-            return x ``;
-        }
-        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, selected.actions.length - 1));
-        const action = selected.actions[ai];
-        const cur = String(action?.action_payload?.preset_mode ?? '');
-        const orphan = cur && !modes.includes(cur);
-        return x `
-      <label class="sm-form-label sm-form-label-last">
-        Mode préréglé
-        <select
-          class="sm-select"
-          .value=${cur}
-          @change=${(e) => this.visualSetPresetMode(e.target.value)}
-        >
-          ${orphan ? x `<option value=${cur}>${cur} (actuel)</option>` : null}
-          ${modes.map((m) => x `<option value=${m}>${m}</option>`)}
-        </select>
-      </label>
-    `;
-    }
-    getClimatePresetModesForSelected() {
-        if (!this.hass || !this._visualEdit) {
-            return null;
-        }
-        const block = this._visualEdit.blocks[this._visualEdit.selectedIndex];
-        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (block?.actions?.length ?? 1) - 1));
-        const action = block?.actions?.[ai];
-        if (!block || !action || action.action_type.trim() !== 'climate.set_preset_mode') {
-            return null;
-        }
-        const ids = entityIdsFromPayload(action.action_payload);
-        for (const id of ids) {
-            if (!id.startsWith('climate.')) {
-                continue;
-            }
-            const st = this.hass.states[id];
-            if (!st) {
-                continue;
-            }
-            const pm = st.attributes?.preset_modes;
-            if (Array.isArray(pm) && pm.every((x) => typeof x === 'string')) {
-                return pm;
-            }
-        }
-        return null;
     }
     visualSetPresetMode(mode) {
         if (!this._visualEdit) {
@@ -4264,7 +4422,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                   <div class="sm-action-card">
                     <h4>Actions pendant cette plage</h4>
                     ${this.renderActionPlanningControls(selected)}
-                    ${this.renderClimatePresetSelect(selected)}
                   </div>
                 </div>
               `

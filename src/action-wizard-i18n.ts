@@ -138,7 +138,7 @@ export function listSelectableDomains(hass: HomeAssistant): string[] {
   const svc = hass.services || {};
   const doms = new Set<string>();
   for (const eid of Object.keys(hass.states)) {
-    const d = eid.includes('.') ? eid.split('.')[0]! : '';
+    const d = eid.includes('.') ? eid.split('.')[0] ?? '' : '';
     if (!d || !svc[d] || Object.keys(svc[d]).length === 0) {
       continue;
     }

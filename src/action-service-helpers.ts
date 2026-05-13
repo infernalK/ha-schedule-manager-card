@@ -58,7 +58,8 @@ export function pickDefaultService(domain: string, available: string[]): string 
   if (pref && available.includes(pref)) {
     return pref;
   }
-  return available[0]!;
+  const first = available[0];
+  return first ?? 'turn_on';
 }
 
 /** Garde uniquement `entity_id` et la couleur d’affichage (réinitialise le reste au changement de service). */

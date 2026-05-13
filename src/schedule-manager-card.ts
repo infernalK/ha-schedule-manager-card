@@ -523,7 +523,10 @@ export class ScheduleManagerCard extends LitElement {
         ${refs
           .filter((scheduleId) => schedulesMap[scheduleId])
           .map((scheduleId) => {
-            const schedule = schedulesMap[scheduleId]!;
+            const schedule = schedulesMap[scheduleId];
+            if (!schedule) {
+              return html``;
+            }
             return this.renderSchedule(
               this.withCanonicalId(scheduleId, schedule),
               group
@@ -1349,7 +1352,10 @@ export class ScheduleManagerCard extends LitElement {
     if (!this._visualEdit || !this.hass || !entityId.includes('.')) {
       return;
     }
-    const domain = entityId.split('.')[0]!;
+    const domain = entityId.split('.')[0] ?? '';
+    if (!domain) {
+      return;
+    }
     const sel = this._visualEdit.selectedIndex;
     const ai = Math.min(
       this._visualEdit.selectedActionIndex,
@@ -1361,7 +1367,7 @@ export class ScheduleManagerCard extends LitElement {
       return;
     }
 
-    let payload = stripPayloadForNewService(
+    const payload = stripPayloadForNewService(
       curAction.action_payload,
       entityId,
       SCHEDULE_MANAGER_COLOR_KEY
@@ -1432,7 +1438,7 @@ export class ScheduleManagerCard extends LitElement {
     if (!id) {
       return;
     }
-    const dom = id.includes('.') ? id.split('.')[0]! : '';
+    const dom = id.includes('.') ? id.split('.')[0] ?? '' : '';
     if (serviceShort === 'set_preset_mode' && dom === 'climate') {
       const modes = this.climatePresetModesForEntityId(id);
       if (modes && modes.length > 0) {
@@ -1468,11 +1474,19 @@ export class ScheduleManagerCard extends LitElement {
     if (!String(selected.action_type ?? '').trim()) {
       return html``;
     }
-    const hass = this.hass!;
+    const hass = this.hass;
+    if (!hass) {
+      return html``;
+    }
     const primary = this.primaryEntityFromAction(selected);
     const parsed = parseDomainService(selected.action_type);
+    const primaryDomain = primary.includes('.')
+      ? primary.split('.')[0] ?? ''
+      : '';
     const icon = primary
-      ? entityIcon(hass, primary) ?? domainIcon(primary.split('.')[0]!)
+      ? entityIcon(hass, primary) ??
+        (primaryDomain ? domainIcon(primaryDomain) : undefined) ??
+        'mdi:gesture-tap-button'
       : 'mdi:gesture-tap-button';
     const title = primary
       ? friendlyEntityName(hass, primary)
@@ -1502,8 +1516,40 @@ export class ScheduleManagerCard extends LitElement {
     if (!t) {
       return `Action ${index + 1}`;
     }
-    const tail = t.includes('.') ? t.split('.').pop()! : t;
+    const segs = t.split('.');
+    const tail = t.includes('.') ? segs[segs.length - 1] ?? t : t;
     return tail.length > 20 ? `${tail.slice(0, 18)}…` : tail;
+  }
+
+  /** Une seule action encore sans service : pas de liste — uniquement le bouton principal. */
+  private isSinglePlaceholderAction(selected: TimeBlock): boolean {
+    const actions = selected.actions || [];
+    return (
+      actions.length === 1 && !String(actions[0]?.action_type ?? '').trim()
+    );
+  }
+
+  private openActionWizardAt(actionIndex: number) {
+    this.visualSelectAction(actionIndex);
+    this.openActionWizard();
+  }
+
+  private visualAppendEntityAt(
+    actionIndex: number,
+    ev: CustomEvent<{ value?: string }>
+  ) {
+    this.visualSelectAction(actionIndex);
+    this.visualAppendEntity(ev);
+  }
+
+  private visualRemoveEntityAt(actionIndex: number, entityId: string) {
+    this.visualSelectAction(actionIndex);
+    this.visualRemoveEntityChip(entityId);
+  }
+
+  private visualSetPresetModeAt(actionIndex: number, mode: string) {
+    this.visualSelectAction(actionIndex);
+    this.visualSetPresetMode(mode);
   }
 
   private renderActionWizardOverlay() {
@@ -1577,7 +1623,7 @@ export class ScheduleManagerCard extends LitElement {
               )}
             </div>`;
     } else if (step === 'service' && entityPick) {
-      const dom = entityPick.includes('.') ? entityPick.split('.')[0]! : '';
+      const dom = entityPick.includes('.') ? entityPick.split('.')[0] ?? '' : '';
       const svcList = servicesForDomain(hass, dom).filter(
         (s) =>
           matches(s) ||
@@ -1706,111 +1752,179 @@ export class ScheduleManagerCard extends LitElement {
     if (!this.hass || !this._visualEdit) {
       return html``;
     }
-    const ai = Math.min(
-      this._visualEdit.selectedActionIndex,
-      Math.max(0, selected.actions.length - 1)
-    );
-    const cur = selected.actions[ai]!;
-    const primary = this.primaryEntityFromAction(cur);
-    const parsed = parseDomainService(cur.action_type);
-    const dom = primary.includes('.') ? primary.split('.')[0]! : '';
-    const hasAction = Boolean(String(cur.action_type ?? '').trim());
-    const unknownService = Boolean(
-      hasAction &&
-        primary &&
-        parsed &&
-        dom &&
-        parsed.domain === dom &&
-        !servicesForDomain(this.hass, parsed.domain).includes(parsed.service)
-    );
+    const hass = this.hass;
+
+    if (this.isSinglePlaceholderAction(selected)) {
+      return html`
+        <div class="sm-action-entry">
+          <button
+            type="button"
+            class="sm-action-primary-btn"
+            @click=${() => this.openActionWizardAt(0)}
+          >
+            + Choisir une action
+          </button>
+        </div>
+      `;
+    }
+
+    const scheduleKey = this._visualEdit.scheduleId;
+    const blockIdx = this._visualEdit.selectedIndex;
 
     return html`
       <div class="sm-action-entry">
-        <div class="sm-actions-toolbar" role="tablist" aria-label="Actions du créneau">
-          ${selected.actions.map(
-            (a, i) => html`
-              <div class="sm-action-tab-wrap">
-                <button
-                  type="button"
-                  role="tab"
-                  class="sm-action-tab ${i === ai ? 'is-active' : ''}"
-                  aria-selected=${i === ai}
-                  @click=${() => this.visualSelectAction(i)}
-                >
-                  ${this.formatActionTabTitle(a, i)}
-                </button>
-                ${selected.actions.length > 1
-                  ? html`
-                      <button
-                        type="button"
-                        class="sm-action-tab-remove"
-                        aria-label="Supprimer cette action"
-                        title="Supprimer cette action"
-                        @click=${() => this.visualRemoveAction(i)}
-                      >
-                        ×
-                      </button>
-                    `
-                  : null}
-              </div>
-            `
-          )}
-          <button
-            type="button"
-            class="sm-action-tab sm-action-tab--add"
-            @click=${() => this.visualAddAction()}
-          >
-            + Action
-          </button>
-        </div>
-        ${this.renderActionSummary(cur)}
-        <button type="button" class="sm-action-primary-btn" @click=${() => this.openActionWizard()}>
-          ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
-        </button>
-        ${unknownService
-          ? html`<p class="sm-field-hint">
-              Action personnalisée : <code>${cur.action_type}</code>
-            </p>`
-          : null}
-        ${hasAction
-          ? html`
-              <div class="sm-action-entities-quick">
-                <span class="sm-action-entities-quick-title">Entités ciblées</span>
-                <p class="sm-action-entities-quick-hint">
-                  Ajoutez ou retirez des entités sans refaire l’assistant — uniquement celles compatibles
-                  avec <code>${cur.action_type}</code>.
-                </p>
-                <div class="entity-chips">
-                  ${entityIdsFromPayload(cur.action_payload).map(
-                    (eid) => html`
-                      <span class="entity-chip">
-                        <code>${eid}</code>
+        <div class="sm-actions-stack" role="list" aria-label="Liste des actions du créneau">
+          ${selected.actions.map((action, i) => {
+            const primary = this.primaryEntityFromAction(action);
+            const parsed = parseDomainService(action.action_type);
+            const dom = primary.includes('.') ? primary.split('.')[0] ?? '' : '';
+            const hasAction = Boolean(String(action.action_type ?? '').trim());
+            const unknownService = Boolean(
+              hasAction &&
+                primary &&
+                parsed &&
+                dom &&
+                parsed.domain === dom &&
+                !servicesForDomain(hass, parsed.domain).includes(parsed.service)
+            );
+
+            return html`
+              <div class="sm-action-block" role="listitem">
+                <div class="sm-action-block-head">
+                  <span class="sm-action-block-title">${this.formatActionTabTitle(action, i)}</span>
+                  ${selected.actions.length > 1
+                    ? html`
                         <button
                           type="button"
-                          aria-label="Retirer cette entité"
-                          @click=${() => this.visualRemoveEntityChip(eid)}
+                          class="sm-action-block-remove"
+                          aria-label="Supprimer cette action"
+                          title="Supprimer cette action"
+                          @click=${() => this.visualRemoveAction(i)}
                         >
-                          ×
+                          Supprimer
                         </button>
-                      </span>
-                    `
-                  )}
+                      `
+                    : null}
                 </div>
-                <ha-entity-picker
-                  class="sm-action-entities-quick-picker"
-                  .hass=${this.hass}
-                  .entityFilter=${this.entityFilterForConfiguredAction(cur)}
-                  .allowCustomEntity=${true}
-                  label="Ajouter une entité"
-                  .value=${''}
-                  id=${`sm-quick-ep-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${ai}-${this._quickEntityPickerNonce}`}
-                  @value-changed=${(e: CustomEvent<{ value?: string }>) =>
-                    this.visualAppendEntity(e)}
-                ></ha-entity-picker>
+                ${hasAction ? this.renderActionSummary(action) : null}
+                <button
+                  type="button"
+                  class="sm-action-primary-btn sm-action-block-wizard"
+                  @click=${() => this.openActionWizardAt(i)}
+                >
+                  ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
+                </button>
+                ${unknownService
+                  ? html`<p class="sm-field-hint">
+                      Action personnalisée : <code>${action.action_type}</code>
+                    </p>`
+                  : null}
+                ${hasAction
+                  ? html`
+                      <div class="sm-action-entities-quick">
+                        <span class="sm-action-entities-quick-title">Entités ciblées</span>
+                        <p class="sm-action-entities-quick-hint">
+                          Retirez une entité avec × ou ajoutez-en une avec la liste ci-dessous (compatible
+                          avec <code>${action.action_type}</code>).
+                        </p>
+                        <div class="entity-chips">
+                          ${entityIdsFromPayload(action.action_payload).map(
+                            (eid) => html`
+                              <span class="entity-chip" title=${eid}>
+                                <span class="entity-chip-text">
+                                  <span class="entity-chip-name">${friendlyEntityName(hass, eid)}</span>
+                                  <span class="entity-chip-id">${eid}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  aria-label="Retirer ${friendlyEntityName(hass, eid)}"
+                                  @click=${() => this.visualRemoveEntityAt(i, eid)}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            `
+                          )}
+                        </div>
+                        <div class="sm-entity-add-block">
+                          <span class="sm-entity-add-heading">Ajouter une entité</span>
+                          <ha-entity-picker
+                            class="sm-action-entities-quick-picker"
+                            .hass=${hass}
+                            .entityFilter=${this.entityFilterForConfiguredAction(action)}
+                            .allowCustomEntity=${true}
+                            label="Rechercher ou choisir une entité…"
+                            .value=${''}
+                            id=${`sm-quick-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
+                            @value-changed=${(e: CustomEvent<{ value?: string }>) =>
+                              this.visualAppendEntityAt(i, e)}
+                          ></ha-entity-picker>
+                        </div>
+                      </div>
+                    `
+                  : null}
+                ${this.renderClimatePresetForAction(action, i)}
               </div>
-            `
-          : null}
+            `;
+          })}
+        </div>
+        <button
+          type="button"
+          class="sm-action-add-another-btn"
+          @click=${() => this.visualAddAction()}
+        >
+          + Ajouter une autre action
+        </button>
       </div>
+    `;
+  }
+
+  private getClimatePresetModesForAction(action: BlockAction): string[] | null {
+    if (!this.hass || action.action_type.trim() !== 'climate.set_preset_mode') {
+      return null;
+    }
+    const ids = entityIdsFromPayload(action.action_payload);
+    for (const id of ids) {
+      if (!id.startsWith('climate.')) {
+        continue;
+      }
+      const st = this.hass.states[id];
+      if (!st) {
+        continue;
+      }
+      const pm = st.attributes?.preset_modes;
+      if (Array.isArray(pm) && pm.every((x): x is string => typeof x === 'string')) {
+        return pm;
+      }
+    }
+    return null;
+  }
+
+  private renderClimatePresetForAction(action: BlockAction, actionIndex: number) {
+    const modes = this.getClimatePresetModesForAction(action);
+    if (!modes?.length) {
+      return html``;
+    }
+    const cur = String(
+      (action.action_payload as Record<string, unknown>)?.preset_mode ?? ''
+    );
+    const orphan = cur && !modes.includes(cur);
+    return html`
+      <label class="sm-form-label sm-form-label-last sm-action-climate-preset">
+        Mode préréglé
+        <select
+          class="sm-select"
+          .value=${cur}
+          @change=${(e: Event) =>
+            this.visualSetPresetModeAt(
+              actionIndex,
+              (e.target as HTMLSelectElement).value
+            )}
+        >
+          ${orphan ? html`<option value=${cur}>${cur} (actuel)</option>` : null}
+          ${modes.map((m) => html`<option value=${m}>${m}</option>`)}
+        </select>
+      </label>
     `;
   }
 
@@ -1851,66 +1965,6 @@ export class ScheduleManagerCard extends LitElement {
       // eslint-disable-next-line no-console
       console.error('schedule_manager.update_schedule failed', e);
     }
-  }
-
-  private renderClimatePresetSelect(selected: TimeBlock) {
-    const modes = this.getClimatePresetModesForSelected();
-    if (!modes?.length) {
-      return html``;
-    }
-    const ai = Math.min(
-      this._visualEdit!.selectedActionIndex,
-      Math.max(0, selected.actions.length - 1)
-    );
-    const action = selected.actions[ai];
-    const cur = String(
-      (action?.action_payload as Record<string, unknown>)?.preset_mode ?? ''
-    );
-    const orphan = cur && !modes.includes(cur);
-    return html`
-      <label class="sm-form-label sm-form-label-last">
-        Mode préréglé
-        <select
-          class="sm-select"
-          .value=${cur}
-          @change=${(e: Event) =>
-            this.visualSetPresetMode((e.target as HTMLSelectElement).value)}
-        >
-          ${orphan ? html`<option value=${cur}>${cur} (actuel)</option>` : null}
-          ${modes.map((m) => html`<option value=${m}>${m}</option>`)}
-        </select>
-      </label>
-    `;
-  }
-
-  private getClimatePresetModesForSelected(): string[] | null {
-    if (!this.hass || !this._visualEdit) {
-      return null;
-    }
-    const block = this._visualEdit.blocks[this._visualEdit.selectedIndex];
-    const ai = Math.min(
-      this._visualEdit.selectedActionIndex,
-      Math.max(0, (block?.actions?.length ?? 1) - 1)
-    );
-    const action = block?.actions?.[ai];
-    if (!block || !action || action.action_type.trim() !== 'climate.set_preset_mode') {
-      return null;
-    }
-    const ids = entityIdsFromPayload(action.action_payload);
-    for (const id of ids) {
-      if (!id.startsWith('climate.')) {
-        continue;
-      }
-      const st = this.hass.states[id];
-      if (!st) {
-        continue;
-      }
-      const pm = st.attributes?.preset_modes;
-      if (Array.isArray(pm) && pm.every((x): x is string => typeof x === 'string')) {
-        return pm;
-      }
-    }
-    return null;
   }
 
   private visualSetPresetMode(mode: string) {
@@ -2262,7 +2316,6 @@ export class ScheduleManagerCard extends LitElement {
                   <div class="sm-action-card">
                     <h4>Actions pendant cette plage</h4>
                     ${this.renderActionPlanningControls(selected)}
-                    ${this.renderClimatePresetSelect(selected)}
                   </div>
                 </div>
               `

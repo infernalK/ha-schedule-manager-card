@@ -117,8 +117,9 @@ function segmentLabelOne(action: BlockAction): string {
       return `${String(rec.position)}%`;
     }
   }
+  const segs = action.action_type.split('.');
   const tail = action.action_type.includes('.')
-    ? action.action_type.split('.').pop()!
+    ? segs[segs.length - 1] ?? action.action_type
     : action.action_type;
   return tail.length > 14 ? `${tail.slice(0, 12)}…` : tail;
 }
@@ -131,9 +132,9 @@ export function segmentLabel(block: TimeBlock): string {
   }
   const labels = configured.map((a) => segmentLabelOne(a));
   if (labels.length === 1) {
-    return labels[0]!;
+    return labels[0] ?? '—';
   }
-  const first = labels[0]!;
+  const first = labels[0] ?? '—';
   const suffix = ` +${labels.length - 1}`;
   const maxMain = Math.max(4, 14 - suffix.length);
   if (first.length > maxMain) {

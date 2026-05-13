@@ -152,7 +152,7 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
 
     const explicit = this._config?.schedule_ids;
-    let selected = new Set<string>(
+    const selected = new Set<string>(
       explicit && explicit.length > 0 ? explicit : allIds
     );
 
