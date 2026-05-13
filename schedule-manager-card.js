@@ -3116,7 +3116,6 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         }
         const merged = this._mergeLovelaceShallow(this._config, config);
         this._applyIncomingConfigRecord(merged);
-        this._userClearedStatusEntity = false;
         // Référence distincte : évite que Lovelace et Lit partagent la même référence mutable.
         this.config = { ...this._config };
         this.requestUpdate();
@@ -3130,17 +3129,48 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         const inc = this._configWithoutUndefinedKeys(incoming);
         return { ...p, ...inc, type: 'custom:schedule-manager-card' };
     }
+    /**
+     * Config explicite : booléens toujours présents + capteur par défaut si absent du YAML,
+     * pour que l’éditeur et le YAML reflètent le même état (évite les configs « invisibles »).
+     */
+    _canonicalEditorConfig(r) {
+        const showHeader = r.show_header !== false;
+        const showToggle = r.show_schedule_enable_toggle !== false;
+        const showRepeat = r.show_repeat_days_on_card !== false;
+        const seRaw = r.status_entity;
+        const seTrim = typeof seRaw === 'string' && seRaw.trim() ? seRaw.trim() : '';
+        const out = {
+            type: 'custom:schedule-manager-card',
+            show_header: showHeader,
+            show_schedule_enable_toggle: showToggle,
+            show_repeat_days_on_card: showRepeat,
+        };
+        if (seTrim) {
+            out.status_entity = seTrim;
+        }
+        else if (!this._userClearedStatusEntity) {
+            out.status_entity = SCHEDULE_MANAGER_STATUS_ENTITY_ID;
+        }
+        const ht = typeof r.header_title === 'string' ? r.header_title.trim() : '';
+        if (ht) {
+            out.header_title = ht;
+        }
+        const sid = r.schedule_ids;
+        if (Array.isArray(sid)) {
+            const ids = sid.map((x) => String(x).trim()).filter(Boolean);
+            if (ids.length > 0) {
+                out.schedule_ids = ids;
+            }
+        }
+        return out;
+    }
     /** Normalise une config HA → état local `_config`. */
     _applyIncomingConfigRecord(config) {
         const base = this._configWithoutUndefinedKeys(config);
-        const sid = base.schedule_ids;
-        if (Array.isArray(sid)) {
-            base.schedule_ids = [...sid];
-        }
-        this._config = {
+        this._config = this._canonicalEditorConfig({
             ...base,
             type: 'custom:schedule-manager-card',
-        };
+        });
         const te = this._headerTitleRef.value;
         if (document.activeElement !== te) {
             this._headerTitleDraft = this._config.header_title ?? '';
@@ -3488,8 +3518,8 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                 delete merged[k];
             }
         }
-        /** Même référence que `detail.config` : le parent HA supprime les clés `undefined` sur cet objet. */
-        const outgoing = { ...merged };
+        /** Objet canonique : clés explicites pour le YAML Lovelace. */
+        const outgoing = this._canonicalEditorConfig(merged);
         this._config = outgoing;
         const te = this._headerTitleRef.value;
         if (document.activeElement !== te) {
@@ -3504,18 +3534,18 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     }
     _onShowHeaderChange(ev) {
         const checked = haFormControlCheckedFromChangeEvent(ev);
-        this._patchConfig({ show_header: checked ? undefined : false });
+        this._patchConfig({ show_header: checked });
     }
     _onShowScheduleEnableToggleChange(ev) {
         const checked = haFormControlCheckedFromChangeEvent(ev);
         this._patchConfig({
-            show_schedule_enable_toggle: checked ? undefined : false,
+            show_schedule_enable_toggle: checked,
         });
     }
     _onShowRepeatDaysOnCardChange(ev) {
         const checked = haFormControlCheckedFromChangeEvent(ev);
         this._patchConfig({
-            show_repeat_days_on_card: checked ? undefined : false,
+            show_repeat_days_on_card: checked,
         });
     }
     _onHeaderTitleInput(ev) {
@@ -3929,7 +3959,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         return document.createElement('schedule-manager-card-editor');
     }
     static getStubConfig() {
-        return { type: 'custom:schedule-manager-card' };
+        return {
+            type: 'custom:schedule-manager-card',
+            status_entity: SCHEDULE_MANAGER_STATUS_ENTITY_ID,
+            show_header: true,
+            show_schedule_enable_toggle: true,
+            show_repeat_days_on_card: true,
+        };
     }
     updated(changed) {
         super.updated(changed);

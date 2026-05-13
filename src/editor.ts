@@ -148,7 +148,6 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
     const merged = this._mergeLovelaceShallow(this._config, config);
     this._applyIncomingConfigRecord(merged);
-    this._userClearedStatusEntity = false;
     // Référence distincte : évite que Lovelace et Lit partagent la même référence mutable.
     this.config = { ...(this._config as object) } as CardConfig;
     this.requestUpdate();
@@ -164,19 +163,51 @@ export class ScheduleManagerCardEditor extends LitElement {
     return { ...p, ...inc, type: 'custom:schedule-manager-card' } as unknown as CardConfig;
   }
 
+  /**
+   * Config explicite : booléens toujours présents + capteur par défaut si absent du YAML,
+   * pour que l’éditeur et le YAML reflètent le même état (évite les configs « invisibles »).
+   */
+  private _canonicalEditorConfig(r: Record<string, unknown>): CardConfig {
+    const showHeader = r.show_header !== false;
+    const showToggle = r.show_schedule_enable_toggle !== false;
+    const showRepeat = r.show_repeat_days_on_card !== false;
+    const seRaw = r.status_entity;
+    const seTrim =
+      typeof seRaw === 'string' && seRaw.trim() ? seRaw.trim() : '';
+    const out: CardConfig = {
+      type: 'custom:schedule-manager-card',
+      show_header: showHeader,
+      show_schedule_enable_toggle: showToggle,
+      show_repeat_days_on_card: showRepeat,
+    };
+    if (seTrim) {
+      out.status_entity = seTrim;
+    } else if (!this._userClearedStatusEntity) {
+      out.status_entity = SCHEDULE_MANAGER_STATUS_ENTITY_ID;
+    }
+    const ht = typeof r.header_title === 'string' ? r.header_title.trim() : '';
+    if (ht) {
+      out.header_title = ht;
+    }
+    const sid = r.schedule_ids;
+    if (Array.isArray(sid)) {
+      const ids = sid.map((x) => String(x).trim()).filter(Boolean);
+      if (ids.length > 0) {
+        out.schedule_ids = ids;
+      }
+    }
+    return out;
+  }
+
   /** Normalise une config HA → état local `_config`. */
   private _applyIncomingConfigRecord(config: CardConfig) {
     const base = this._configWithoutUndefinedKeys(
       config as unknown as Record<string, unknown>
     );
-    const sid = base.schedule_ids;
-    if (Array.isArray(sid)) {
-      base.schedule_ids = [...sid];
-    }
-    this._config = {
+    this._config = this._canonicalEditorConfig({
       ...base,
       type: 'custom:schedule-manager-card',
-    } as CardConfig;
+    });
     const te = this._headerTitleRef.value;
     if (document.activeElement !== te) {
       this._headerTitleDraft = this._config.header_title ?? '';
@@ -586,8 +617,8 @@ export class ScheduleManagerCardEditor extends LitElement {
         delete merged[k];
       }
     }
-    /** Même référence que `detail.config` : le parent HA supprime les clés `undefined` sur cet objet. */
-    const outgoing = { ...(merged as object) } as CardConfig;
+    /** Objet canonique : clés explicites pour le YAML Lovelace. */
+    const outgoing = this._canonicalEditorConfig(merged);
     this._config = outgoing;
     const te = this._headerTitleRef.value;
     if (document.activeElement !== te) {
@@ -605,20 +636,20 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   private _onShowHeaderChange(ev: Event) {
     const checked = haFormControlCheckedFromChangeEvent(ev);
-    this._patchConfig({ show_header: checked ? undefined : false });
+    this._patchConfig({ show_header: checked });
   }
 
   private _onShowScheduleEnableToggleChange(ev: Event) {
     const checked = haFormControlCheckedFromChangeEvent(ev);
     this._patchConfig({
-      show_schedule_enable_toggle: checked ? undefined : false,
+      show_schedule_enable_toggle: checked,
     });
   }
 
   private _onShowRepeatDaysOnCardChange(ev: Event) {
     const checked = haFormControlCheckedFromChangeEvent(ev);
     this._patchConfig({
-      show_repeat_days_on_card: checked ? undefined : false,
+      show_repeat_days_on_card: checked,
     });
   }
 

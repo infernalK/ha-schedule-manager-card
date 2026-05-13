@@ -392,7 +392,13 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   static getStubConfig() {
-    return { type: 'custom:schedule-manager-card' };
+    return {
+      type: 'custom:schedule-manager-card',
+      status_entity: SCHEDULE_MANAGER_STATUS_ENTITY_ID,
+      show_header: true,
+      show_schedule_enable_toggle: true,
+      show_repeat_days_on_card: true,
+    };
   }
 
   protected updated(changed: PropertyValues) {
