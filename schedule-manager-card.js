@@ -2612,8 +2612,10 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$1 {
     willUpdate(changed) {
         super.willUpdate(changed);
         // Certains flux HA posent uniquement la propriété `config` sans rappeler setConfig.
+        // Fusionner avec l’état local : un `config` partiel ne doit pas effacer `schedule_ids`, etc.
         if (changed.has('config') && this.config) {
             this._config = {
+                ...(this._config ?? {}),
                 ...this.config,
                 type: 'custom:schedule-manager-card',
             };
@@ -2672,9 +2674,20 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$1 {
     _allScheduleIds() {
         return this._scheduleEntries().map((e) => e.id);
     }
+    /** Liste explicite de plannings affichés (défini = filtre actif). */
+    _explicitScheduleIds() {
+        const raw = this._config?.schedule_ids ?? this.config?.schedule_ids;
+        if (raw == null) {
+            return undefined;
+        }
+        if (!Array.isArray(raw)) {
+            return undefined;
+        }
+        return raw.length ? raw : undefined;
+    }
     /** Filtrage actif uniquement si `schedule_ids` est une liste non vide. */
     _isScheduleChecked(scheduleId) {
-        const explicit = this._config?.schedule_ids;
+        const explicit = this._explicitScheduleIds();
         if (!explicit || explicit.length === 0) {
             return true;
         }
@@ -2687,7 +2700,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$1 {
         if (allIds.length === 0) {
             return;
         }
-        const explicit = this._config?.schedule_ids;
+        const explicit = this._explicitScheduleIds();
         const selected = new Set(explicit && explicit.length > 0 ? explicit : allIds);
         if (checked) {
             selected.add(scheduleId);
@@ -2715,28 +2728,26 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$1 {
         return x `
       <div class="card-config">
         <div class="field-block">
-          <ha-formfield label="Afficher le titre de la carte">
+          <div class="schedule-list-title">Titre de la carte</div>
+          <ha-textfield
+            label="Titre personnalisé (optionnel)"
+            .placeholder=${DEFAULT_CARD_HEADER_TITLE}
+            .value=${this._config?.header_title ?? ''}
+            @value-changed=${this._onHeaderTitleChanged}
+          ></ha-textfield>
+          <p class="hint">
+            Saisissez le texte affiché dans l’en-tête de la carte. Laissez vide pour utiliser le
+            libellé par défaut (<code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>).
+          </p>
+          <ha-formfield label="Afficher le titre sur la carte">
             <ha-switch
               .checked=${this._config?.show_header !== false}
               @change=${this._onShowHeaderChange}
             ></ha-switch>
           </ha-formfield>
           <p class="hint">
-            Le titre apparaît en haut de la carte (style en-tête Home Assistant). Désactivez-le pour
-            un affichage plus compact.
-          </p>
-        </div>
-        <div class="field-block">
-          <ha-textfield
-            .label=${'Titre affiché'}
-            .placeholder=${DEFAULT_CARD_HEADER_TITLE}
-            .value=${this._config?.header_title ?? ''}
-            .disabled=${this._config?.show_header === false}
-            @value-changed=${this._onHeaderTitleChanged}
-          ></ha-textfield>
-          <p class="hint">
-            Laissez vide pour le titre par défaut :
-            <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>
+            Désactivez pour masquer complètement la barre de titre (le texte ci-dessus reste
+            enregistré si vous la réactivez plus tard).
           </p>
         </div>
         <div class="field-block">
@@ -2761,48 +2772,49 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$1 {
             .allowCustomEntity=${true}
             @value-changed=${this._statusEntityChanged}
           ></ha-entity-picker>
-          <p class="hint">
-            En général une seule entité :
-            <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>
-            (présélectionnée si elle existe). Autre capteur seulement si vous avez plusieurs entrées
-            Schedule Manager.
-          </p>
-        </div>
-        <div class="field-block">
           ${entityMissing
             ? x `
                 <p class="hint">
-                  Capteur
+                  L’entité
                   <code class="inline">${this._resolvedStatusEntityId()}</code>
-                  introuvable — vérifiez l’intégration Schedule Manager.
+                  est introuvable. Vérifiez que l’intégration Schedule Manager est installée et
+                  chargée ; le capteur attendu est en général
+                  <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>.
                 </p>
               `
-            : entries.length === 0
-                ? x `
-                  <p class="hint">
-                    Aucun planning dans les attributs du capteur pour l’instant. Créez un planning
-                    depuis la carte ou le service
-                    <code class="inline">schedule_manager.create_schedule</code>.
-                  </p>
-                `
-                : x `
-                  <div class="schedule-list-title">Plannings à afficher sur la carte</div>
-                  <p class="hint">
-                    Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer
-                    un planning (au moins un reste visible).
-                  </p>
-                  <div class="schedule-list">
-                    ${entries.map((row) => x `
-                        <ha-formfield label=${row.name}>
-                          <ha-checkbox
-                            .checked=${this._isScheduleChecked(row.id)}
-                            @change=${(e) => this._onScheduleCheck(e, row.id)}
-                          ></ha-checkbox>
-                        </ha-formfield>
-                      `)}
-                  </div>
-                `}
+            : x ``}
         </div>
+        ${!entityMissing
+            ? x `
+              <div class="field-block">
+                ${entries.length === 0
+                ? x `
+                      <p class="hint">
+                        Aucun planning dans les attributs du capteur pour l’instant. Créez un
+                        planning depuis la carte ou le service
+                        <code class="inline">schedule_manager.create_schedule</code>.
+                      </p>
+                    `
+                : x `
+                      <div class="schedule-list-title">Plannings à afficher sur la carte</div>
+                      <p class="hint">
+                        Toutes les cases cochées = afficher tous les plannings. Décochez pour
+                        masquer un planning (au moins un reste visible).
+                      </p>
+                      <div class="schedule-list">
+                        ${entries.map((row) => x `
+                            <ha-formfield label=${row.name}>
+                              <ha-checkbox
+                                .checked=${this._isScheduleChecked(row.id)}
+                                @change=${(e) => this._onScheduleCheck(e, row.id)}
+                              ></ha-checkbox>
+                            </ha-formfield>
+                          `)}
+                      </div>
+                    `}
+              </div>
+            `
+            : x ``}
       </div>
     `;
     }
