@@ -1016,6 +1016,145 @@ export const styles = css`
     min-height: 48px;
   }
 
+  .sm-entity-manual-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .sm-entity-manual-search {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    min-height: 48px;
+    padding: 0 4px 0 10px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--ha-card-background, var(--card-background-color));
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+
+  .sm-entity-manual-search:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-color);
+  }
+
+  .sm-entity-manual-search-icon {
+    flex-shrink: 0;
+    color: var(--secondary-text-color);
+    --mdc-icon-size: 22px;
+  }
+
+  .sm-entity-manual-filter {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 10px 8px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 1rem;
+  }
+
+  .sm-entity-manual-filter::placeholder {
+    color: var(--secondary-text-color);
+    opacity: 0.85;
+  }
+
+  .sm-entity-manual-list {
+    max-height: min(42vh, 320px);
+    overflow-y: auto;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--ha-card-background, var(--card-background-color));
+    min-width: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  }
+
+  .sm-entity-manual-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin: 0;
+    padding: 10px 12px;
+    border: none;
+    border-bottom: 1px solid var(--divider-color);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+
+  .sm-entity-manual-row:last-child {
+    border-bottom: none;
+  }
+
+  .sm-entity-manual-row:hover {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.08);
+  }
+
+  .sm-entity-manual-badge {
+    flex-shrink: 0;
+    line-height: 0;
+    --state-badge-size: 40px;
+  }
+
+  .sm-entity-manual-icon-fallback {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(127, 127, 127, 0.22);
+    color: var(--primary-text-color);
+  }
+
+  .sm-entity-manual-icon-fallback ha-icon {
+    --mdc-icon-size: 22px;
+  }
+
+  .sm-entity-manual-row-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .sm-entity-manual-row-name {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--primary-text-color);
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .sm-entity-manual-row-id {
+    font-size: 0.78rem;
+    color: var(--secondary-text-color);
+    line-height: 1.2;
+    word-break: break-all;
+  }
+
+  .sm-entity-manual-empty {
+    margin: 0;
+    padding: 12px 10px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--secondary-text-color);
+  }
+
   .sm-action-climate-preset {
     margin-top: 4px;
   }
@@ -1183,15 +1322,6 @@ export const styles = css`
   .sm-action-entities-quick-hint code {
     font-size: 0.95em;
     word-break: break-all;
-  }
-
-  .sm-action-entities-quick-picker {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    min-height: 56px;
-    margin-top: 8px;
   }
 
   /* Assistant plein écran au-dessus du modal d’édition */

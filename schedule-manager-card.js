@@ -1214,6 +1214,145 @@ const styles = i$4 `
     min-height: 48px;
   }
 
+  .sm-entity-manual-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .sm-entity-manual-search {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    min-height: 48px;
+    padding: 0 4px 0 10px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--ha-card-background, var(--card-background-color));
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+
+  .sm-entity-manual-search:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-color);
+  }
+
+  .sm-entity-manual-search-icon {
+    flex-shrink: 0;
+    color: var(--secondary-text-color);
+    --mdc-icon-size: 22px;
+  }
+
+  .sm-entity-manual-filter {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    padding: 10px 8px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 1rem;
+  }
+
+  .sm-entity-manual-filter::placeholder {
+    color: var(--secondary-text-color);
+    opacity: 0.85;
+  }
+
+  .sm-entity-manual-list {
+    max-height: min(42vh, 320px);
+    overflow-y: auto;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--ha-card-background, var(--card-background-color));
+    min-width: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  }
+
+  .sm-entity-manual-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    margin: 0;
+    padding: 10px 12px;
+    border: none;
+    border-bottom: 1px solid var(--divider-color);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+
+  .sm-entity-manual-row:last-child {
+    border-bottom: none;
+  }
+
+  .sm-entity-manual-row:hover {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.08);
+  }
+
+  .sm-entity-manual-badge {
+    flex-shrink: 0;
+    line-height: 0;
+    --state-badge-size: 40px;
+  }
+
+  .sm-entity-manual-icon-fallback {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(127, 127, 127, 0.22);
+    color: var(--primary-text-color);
+  }
+
+  .sm-entity-manual-icon-fallback ha-icon {
+    --mdc-icon-size: 22px;
+  }
+
+  .sm-entity-manual-row-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .sm-entity-manual-row-name {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--primary-text-color);
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .sm-entity-manual-row-id {
+    font-size: 0.78rem;
+    color: var(--secondary-text-color);
+    line-height: 1.2;
+    word-break: break-all;
+  }
+
+  .sm-entity-manual-empty {
+    margin: 0;
+    padding: 12px 10px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--secondary-text-color);
+  }
+
   .sm-action-climate-preset {
     margin-top: 4px;
   }
@@ -1381,15 +1520,6 @@ const styles = i$4 `
   .sm-action-entities-quick-hint code {
     font-size: 0.95em;
     word-break: break-all;
-  }
-
-  .sm-action-entities-quick-picker {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    min-height: 56px;
-    margin-top: 8px;
   }
 
   /* Assistant plein écran au-dessus du modal d’édition */
@@ -2807,12 +2937,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
         /** Nom court du service sélectionné (ex. turn_on) avant le choix de l’entité. */
         this._actionWizardServiceShort = null;
         this._actionWizardEntityId = null;
-        /** Réinitialise le sélecteur rapide d’entités après ajout. */
-        this._quickEntityPickerNonce = 0;
         /** `${blockIdx}-${actionIdx}` quand le panneau d’ajout d’entité (bouton +) est ouvert. */
         this._entityAddPickerOpenKey = null;
         /** Panneau « remplacer cette entité » après clic sur une puce. */
         this._entityPickerReplace = null;
+        /** Filtre texte pour la liste manuelle d’entités (remplace ha-entity-picker dans le modal). */
+        this._entityManualListSearch = '';
         /** Réglé à l’ouverture de l’assistant : action à mettre à jour (évite décalage avec selectedActionIndex). */
         this._actionWizardTargetActionIndex = 0;
         /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
@@ -2950,24 +3080,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
                 this._detachEditorFriseObserver();
                 this._editorFriseWidth = 0;
             }
-        }
-        const pickerUi = changed.has('_entityAddPickerOpenKey') ||
-            changed.has('_entityPickerReplace') ||
-            changed.has('_quickEntityPickerNonce');
-        if (pickerUi && (this._entityAddPickerOpenKey || this._entityPickerReplace)) {
-            requestAnimationFrame(() => this._tryOpenQuickEntityPicker());
-        }
-    }
-    /** Ouvre la liste du `ha-entity-picker` (HA récent : `ha-generic-picker`). */
-    _tryOpenQuickEntityPicker() {
-        const root = this.shadowRoot;
-        if (!root) {
-            return;
-        }
-        const pickers = root.querySelectorAll('ha-entity-picker.sm-action-entities-quick-picker');
-        const last = pickers.item(pickers.length - 1);
-        if (last && typeof last.open === 'function') {
-            void last.open();
         }
     }
     statusEntityId() {
@@ -3316,7 +3428,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
         this._editorFriseWidth = 0;
         this._visualEdit = null;
         this._actionWizardOpen = false;
-        this._quickEntityPickerNonce = 0;
         this.closeEntityAddPicker();
     }
     endBoundaryDrag() {
@@ -3694,12 +3805,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
     primaryEntityFromAction(action) {
         return entityIdsFromPayload(action.action_payload)[0] ?? '';
     }
-    /** Domaine HA pour restreindre le picker (complète entityFilter). */
-    includeDomainsForEntityPicker(action) {
-        const parsed = parseDomainService(String(action.action_type ?? '').trim());
-        return parsed?.domain ? [parsed.domain] : undefined;
-    }
-    /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
+    /** Première entité ciblée dans le payload (pour l’UI et les services). */
     entityFilterForConfiguredAction(selected) {
         const actionType = String(selected.action_type ?? '').trim();
         const hass = this.hass;
@@ -3710,6 +3816,126 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             }
             return entityCompatibleWithAction(entityId, actionType, hass);
         };
+    }
+    /** Entités `hass.states` compatibles avec l’action (même règles que l’ancien picker HA). */
+    compatibleEntityChoicesForAction(action, excludeEntityIds) {
+        const hass = this.hass;
+        if (!hass) {
+            return [];
+        }
+        const filterFn = this.entityFilterForConfiguredAction(action);
+        const omit = new Set(excludeEntityIds);
+        const out = [];
+        for (const id of Object.keys(hass.states)) {
+            if (!id.includes('.') || omit.has(id)) {
+                continue;
+            }
+            const st = hass.states[id];
+            const ok = filterFn({
+                entity_id: id,
+                state: st.state,
+                attributes: st.attributes,
+            });
+            if (!ok) {
+                continue;
+            }
+            out.push({ id, name: friendlyEntityName(hass, id) });
+        }
+        out.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }) || a.id.localeCompare(b.id));
+        return out;
+    }
+    quickPickEntityAppend(actionIndex, entityId) {
+        const ev = new CustomEvent('value-changed', {
+            detail: { value: entityId },
+        });
+        if (this.visualAppendEntityAt(actionIndex, ev)) {
+            this.closeEntityAddPicker();
+        }
+    }
+    quickPickEntityReplace(actionIndex, oldEntityId, entityId) {
+        const ev = new CustomEvent('value-changed', {
+            detail: { value: entityId },
+        });
+        if (this.visualReplaceEntityAt(actionIndex, oldEntityId, ev)) {
+            this.closeEntityAddPicker();
+        }
+    }
+    renderQuickEntityPickerPanel(action, actionIndex, mode, oldEntityId) {
+        const hass = this.hass;
+        if (!hass) {
+            return x ``;
+        }
+        const payloadIds = entityIdsFromPayload(action.action_payload);
+        const exclude = mode === 'replace' && oldEntityId
+            ? payloadIds.filter((id) => id !== oldEntityId)
+            : payloadIds;
+        const rows = this.compatibleEntityChoicesForAction(action, exclude);
+        const q = this._entityManualListSearch.trim().toLowerCase();
+        const filtered = q === ''
+            ? rows
+            : rows.filter((r) => r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+        return x `
+      <div class="sm-entity-manual-picker">
+        <div class="sm-entity-manual-search">
+          <ha-icon class="sm-entity-manual-search-icon" icon="mdi:magnify"></ha-icon>
+          <input
+            type="search"
+            class="sm-entity-manual-filter"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Rechercher des entités"
+            placeholder="Rechercher des entités"
+            .value=${this._entityManualListSearch}
+            @input=${(e) => {
+            this._entityManualListSearch = e.target.value;
+        }}
+          />
+        </div>
+        <div class="sm-entity-manual-list" role="listbox" aria-label="Entités compatibles">
+          ${filtered.length === 0
+            ? x `<p class="sm-entity-manual-empty">
+                Aucune entité compatible${q ? ' pour cette recherche' : ''}. Vérifiez le type
+                d’action ou utilisez « Modifier l’action ».
+              </p>`
+            : filtered.map((r) => {
+                const st = hass.states[r.id];
+                const dom = r.id.includes('.') ? (r.id.split('.')[0] ?? '') : '';
+                return x `
+                  <button
+                    type="button"
+                    role="option"
+                    class="sm-entity-manual-row"
+                    @click=${() => {
+                    if (mode === 'append') {
+                        this.quickPickEntityAppend(actionIndex, r.id);
+                    }
+                    else if (oldEntityId) {
+                        this.quickPickEntityReplace(actionIndex, oldEntityId, r.id);
+                    }
+                }}
+                  >
+                    ${st
+                    ? x `<state-badge
+                          class="sm-entity-manual-badge"
+                          .hass=${hass}
+                          .stateObj=${st}
+                        ></state-badge>`
+                    : x `<div class="sm-entity-manual-icon-fallback">
+                          <ha-icon
+                            icon=${entityIcon(hass, r.id) ??
+                        (dom ? domainIcon(dom) : 'mdi:shape-outline')}
+                          ></ha-icon>
+                        </div>`}
+                    <div class="sm-entity-manual-row-text">
+                      <span class="sm-entity-manual-row-name">${r.name}</span>
+                      <span class="sm-entity-manual-row-id">${r.id}</span>
+                    </div>
+                  </button>
+                `;
+            })}
+        </div>
+      </div>
+    `;
     }
     visualAppendEntity(ev, actionIndexOverride) {
         if (!this._visualEdit || !this.hass) {
@@ -3741,7 +3967,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
         const nextIds = [...ids, v];
         base.entity_id = nextIds.length === 1 ? nextIds[0] : nextIds;
         this.visualPatchSelectedAction({ action_payload: base }, ai);
-        this._quickEntityPickerNonce += 1;
         return true;
     }
     visualReplaceEntity(oldEntityId, ev, actionIndexOverride) {
@@ -3774,7 +3999,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             : {};
         base.entity_id = nextIds.length === 1 ? nextIds[0] : nextIds;
         this.visualPatchSelectedAction({ action_payload: base }, ai);
-        this._quickEntityPickerNonce += 1;
         return true;
     }
     visualRemoveEntityChip(entityId, actionIndexOverride) {
@@ -3801,7 +4025,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             : {};
         base.entity_id = ids.length === 1 ? ids[0] : ids;
         this.visualPatchSelectedAction({ action_payload: base }, ai);
-        this._quickEntityPickerNonce += 1;
     }
     /** Modes préréglés exposés par l’entité climate (pour l’étape assistant). */
     climatePresetModesForEntityId(entityId) {
@@ -3998,6 +4221,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
     closeEntityAddPicker() {
         this._entityAddPickerOpenKey = null;
         this._entityPickerReplace = null;
+        this._entityManualListSearch = '';
     }
     toggleEntityAddPicker(blockIdx, actionIdx) {
         const k = this.entityAddPickerKey(blockIdx, actionIdx);
@@ -4006,13 +4230,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             return;
         }
         this._entityPickerReplace = null;
+        this._entityManualListSearch = '';
         this._entityAddPickerOpenKey = k;
-        this._quickEntityPickerNonce += 1;
     }
     openEntityReplacePicker(blockIdx, actionIdx, oldEntityId) {
         this._entityAddPickerOpenKey = null;
+        this._entityManualListSearch = '';
         this._entityPickerReplace = { blockIdx, actionIdx, oldEntityId };
-        this._quickEntityPickerNonce += 1;
     }
     entityReplacePanelActive(blockIdx, actionIdx) {
         const r = this._entityPickerReplace;
@@ -4224,7 +4448,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
         </div>
       `;
         }
-        const scheduleKey = this._visualEdit.scheduleId;
         const blockIdx = this._visualEdit.selectedIndex;
         return x `
       <div class="sm-action-entry">
@@ -4264,8 +4487,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
                       <div class="sm-action-entities-quick">
                         <span class="sm-action-entities-quick-title">Entités ciblées</span>
                         <p class="sm-action-entities-quick-hint">
-                          Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » pour en
-                          ajouter une (compatible avec <code>${action.action_type}</code>).
+                          Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » puis
+                          choisissez dans la liste (recherche et pastilles comme dans Home Assistant) —
+                          compatible avec <code>${action.action_type}</code>.
                         </p>
                         <div class="entity-chips">
                           ${entityIdsFromPayload(action.action_payload).map((eid) => x `
@@ -4311,25 +4535,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
                                   </button>
                                 </div>
                                 <div class="sm-entity-picker-shell sm-entity-picker-shell--popover">
-                                  <ha-entity-picker
-                                    class="sm-action-entities-quick-picker"
-                                    .hass=${hass}
-                                    .includeDomains=${this.includeDomainsForEntityPicker(action)}
-                                    .entityFilter=${this.entityFilterForConfiguredAction(action)}
-                                    .allowCustomEntity=${true}
-                                    label="Choisir une autre entité…"
-                                    .value=${this._entityPickerReplace.oldEntityId}
-                                    id=${`sm-replace-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
-                                    @value-changed=${(e) => {
-                        const old = this._entityPickerReplace?.oldEntityId;
-                        if (!old) {
-                            return;
-                        }
-                        if (this.visualReplaceEntityAt(i, old, e)) {
-                            this.closeEntityAddPicker();
-                        }
-                    }}
-                                  ></ha-entity-picker>
+                                  ${this.renderQuickEntityPickerPanel(action, i, 'replace', this._entityPickerReplace.oldEntityId)}
                                 </div>
                               </div>
                             `
@@ -4363,21 +4569,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
                           ${this._entityAddPickerOpenKey === this.entityAddPickerKey(blockIdx, i)
                     ? x `
                                 <div class="sm-entity-picker-shell sm-entity-picker-shell--popover">
-                                  <ha-entity-picker
-                                    class="sm-action-entities-quick-picker"
-                                    .hass=${hass}
-                                    .includeDomains=${this.includeDomainsForEntityPicker(action)}
-                                    .entityFilter=${this.entityFilterForConfiguredAction(action)}
-                                    .allowCustomEntity=${true}
-                                    label="Rechercher ou choisir une entité…"
-                                    .value=${''}
-                                    id=${`sm-quick-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
-                                    @value-changed=${(e) => {
-                        if (this.visualAppendEntityAt(i, e)) {
-                            this.closeEntityAddPicker();
-                        }
-                    }}
-                                  ></ha-entity-picker>
+                                  ${this.renderQuickEntityPickerPanel(action, i, 'append')}
                                 </div>
                               `
                     : null}
@@ -4887,13 +5079,13 @@ __decorate([
 ], ScheduleManagerCard.prototype, "_actionWizardEntityId", void 0);
 __decorate([
     t()
-], ScheduleManagerCard.prototype, "_quickEntityPickerNonce", void 0);
-__decorate([
-    t()
 ], ScheduleManagerCard.prototype, "_entityAddPickerOpenKey", void 0);
 __decorate([
     t()
 ], ScheduleManagerCard.prototype, "_entityPickerReplace", void 0);
+__decorate([
+    t()
+], ScheduleManagerCard.prototype, "_entityManualListSearch", void 0);
 __decorate([
     t()
 ], ScheduleManagerCard.prototype, "_editorFriseWidth", void 0);
