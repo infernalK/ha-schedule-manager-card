@@ -929,17 +929,17 @@ const styles = i$4 `
 
   .sm-action-card {
     margin-top: 4px;
-    padding: 12px;
-    border-radius: 10px;
-    border: 1px solid var(--divider-color);
-    background: rgba(127, 127, 127, 0.06);
+    padding: 0;
+    border: none;
+    background: transparent;
   }
 
   .sm-action-card h4 {
     margin: 0 0 10px;
-    font-size: 0.88em;
-    font-weight: 600;
-    color: var(--secondary-text-color);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
   }
 
   .sm-field-hint {
