@@ -730,12 +730,7 @@ export class ScheduleManagerCard extends LitElement {
         </button>
 
         ${blocks.length
-          ? html`
-              <div class="timeline-hint">
-                ${msg(this.hass, 'card.timeline_hint')}
-              </div>
-              ${this.renderDayTimeline(blocks)}
-            `
+          ? html`${this.renderDayTimeline(blocks)}`
           : html`
               <div class="empty-hint">
                 ${msg(this.hass, 'card.no_slots_hint')}

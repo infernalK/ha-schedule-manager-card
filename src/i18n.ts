@@ -205,7 +205,6 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.create_schedule': 'Create schedule',
     'card.empty_list': 'Nothing to display.',
     'card.configure_slots': 'Configure time slots…',
-    'card.timeline_hint': 'Graphic preview — open configuration to edit slots.',
     'card.no_slots_hint': 'No time slots — use “Configure time slots…” to add some.',
     'card.timeline_aria': 'Time slots over 24 hours',
     'card.default_header_title': 'Schedule Manager',
@@ -338,8 +337,6 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.create_schedule': 'Créer le planning',
     'card.empty_list': 'Aucun élément à afficher.',
     'card.configure_slots': 'Configurer les plages…',
-    'card.timeline_hint':
-      'Aperçu graphique — ouvrez la configuration pour modifier les plages.',
     'card.no_slots_hint':
       'Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.',
     'card.timeline_aria': 'Plages sur 24 heures',

@@ -116,13 +116,6 @@ export const styles = css`
     border-radius: 4px;
   }
 
-  .timeline-hint {
-    font-size: 0.78em;
-    color: var(--secondary-text-color);
-    margin: -4px 0 8px;
-    line-height: 1.35;
-  }
-
   /* Frise 24 h — pas de cadre : la barre de plages se suffit visuellement */
   .timeline-frise {
     margin: 0 0 16px;

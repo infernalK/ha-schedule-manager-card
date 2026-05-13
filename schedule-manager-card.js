@@ -316,13 +316,6 @@ const styles = i$4 `
     border-radius: 4px;
   }
 
-  .timeline-hint {
-    font-size: 0.78em;
-    color: var(--secondary-text-color);
-    margin: -4px 0 8px;
-    line-height: 1.35;
-  }
-
   /* Frise 24 h — pas de cadre : la barre de plages se suffit visuellement */
   .timeline-frise {
     margin: 0 0 16px;
@@ -1964,7 +1957,6 @@ const MESSAGES = {
         'card.create_schedule': 'Create schedule',
         'card.empty_list': 'Nothing to display.',
         'card.configure_slots': 'Configure time slots…',
-        'card.timeline_hint': 'Graphic preview — open configuration to edit slots.',
         'card.no_slots_hint': 'No time slots — use “Configure time slots…” to add some.',
         'card.timeline_aria': 'Time slots over 24 hours',
         'card.default_header_title': 'Schedule Manager',
@@ -2081,7 +2073,6 @@ const MESSAGES = {
         'card.create_schedule': 'Créer le planning',
         'card.empty_list': 'Aucun élément à afficher.',
         'card.configure_slots': 'Configurer les plages…',
-        'card.timeline_hint': 'Aperçu graphique — ouvrez la configuration pour modifier les plages.',
         'card.no_slots_hint': 'Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.',
         'card.timeline_aria': 'Plages sur 24 heures',
         'card.default_header_title': 'Schedule Manager',
@@ -4158,12 +4149,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         </button>
 
         ${blocks.length
-            ? x `
-              <div class="timeline-hint">
-                ${msg(this.hass, 'card.timeline_hint')}
-              </div>
-              ${this.renderDayTimeline(blocks)}
-            `
+            ? x `${this.renderDayTimeline(blocks)}`
             : x `
               <div class="empty-hint">
                 ${msg(this.hass, 'card.no_slots_hint')}
