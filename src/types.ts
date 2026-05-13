@@ -24,6 +24,8 @@ export interface HomeAssistant {
     service: string,
     data?: Record<string, unknown>
   ): Promise<unknown>;
+  /** Langue BCP‑47 (ex. `fr`, `en-GB`) — fournie par Lovelace / Home Assistant. */
+  locale?: { language: string };
 }
 
 export interface Schedule {

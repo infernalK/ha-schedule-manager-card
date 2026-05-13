@@ -6,7 +6,6 @@ import { styleMap } from 'lit/directives/style-map.js';
 import {
   BlockAction,
   CardConfig,
-  DEFAULT_CARD_HEADER_TITLE,
   HomeAssistant,
   Schedule,
   TimeBlock,
@@ -28,15 +27,14 @@ import {
 } from './action-service-helpers';
 import {
   domainIcon,
-  domainLabelFr,
   entityIcon,
   friendlyEntityName,
   listEntitiesInDomain,
   listEntityIdsForAction,
   listSelectableDomains,
-  servicePrimaryLabel,
   serviceSecondaryHint,
 } from './action-wizard-i18n';
+import { domainLabel, msg, servicePrimaryLabel, weekdayShort } from './i18n';
 import { climatePresetModesList, entityCompatibleWithAction } from './entity-domains';
 import {
   blockTimelineFill,
@@ -63,8 +61,6 @@ import {
 } from './timeline-helpers';
 
 import './editor';
-
-const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 
 /** Pastilles de couleur rapides (+ valeur du sélecteur). */
 const BLOCK_COLOR_PRESETS = [
@@ -418,8 +414,11 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private _cardHeaderTitleText(): string {
-    const t = this.config?.header_title?.trim();
-    return t || DEFAULT_CARD_HEADER_TITLE;
+    const raw = this.config?.header_title?.trim();
+    if (raw) {
+      return raw;
+    }
+    return msg(this.hass, 'card.default_header_title');
   }
 
   private _renderCardHeader() {
@@ -460,18 +459,19 @@ export class ScheduleManagerCard extends LitElement {
 
   render() {
     if (!this.hass || !this.config) {
-      return html`<ha-card><div class="card-content">Chargement…</div></ha-card>`;
+      return html`<ha-card><div class="card-content">${msg(undefined, 'card.loading')}</div></ha-card>`;
     }
 
     const scheduleIds = this.config.schedule_ids || [];
     const schedulesMap = this.getSchedulesRecord();
+    const hass = this.hass;
 
-    if (!this.hass.states[this.statusEntityId()]) {
+    if (!hass.states[this.statusEntityId()]) {
       return html`
         <ha-card>
           ${this._renderCardHeader()}
           <div class="card-content">
-            Entité introuvable : <code>${this.statusEntityId()}</code>
+            ${msg(hass, 'card.entity_missing')} <code>${this.statusEntityId()}</code>
           </div>
         </ha-card>
       `;
@@ -492,6 +492,10 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private renderSchedulesList(scheduleIds: string[], schedulesMap: Record<string, Schedule>) {
+    const hass = this.hass;
+    if (!hass) {
+      return html``;
+    }
     const totalCount = Object.keys(schedulesMap).length;
     const list: Schedule[] =
       scheduleIds.length > 0
@@ -509,25 +513,21 @@ export class ScheduleManagerCard extends LitElement {
       if (scheduleIds.length > 0 && totalCount > 0) {
         return html`
           <div class="empty-hint">
-            Aucun planning ne correspond aux
-            <code class="inline">schedule_ids</code>
-            de la carte. Vérifiez les UUID dans les attributs du capteur
-            <code class="inline">schedules</code>.
+            ${msg(hass, 'card.empty_filter_schedules')}
           </div>
         `;
       }
       if (totalCount === 0) {
         return html`
           <div class="empty-hint">
-            Aucun planning enregistré pour l’instant. Créez-en un ci-dessous ou via
-            <strong>Outils de développement → Actions</strong> :
+            ${msg(hass, 'card.empty_no_schedules')}
             <code class="inline">schedule_manager.create_schedule</code>
-            (service <code class="inline">name</code> obligatoire).
+            ${msg(hass, 'card.empty_no_schedules_service')}
           </div>
           <div class="create-row">
             <input
               type="text"
-              placeholder="Nom du planning (ex. Semaine)"
+              placeholder=${msg(hass, 'card.placeholder_schedule_name')}
               .value=${this._newScheduleName}
               @input=${(e: Event) => {
                 this._newScheduleName = (e.target as HTMLInputElement).value;
@@ -543,12 +543,12 @@ export class ScheduleManagerCard extends LitElement {
               ?disabled=${this._creating || !this._newScheduleName.trim()}
               @click=${() => this.createScheduleFromInput()}
             >
-              ${this._creating ? 'Création…' : 'Créer le planning'}
+              ${this._creating ? msg(hass, 'card.creating') : msg(hass, 'card.create_schedule')}
             </button>
           </div>
         `;
       }
-      return html`<div class="empty-hint">Aucun élément à afficher.</div>`;
+      return html`<div class="empty-hint">${msg(hass, 'card.empty_list')}</div>`;
     }
 
     return html`${list.map((s) => this.renderSchedule(s))}`;
@@ -633,7 +633,7 @@ export class ScheduleManagerCard extends LitElement {
     const showNow = segments.length > 0;
     const nowPct = nowPercentOfDay();
     return html`
-      <div class="timeline-frise sm-scheduler-frise" role="img" aria-label="Plages sur 24 heures">
+      <div class="timeline-frise sm-scheduler-frise" role="img" aria-label=${msg(this.hass, 'card.timeline_aria')}>
         <div class="sm-scheduler-track">
           <div class="sm-scheduler-bar">
             ${segments.map((s, i) => {
@@ -717,19 +717,19 @@ export class ScheduleManagerCard extends LitElement {
           class="btn-open-config"
           @click=${() => this.openVisualEditor(schedule)}
         >
-          Configurer les plages…
+          ${msg(this.hass, 'card.configure_slots')}
         </button>
 
         ${blocks.length
           ? html`
               <div class="timeline-hint">
-                Aperçu graphique — ouvrez la configuration pour modifier les plages.
+                ${msg(this.hass, 'card.timeline_hint')}
               </div>
               ${this.renderDayTimeline(blocks)}
             `
           : html`
               <div class="empty-hint">
-                Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.
+                ${msg(this.hass, 'card.no_slots_hint')}
               </div>
             `}
       </div>
@@ -1025,7 +1025,7 @@ export class ScheduleManagerCard extends LitElement {
       days = [...days, day].sort((a, b) => a - b);
     }
     if (days.length === 0) {
-      alert('Sélectionnez au moins un jour.');
+      alert(msg(this.hass, 'card.alert_select_day'));
       return;
     }
     this._visualEdit = { ...this._visualEdit, repeatDays: days };
@@ -1061,15 +1061,13 @@ export class ScheduleManagerCard extends LitElement {
     }
     const next = { ...cur, ...patch } as TimeBlock;
     if (!isOvernightBlock(next) && !sameDayBlockIntervalExclusiveEnd(next)) {
-      alert(
-        'Pour une plage sur une même journée, l’heure de fin doit être strictement après le début.'
-      );
+      alert(msg(this.hass, 'card.alert_end_after_start'));
       return;
     }
     const trial = [...this._visualEdit.blocks];
     trial[sel] = next;
     if (hasOverlappingSameDayBlocks(trial)) {
-      alert('Les plages horaires ne peuvent pas se chevaucher.');
+      alert(msg(this.hass, 'card.alert_overlap'));
       return;
     }
     this._visualEdit = { ...this._visualEdit, blocks: trial };
@@ -1151,7 +1149,7 @@ export class ScheduleManagerCard extends LitElement {
     const bi = this._visualEdit.selectedIndex;
     const b = this._visualEdit.blocks[bi];
     if (!b || b.actions.length <= 1) {
-      alert('Chaque plage doit conserver au moins une action.');
+      alert(msg(this.hass, 'card.alert_min_one_action'));
       return;
     }
     const actions = b.actions.filter((_, i) => i !== ai);
@@ -1186,9 +1184,7 @@ export class ScheduleManagerCard extends LitElement {
       nextBlocks = [...this._visualEdit.blocks, nb];
       selectedIndex = nextBlocks.length - 1;
       if (hasOverlappingSameDayBlocks(nextBlocks)) {
-        alert(
-          'Impossible d’ajouter cette plage sans chevauchement. Modifiez les horaires existants.'
-        );
+        alert(msg(this.hass, 'card.alert_cannot_add_overlap'));
         return;
       }
     } else {
@@ -1197,9 +1193,7 @@ export class ScheduleManagerCard extends LitElement {
         TIMELINE_DRAG_SNAP_MINUTES
       );
       if (!split) {
-        alert(
-          'La journée est déjà entièrement couverte. Supprimez ou raccourcissez une plage avant d’en ajouter une autre.'
-        );
+        alert(msg(this.hass, 'card.alert_day_full'));
         return;
       }
       nextBlocks = split;
@@ -1210,7 +1204,7 @@ export class ScheduleManagerCard extends LitElement {
     const fp = blockFingerprint(nb);
     for (const b of this._visualEdit.blocks) {
       if (blockFingerprint(b) === fp) {
-        alert('Une plage identique existe déjà — modifiez les horaires ou le service.');
+        alert(msg(this.hass, 'card.alert_duplicate_slot'));
         return;
       }
     }
@@ -1295,6 +1289,7 @@ export class ScheduleManagerCard extends LitElement {
     const exclude = payloadIds;
     const rows = this.compatibleEntityChoicesForAction(action, exclude);
     const q = this._entityManualListSearch.trim().toLowerCase();
+    const emptyQ = q ? msg(hass, 'card.entity_manual_empty_q') : '';
     const filtered =
       q === ''
         ? rows
@@ -1311,19 +1306,18 @@ export class ScheduleManagerCard extends LitElement {
             class="sm-entity-manual-filter"
             autocomplete="off"
             spellcheck="false"
-            aria-label="Rechercher des entités"
-            placeholder="Rechercher des entités"
+            aria-label=${msg(hass, 'card.entity_search_aria')}
+            placeholder=${msg(hass, 'card.entity_search_placeholder')}
             .value=${this._entityManualListSearch}
             @input=${(e: Event) => {
               this._entityManualListSearch = (e.target as HTMLInputElement).value;
             }}
           />
         </div>
-        <div class="sm-entity-manual-list" role="listbox" aria-label="Entités compatibles">
+        <div class="sm-entity-manual-list" role="listbox" aria-label=${msg(hass, 'card.entity_list_aria')}>
           ${filtered.length === 0
             ? html`<p class="sm-entity-manual-empty">
-                Aucune entité compatible${q ? ' pour cette recherche' : ''}. Vérifiez le type
-                d’action ou utilisez « Modifier l’action ».
+                ${msg(hass, 'card.entity_manual_empty', { q: emptyQ })}
               </p>`
             : filtered.map((r) => {
                 const st = hass.states[r.id];
@@ -1470,9 +1464,7 @@ export class ScheduleManagerCard extends LitElement {
     }
     const ids = entityIdsFromPayload(action.action_payload).filter((e) => e !== entityId);
     if (ids.length === 0) {
-      alert(
-        'Conservez au moins une entité, ou utilisez « Modifier l’action » pour tout reconfigurer.'
-      );
+      alert(msg(this.hass, 'card.alert_min_one_entity'));
       return;
     }
     const base =
@@ -1656,9 +1648,9 @@ export class ScheduleManagerCard extends LitElement {
       : 'mdi:gesture-tap-button';
     const title = primary
       ? friendlyEntityName(hass, primary)
-      : 'Aucune entité sélectionnée';
+      : msg(hass, 'card.no_entity_selected');
     const actionLine = parsed
-      ? servicePrimaryLabel(parsed.domain, parsed.service)
+      ? servicePrimaryLabel(hass, parsed.domain, parsed.service)
       : selected.action_type || '—';
 
     return html`
@@ -1678,12 +1670,12 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private formatActionTabTitle(action: BlockAction, index: number): string {
-    const t = String(action.action_type ?? '').trim();
-    if (!t) {
-      return `Action ${index + 1}`;
+    const at = String(action.action_type ?? '').trim();
+    if (!at) {
+      return msg(this.hass, 'card.action_tab_fallback', { n: String(index + 1) });
     }
-    const segs = t.split('.');
-    const tail = t.includes('.') ? segs[segs.length - 1] ?? t : t;
+    const segs = at.split('.');
+    const tail = at.includes('.') ? segs[segs.length - 1] ?? at : at;
     return tail.length > 20 ? `${tail.slice(0, 18)}…` : tail;
   }
 
@@ -1775,11 +1767,11 @@ export class ScheduleManagerCard extends LitElement {
 
     if (step === 'domain') {
       const domains = listSelectableDomains(hass).filter(
-        (d) => matches(domainLabelFr(d)) || matches(d)
+        (d) => matches(domainLabel(hass, d)) || matches(d)
       );
       body =
         domains.length === 0
-          ? html`<p class="sm-ap-empty">Aucun résultat.</p>`
+          ? html`<p class="sm-ap-empty">${msg(hass, 'card.wizard_no_results')}</p>`
           : html`<div class="sm-ap-scroll">
               ${domains.map(
                 (d) => html`
@@ -1790,7 +1782,7 @@ export class ScheduleManagerCard extends LitElement {
                   >
                     <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(d)}></ha-icon>
                     <div class="sm-ap-row-text">
-                      <span class="sm-ap-row-primary">${domainLabelFr(d)}</span>
+                      <span class="sm-ap-row-primary">${domainLabel(hass, d)}</span>
                       <span class="sm-ap-row-secondary">${d}</span>
                     </div>
                     <span class="sm-ap-chevron" aria-hidden="true">›</span>
@@ -1803,12 +1795,12 @@ export class ScheduleManagerCard extends LitElement {
       const svcList = servicesForDomain(hass, dom).filter(
         (s) =>
           matches(s) ||
-          matches(servicePrimaryLabel(dom, s)) ||
+          matches(servicePrimaryLabel(hass, dom, s)) ||
           matches(serviceSecondaryHint(dom, s))
       );
       body =
         svcList.length === 0
-          ? html`<p class="sm-ap-empty">Aucun service pour ce domaine.</p>`
+          ? html`<p class="sm-ap-empty">${msg(hass, 'card.wizard_no_services_domain')}</p>`
           : html`<div class="sm-ap-scroll">
               ${svcList.map(
                 (s) => html`
@@ -1819,7 +1811,7 @@ export class ScheduleManagerCard extends LitElement {
                   >
                     <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(dom)}></ha-icon>
                     <div class="sm-ap-row-text">
-                      <span class="sm-ap-row-primary">${servicePrimaryLabel(dom, s)}</span>
+                      <span class="sm-ap-row-primary">${servicePrimaryLabel(hass, dom, s)}</span>
                       <span class="sm-ap-row-secondary">${serviceSecondaryHint(dom, s)}</span>
                     </div>
                     <span class="sm-ap-chevron" aria-hidden="true">›</span>
@@ -1839,7 +1831,7 @@ export class ScheduleManagerCard extends LitElement {
       body =
         entities.length === 0
           ? html`<p class="sm-ap-empty">
-              Aucune entité compatible avec l’action <code>${actionFull}</code> dans ce domaine.
+              ${msg(hass, 'card.wizard_no_entities', { action: actionFull })}
             </p>`
           : html`<div class="sm-ap-scroll">
               ${entities.map(
@@ -1868,7 +1860,7 @@ export class ScheduleManagerCard extends LitElement {
       body =
         filtered.length === 0
           ? html`<p class="sm-ap-empty">
-              Aucun mode préréglé trouvé pour cette entité. Utilisez Retour ou fermez.
+              ${msg(hass, 'card.wizard_no_presets')}
             </p>`
           : html`<div class="sm-ap-scroll">
               ${filtered.map(
@@ -1884,7 +1876,7 @@ export class ScheduleManagerCard extends LitElement {
                     ></ha-icon>
                     <div class="sm-ap-row-text">
                       <span class="sm-ap-row-primary">${mode}</span>
-                      <span class="sm-ap-row-secondary">Mode préréglé · climate.set_preset_mode</span>
+                      <span class="sm-ap-row-secondary">${msg(hass, 'card.wizard_preset_sub')}</span>
                     </div>
                     <span class="sm-ap-chevron" aria-hidden="true">›</span>
                   </button>
@@ -1895,17 +1887,17 @@ export class ScheduleManagerCard extends LitElement {
 
     const context =
       step === 'domain'
-        ? 'Étape 1 — choisissez un type d’appareil (domaine)'
+        ? msg(hass, 'card.wizard_step1')
         : step === 'service' && domainF
-          ? html`Étape 2 — quelle action · domaine
-              <strong>${domainLabelFr(domainF)}</strong> ?`
+          ? html`${msg(hass, 'card.wizard_step2')}
+              <strong>${domainLabel(hass, domainF)}</strong>${msg(hass, 'card.wizard_step2_suffix')}`
           : step === 'entity' && domainF && svcPick
-            ? html`Étape 3 — quelle entité pour
-                <code>${domainF}.${svcPick}</code>
-                ? Seules les entités compatibles sont listées.`
+            ? html`${msg(hass, 'card.wizard_step3')}
+                <code>${domainF}.${svcPick}</code>${msg(hass, 'card.wizard_step3_suffix')}`
             : step === 'climate_preset' && entityPick
-              ? html`Étape 4 — mode préréglé pour «
-                  <strong>${friendlyEntityName(hass, entityPick)}</strong> »`
+              ? msg(hass, 'card.wizard_step4', {
+                  name: friendlyEntityName(hass, entityPick),
+                })
               : '';
 
     return html`
@@ -1930,17 +1922,17 @@ export class ScheduleManagerCard extends LitElement {
             <button
               type="button"
               class="sm-ap-nav-btn"
-              aria-label="Retour"
+              aria-label=${msg(hass, 'card.wizard_back')}
               ?disabled=${step === 'domain'}
               @click=${() => this.actionWizardBack()}
             >
               ‹
             </button>
-            <h3 id="sm-ap-heading" class="sm-ap-heading">Choisir une action</h3>
+            <h3 id="sm-ap-heading" class="sm-ap-heading">${msg(hass, 'card.wizard_title')}</h3>
             <button
               type="button"
               class="sm-ap-nav-btn"
-              aria-label="Fermer"
+              aria-label=${msg(hass, 'card.wizard_close')}
               @click=${() => this.closeActionWizard()}
             >
               ×
@@ -1950,8 +1942,8 @@ export class ScheduleManagerCard extends LitElement {
           <input
             type="search"
             class="sm-ap-search"
-            placeholder="Rechercher"
-            aria-label="Filtrer la liste"
+            placeholder=${msg(hass, 'card.wizard_search_placeholder')}
+            aria-label=${msg(hass, 'card.wizard_search_aria')}
             .value=${this._actionWizardSearch}
             @input=${this._onWizardSearchInput}
           />
@@ -1975,7 +1967,7 @@ export class ScheduleManagerCard extends LitElement {
             class="sm-action-primary-btn"
             @click=${() => this.openActionWizardAt(0)}
           >
-            + Choisir une action
+            ${msg(hass, 'card.choose_action_btn')}
           </button>
         </div>
       `;
@@ -1985,7 +1977,7 @@ export class ScheduleManagerCard extends LitElement {
 
     return html`
       <div class="sm-action-entry">
-        <div class="sm-actions-stack" role="list" aria-label="Liste des actions du créneau">
+        <div class="sm-actions-stack" role="list" aria-label=${msg(hass, 'card.actions_list_aria')}>
           ${selected.actions.map((action, i) => {
             const primary = this.primaryEntityFromAction(action);
             const parsed = parseDomainService(action.action_type);
@@ -2009,11 +2001,11 @@ export class ScheduleManagerCard extends LitElement {
                         <button
                           type="button"
                           class="sm-action-block-remove"
-                          aria-label="Supprimer cette action"
-                          title="Supprimer cette action"
+                          aria-label=${msg(hass, 'card.remove_action_aria')}
+                          title=${msg(hass, 'card.remove_action_title')}
                           @click=${() => this.visualRemoveAction(i)}
                         >
-                          Supprimer
+                          ${msg(hass, 'card.remove')}
                         </button>
                       `
                     : null}
@@ -2022,12 +2014,10 @@ export class ScheduleManagerCard extends LitElement {
                 ${hasAction
                   ? html`
                       <div class="sm-action-entities-quick">
-                        <span class="sm-action-entities-quick-title">Entités ciblées</span>
+                        <span class="sm-action-entities-quick-title">${msg(hass, 'card.target_entities_title')}</span>
                         <p class="sm-action-entities-quick-hint">
-                          Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » puis
-                          choisissez dans la liste (recherche et lignes avec icône comme le sélecteur
-                          d’entités Home Assistant) —
-                          compatible avec <code>${action.action_type}</code>.
+                          ${msg(hass, 'card.target_entities_hint')}
+                          <code>${action.action_type}</code>.
                         </p>
                         <div class="entity-chips">
                           ${entityIdsFromPayload(action.action_payload).map(
@@ -2036,7 +2026,9 @@ export class ScheduleManagerCard extends LitElement {
                                 <button
                                   type="button"
                                   class="entity-chip-main"
-                                  aria-label="Remplacer ${friendlyEntityName(hass, eid)}"
+                                  aria-label=${msg(hass, 'card.replace_entity_chip_aria', {
+                                    name: friendlyEntityName(hass, eid),
+                                  })}
                                   @click=${() => this.openEntityReplacePicker(blockIdx, i, eid)}
                                 >
                                   <span class="entity-chip-text">
@@ -2047,7 +2039,9 @@ export class ScheduleManagerCard extends LitElement {
                                 <button
                                   type="button"
                                   class="entity-chip-remove"
-                                  aria-label="Retirer ${friendlyEntityName(hass, eid)}"
+                                  aria-label=${msg(hass, 'card.remove_entity_aria', {
+                                    name: friendlyEntityName(hass, eid),
+                                  })}
                                   @click=${(ev: Event) => {
                                     ev.stopPropagation();
                                     this.visualRemoveEntityAt(i, eid);
@@ -2064,14 +2058,14 @@ export class ScheduleManagerCard extends LitElement {
                           ? html`
                               <div class="sm-entity-replace-block">
                                 <div class="sm-entity-add-row">
-                                  <span class="sm-entity-add-heading">Remplacer l’entité</span>
+                                  <span class="sm-entity-add-heading">${msg(hass, 'card.replace_entity')}</span>
                                   <button
                                     type="button"
                                     class="sm-entity-add-dismiss"
-                                    aria-label="Fermer le sélecteur"
+                                    aria-label=${msg(hass, 'card.close_picker_aria')}
                                     @click=${() => this.closeEntityAddPicker()}
                                   >
-                                    Fermer
+                                    ${msg(hass, 'card.wizard_close')}
                                   </button>
                                 </div>
                                 <div class="sm-entity-picker-shell sm-entity-picker-shell--popover">
@@ -2087,24 +2081,24 @@ export class ScheduleManagerCard extends LitElement {
                           : null}
                         <div class="sm-entity-add-block">
                           <div class="sm-entity-add-row">
-                            <span class="sm-entity-add-heading">Ajouter une entité</span>
+                            <span class="sm-entity-add-heading">${msg(hass, 'card.add_entity_heading')}</span>
                             ${this._entityAddPickerOpenKey === this.entityAddPickerKey(blockIdx, i)
                               ? html`
                                   <button
                                     type="button"
                                     class="sm-entity-add-dismiss"
-                                    aria-label="Fermer le sélecteur d’entité"
+                                    aria-label=${msg(hass, 'card.close_entity_picker_aria')}
                                     @click=${() => this.closeEntityAddPicker()}
                                   >
-                                    Fermer
+                                    ${msg(hass, 'card.wizard_close')}
                                   </button>
                                 `
                               : html`
                                   <button
                                     type="button"
                                     class="sm-entity-add-plus"
-                                    title="Choisir une entité à ajouter"
-                                    aria-label="Ajouter une entité"
+                                    title=${msg(hass, 'card.add_entity_title')}
+                                    aria-label=${msg(hass, 'card.add_entity_aria')}
                                     @click=${() => this.toggleEntityAddPicker(blockIdx, i)}
                                   >
                                     +
@@ -2125,7 +2119,7 @@ export class ScheduleManagerCard extends LitElement {
                 ${this.renderClimatePresetForAction(action, i)}
                 ${unknownService
                   ? html`<p class="sm-field-hint">
-                      Action personnalisée : <code>${action.action_type}</code>
+                      ${msg(hass, 'card.custom_action')} <code>${action.action_type}</code>
                     </p>`
                   : null}
                 <button
@@ -2133,7 +2127,7 @@ export class ScheduleManagerCard extends LitElement {
                   class="sm-action-primary-btn sm-action-block-wizard"
                   @click=${() => this.openActionWizardAt(i)}
                 >
-                  ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
+                  ${hasAction ? msg(hass, 'card.edit_action') : msg(hass, 'card.choose_action_btn')}
                 </button>
               </div>
             `;
@@ -2144,7 +2138,7 @@ export class ScheduleManagerCard extends LitElement {
           class="sm-action-add-another-btn"
           @click=${() => this.visualAddAction()}
         >
-          + Ajouter une autre action
+          ${msg(hass, 'card.add_another_action')}
         </button>
       </div>
     `;
@@ -2182,7 +2176,7 @@ export class ScheduleManagerCard extends LitElement {
     const orphan = cur && !modes.includes(cur);
     return html`
       <label class="sm-form-label sm-form-label-last sm-action-climate-preset">
-        Mode préréglé
+        ${msg(this.hass, 'card.preset_mode_label')}
         <select
           class="sm-select"
           .value=${live(cur)}
@@ -2192,7 +2186,7 @@ export class ScheduleManagerCard extends LitElement {
               (e.target as HTMLSelectElement).value
             )}
         >
-          ${orphan ? html`<option value=${cur}>${cur} (actuel)</option>` : null}
+          ${orphan ? html`<option value=${cur}>${cur}${msg(this.hass, 'card.preset_current_suffix')}</option>` : null}
           ${modes.map((m) => html`<option value=${m}>${m}</option>`)}
         </select>
       </label>
@@ -2204,26 +2198,21 @@ export class ScheduleManagerCard extends LitElement {
       return;
     }
     const { scheduleId, blocks, repeatDays } = this._visualEdit;
+    const hass = this.hass;
     for (const b of blocks) {
       const ok = (b.actions || []).some((a) => String(a.action_type ?? '').trim());
       if (!ok) {
-        alert(
-          'Chaque plage doit avoir au moins une action avec un service défini (assistant « Choisir une action »).'
-        );
+        alert(msg(hass, 'card.validation_min_action'));
         return;
       }
     }
     const dupAt = findDuplicateBlockIndex(blocks);
     if (dupAt >= 0) {
-      alert(
-        `Deux plages identiques (horaires + action + payload) — modifiez l’entrée n° ${dupAt + 1}.`
-      );
+      alert(msg(hass, 'card.validation_duplicate', { n: String(dupAt + 1) }));
       return;
     }
     if (hasOverlappingSameDayBlocks(blocks)) {
-      alert(
-        'Des plages se chevauchent sur la journée. Corrigez les horaires avant d’enregistrer.'
-      );
+      alert(msg(hass, 'card.validation_overlap_day'));
       return;
     }
     try {
@@ -2233,8 +2222,8 @@ export class ScheduleManagerCard extends LitElement {
       });
       this.closeVisualEditor();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      alert(`Enregistrement impossible : ${msg}`);
+      const errMsg = e instanceof Error ? e.message : String(e);
+      alert(`${msg(hass, 'card.save_failed_prefix')} ${errMsg}`);
       // eslint-disable-next-line no-console
       console.error('schedule_manager.update_schedule failed', e);
     }
@@ -2335,24 +2324,24 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private renderBlockColorControls(block: TimeBlock) {
+    const hass = this.hass;
     const pickerVal = this.blockColorPickerHex(block);
     const custom = this.hasCustomBlockColor(block);
     return html`
       <div class="sm-form-label sm-color-field">
-        <span class="sm-color-field-title">Couleur du créneau sur la ligne horaire</span>
+        <span class="sm-color-field-title">${msg(hass, 'card.color_field_title')}</span>
         <p class="sm-color-field-hint">
-          Teinte affichée pour la plage sélectionnée sur la frise « Heure » ci‑dessus (pas la couleur
-          de la pièce dans Home Assistant).
+          ${msg(hass, 'card.color_field_hint')}
         </p>
         <div class="sm-color-row">
           <label class="sm-color-system-label">
-            <span class="sm-color-system-text">Nuancier du navigateur</span>
+            <span class="sm-color-system-text">${msg(hass, 'card.color_browser_picker_short')}</span>
             <input
               type="color"
               class="sm-color-native"
               .value=${pickerVal}
-              title="Ouvrir le sélecteur de couleur du système"
-              aria-label="Choisir une couleur précise avec le nuancier du navigateur"
+              title=${msg(hass, 'card.color_system_title')}
+              aria-label=${msg(hass, 'card.color_system_aria')}
               @input=${(e: Event) =>
                 this.visualSetBlockColor((e.target as HTMLInputElement).value)}
             />
@@ -2365,7 +2354,7 @@ export class ScheduleManagerCard extends LitElement {
                   class="sm-color-swatch"
                   style="background:${hex}"
                   title=${hex}
-                  aria-label="Appliquer la couleur ${hex}"
+                  aria-label=${msg(hass, 'card.color_apply_aria', { hex })}
                   @click=${() => this.visualSetBlockColor(hex)}
                 ></button>
               `
@@ -2377,7 +2366,7 @@ export class ScheduleManagerCard extends LitElement {
             ?disabled=${!custom}
             @click=${() => this.visualClearBlockColor()}
           >
-            Défaut
+            ${msg(hass, 'card.color_default')}
           </button>
         </div>
       </div>
@@ -2385,6 +2374,7 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private renderEditorTimeline(blocks: TimeBlock[], selectedIndex: number) {
+    const hass = this.hass;
     const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
     const caps = this.segmentCapIndices(segments);
     const resizeHandles = timelineResizeHandlesForSelection(blocks, selectedIndex);
@@ -2394,10 +2384,10 @@ export class ScheduleManagerCard extends LitElement {
       <div
         class="timeline-frise sm-scheduler-frise sm-editor-frise"
         role="group"
-        aria-label="Plages sur 24 heures — cliquer pour sélectionner, poignées pour ajuster"
+        aria-label=${msg(hass, 'card.editor_timeline_aria')}
       >
         <div class="sm-frise-heading">
-          <span class="sm-frise-heading-label">Heure</span>
+          <span class="sm-frise-heading-label">${msg(hass, 'card.time_axis_label')}</span>
         </div>
         <div class="sm-scheduler-track sm-scheduler-track--editor">
           <div class="sm-scheduler-bar">
@@ -2412,7 +2402,7 @@ export class ScheduleManagerCard extends LitElement {
                   class="sm-slot ${sel} ${capS} ${capE}"
                   style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
                   title=${s.blockIndex === selectedIndex
-                    ? `${s.label} — glisser pour déplacer la plage`
+                    ? msg(hass, 'card.drag_move_slot', { label: s.label })
                     : s.label}
                   @pointerdown=${(e: PointerEvent) => this.onSlotPointerDown(e, s.blockIndex)}
                   @click=${(e: Event) => this.onSlotClick(e, s.blockIndex)}
@@ -2425,16 +2415,16 @@ export class ScheduleManagerCard extends LitElement {
           ${resizeHandles.map((h) => {
             const label =
               h.kind === 'junction'
-                ? 'Ajuster la transition entre deux plages'
+                ? msg(hass, 'card.resize_aria_junction')
                 : h.kind === 'start'
-                  ? 'Déplacer le début de la plage'
-                  : 'Déplacer la fin de la plage';
+                  ? msg(hass, 'card.resize_aria_start')
+                  : msg(hass, 'card.resize_aria_end');
             const title =
               h.kind === 'junction'
-                ? 'Glisser pour déplacer la transition'
+                ? msg(hass, 'card.resize_title_junction')
                 : h.kind === 'start'
-                  ? 'Glisser pour modifier l’heure de début'
-                  : 'Glisser pour modifier l’heure de fin';
+                  ? msg(hass, 'card.resize_title_start')
+                  : msg(hass, 'card.resize_title_end');
             return html`
               <button
                 type="button"
@@ -2478,6 +2468,7 @@ export class ScheduleManagerCard extends LitElement {
     const sel = v.selectedIndex;
     const selected = blocks[sel];
 
+    const hass = this.hass;
     return html`
       <div
         class="sm-overlay"
@@ -2503,23 +2494,23 @@ export class ScheduleManagerCard extends LitElement {
             <button
               type="button"
               class="sm-icon-btn"
-              aria-label="Fermer"
+              aria-label=${msg(hass, 'card.close_overlay_aria')}
               @click=${() => this.closeVisualEditor()}
             >
-              ×
+              ${msg(hass, 'card.modal_close')}
             </button>
           </div>
           <div class="sm-modal-sub">
-            <span>Jours de répétition</span>
+            <span>${msg(hass, 'card.repeat_days')}</span>
             <div class="sm-repeat-days">
-              ${WEEKDAY_LABELS_FR.map(
-                (label, day) => html`
+              ${[0, 1, 2, 3, 4, 5, 6].map(
+                (day) => html`
                   <button
                     type="button"
                     class="sm-day ${v.repeatDays.includes(day) ? 'on' : ''}"
                     @click=${() => this.visualToggleDay(day)}
                   >
-                    ${label}
+                    ${weekdayShort(hass, day)}
                   </button>
                 `
               )}
@@ -2527,7 +2518,7 @@ export class ScheduleManagerCard extends LitElement {
           </div>
           <div class="sm-toolbar">
             <button type="button" class="sm-tool-btn sm-tool-accent" @click=${() => this.visualAddBlock()}>
-              + Ajouter une plage
+              ${msg(hass, 'card.add_slot')}
             </button>
             <button
               type="button"
@@ -2535,7 +2526,7 @@ export class ScheduleManagerCard extends LitElement {
               ?disabled=${blocks.length === 0}
               @click=${() => this.visualRemoveSelected()}
             >
-              Supprimer la plage
+              ${msg(hass, 'card.remove_slot')}
             </button>
           </div>
           ${this.renderEditorTimeline(blocks, sel)}
@@ -2543,7 +2534,7 @@ export class ScheduleManagerCard extends LitElement {
             ? html`
                 <div class="sm-modal-body sm-modal-body-frise-placeholder">
                   <div class="empty-hint">
-                    Aucune plage — utilisez « + Ajouter une plage » ci-dessus.
+                    ${msg(hass, 'card.no_slots_editor')}
                   </div>
                 </div>
               `
@@ -2553,7 +2544,7 @@ export class ScheduleManagerCard extends LitElement {
                 <div class="sm-modal-body">
                   <div class="sm-time-row">
                     <label>
-                      Heure de début (HH:MM)
+                      ${msg(hass, 'card.start_time_label')}
                       <input
                         type="text"
                         inputmode="numeric"
@@ -2569,7 +2560,7 @@ export class ScheduleManagerCard extends LitElement {
                       />
                     </label>
                     <label>
-                      Heure de fin (HH:MM)
+                      ${msg(hass, 'card.end_time_label')}
                       <input
                         type="text"
                         inputmode="numeric"
@@ -2587,7 +2578,7 @@ export class ScheduleManagerCard extends LitElement {
                   </div>
                   ${this.renderBlockColorControls(selected)}
                   <div class="sm-action-card">
-                    <h4>Actions pendant cette plage</h4>
+                    <h4>${msg(hass, 'card.actions_during_slot')}</h4>
                     ${this.renderActionPlanningControls(selected)}
                   </div>
                 </div>
@@ -2595,10 +2586,10 @@ export class ScheduleManagerCard extends LitElement {
             : null}
           <div class="sm-modal-footer">
             <button type="button" class="btn-text danger" @click=${() => this.closeVisualEditor()}>
-              Annuler
+              ${msg(hass, 'card.cancel')}
             </button>
             <button type="button" class="btn-text primary" @click=${() => this.saveVisualEditor()}>
-              Enregistrer
+              ${msg(hass, 'card.save')}
             </button>
           </div>
         </div>

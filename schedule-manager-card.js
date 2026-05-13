@@ -1773,6 +1773,435 @@ function applyDefaultFieldsForService(domain, service, entityId, payload, hass) 
     }
 }
 
+const SUPPORTED = new Set(['en', 'fr']);
+function normalizeLang(raw) {
+    if (!raw || typeof raw !== 'string') {
+        return 'en';
+    }
+    const base = raw.split(/[-_]/)[0]?.toLowerCase() ?? 'en';
+    return SUPPORTED.has(base) ? base : 'en';
+}
+function collatorLocale(hass) {
+    return normalizeLang(hass?.locale?.language) === 'fr' ? 'fr' : 'en';
+}
+const DOMAIN_LABELS = {
+    en: {
+        alarm_control_panel: 'Alarm',
+        automation: 'Automation',
+        binary_sensor: 'Binary sensor',
+        button: 'Button',
+        camera: 'Camera',
+        climate: 'Climate',
+        cover: 'Cover',
+        fan: 'Fan',
+        humidifier: 'Humidifier',
+        input_boolean: 'Input boolean',
+        input_button: 'Input button',
+        input_number: 'Input number',
+        input_select: 'Input select',
+        input_text: 'Input text',
+        light: 'Light',
+        lock: 'Lock',
+        media_player: 'Media player',
+        number: 'Number',
+        scene: 'Scene',
+        script: 'Script',
+        select: 'Select',
+        sensor: 'Sensor',
+        switch: 'Switch',
+        sun: 'Sun',
+        update: 'Update',
+        vacuum: 'Vacuum',
+        valve: 'Valve',
+        water_heater: 'Water heater',
+        weather: 'Weather',
+        zone: 'Zone',
+    },
+    fr: {
+        alarm_control_panel: 'Alarme',
+        automation: 'Automatisation',
+        binary_sensor: 'Capteur binaire',
+        button: 'Bouton',
+        camera: 'Caméra',
+        climate: 'Climat',
+        cover: 'Volet / store',
+        fan: 'Ventilateur',
+        humidifier: 'Humidificateur',
+        input_boolean: 'Interrupteur virtuel',
+        input_button: 'Bouton virtuel',
+        input_number: 'Nombre',
+        input_select: 'Liste déroulante',
+        input_text: 'Texte',
+        light: 'Lumière',
+        lock: 'Serrure',
+        media_player: 'Média',
+        number: 'Nombre',
+        scene: 'Scène',
+        script: 'Script',
+        select: 'Liste',
+        sensor: 'Capteur',
+        switch: 'Interrupteur',
+        sun: 'Soleil',
+        update: 'Mise à jour',
+        vacuum: 'Aspirateur',
+        valve: 'Vanne',
+        water_heater: 'Chauffe-eau',
+        weather: 'Météo',
+        zone: 'Zone',
+    },
+};
+const SERVICE_PRIMARY = {
+    en: {
+        'climate.turn_on': 'Turn on',
+        'climate.turn_off': 'Turn off',
+        'climate.toggle': 'Toggle',
+        'climate.set_preset_mode': 'Set preset mode',
+        'climate.set_temperature': 'Set temperature',
+        'climate.set_hvac_mode': 'Set HVAC mode',
+        'climate.set_fan_mode': 'Set fan mode',
+        'light.turn_on': 'Turn on',
+        'light.turn_off': 'Turn off',
+        'light.toggle': 'Toggle',
+        'switch.turn_on': 'Turn on',
+        'switch.turn_off': 'Turn off',
+        'switch.toggle': 'Toggle',
+        'fan.turn_on': 'Turn on',
+        'fan.turn_off': 'Turn off',
+        'cover.open_cover': 'Open',
+        'cover.close_cover': 'Close',
+        'cover.stop_cover': 'Stop',
+        'cover.set_cover_position': 'Set position',
+        'lock.lock': 'Lock',
+        'lock.unlock': 'Unlock',
+        'media_player.media_play': 'Play',
+        'media_player.media_pause': 'Pause',
+        'media_player.turn_on': 'Turn on',
+        'media_player.turn_off': 'Turn off',
+        'vacuum.start': 'Start',
+        'vacuum.pause': 'Pause',
+        'vacuum.return_to_base': 'Return to base',
+        'script.turn_on': 'Run',
+        'scene.turn_on': 'Activate scene',
+        'input_boolean.turn_on': 'Turn on',
+        'input_boolean.turn_off': 'Turn off',
+        'input_boolean.toggle': 'Toggle',
+        'humidifier.set_humidity': 'Set humidity',
+        'humidifier.turn_on': 'Turn on',
+        'humidifier.turn_off': 'Turn off',
+        'water_heater.set_temperature': 'Set temperature',
+    },
+    fr: {
+        'climate.turn_on': 'Allumer',
+        'climate.turn_off': 'Éteindre',
+        'climate.toggle': 'Basculer',
+        'climate.set_preset_mode': 'Choisir un mode préréglé',
+        'climate.set_temperature': 'Régler la température',
+        'climate.set_hvac_mode': 'Régler le mode HVAC',
+        'climate.set_fan_mode': 'Régler le mode ventilation',
+        'light.turn_on': 'Allumer',
+        'light.turn_off': 'Éteindre',
+        'light.toggle': 'Basculer',
+        'switch.turn_on': 'Allumer',
+        'switch.turn_off': 'Éteindre',
+        'switch.toggle': 'Basculer',
+        'fan.turn_on': 'Allumer',
+        'fan.turn_off': 'Éteindre',
+        'cover.open_cover': 'Ouvrir',
+        'cover.close_cover': 'Fermer',
+        'cover.stop_cover': 'Arrêter',
+        'cover.set_cover_position': 'Régler la position',
+        'lock.lock': 'Verrouiller',
+        'lock.unlock': 'Déverrouiller',
+        'media_player.media_play': 'Lecture',
+        'media_player.media_pause': 'Pause',
+        'media_player.turn_on': 'Allumer',
+        'media_player.turn_off': 'Éteindre',
+        'vacuum.start': 'Démarrer',
+        'vacuum.pause': 'Pause',
+        'vacuum.return_to_base': 'Retour à la base',
+        'script.turn_on': 'Exécuter',
+        'scene.turn_on': 'Activer la scène',
+        'input_boolean.turn_on': 'Activer',
+        'input_boolean.turn_off': 'Désactiver',
+        'input_boolean.toggle': 'Basculer',
+        'humidifier.set_humidity': 'Régler l’humidité',
+        'humidifier.turn_on': 'Allumer',
+        'humidifier.turn_off': 'Éteindre',
+        'water_heater.set_temperature': 'Régler la température',
+    },
+};
+/** Libellé de domaine (liste assistant, etc.). */
+function domainLabel(hass, domain) {
+    const lang = normalizeLang(hass?.locale?.language);
+    return (DOMAIN_LABELS[lang][domain] ??
+        DOMAIN_LABELS.en[domain] ??
+        domain.replace(/_/g, ' '));
+}
+/** Titre principal pour une ligne de service dans l’assistant. */
+function servicePrimaryLabel(hass, domain, service) {
+    const lang = normalizeLang(hass?.locale?.language);
+    const k = `${domain}.${service}`;
+    const known = SERVICE_PRIMARY[lang][k] ?? SERVICE_PRIMARY.en[k];
+    if (known) {
+        return known;
+    }
+    const t = service.replace(/_/g, ' ');
+    return t.charAt(0).toUpperCase() + t.slice(1);
+}
+const MESSAGES = {
+    en: {
+        'card.loading': 'Loading…',
+        'card.entity_missing': 'Entity not found:',
+        'card.empty_filter_schedules': 'No schedule matches the schedule_ids on this card. Check the UUIDs in the sensor schedules attribute.',
+        'card.empty_no_schedules': 'No schedules yet. Create one below or via Developer tools → Actions:',
+        'card.empty_no_schedules_service': '(the `name` field is required).',
+        'card.placeholder_schedule_name': 'Schedule name (e.g. Weekday)',
+        'card.creating': 'Creating…',
+        'card.create_schedule': 'Create schedule',
+        'card.empty_list': 'Nothing to display.',
+        'card.configure_slots': 'Configure time slots…',
+        'card.timeline_hint': 'Graphic preview — open configuration to edit slots.',
+        'card.no_slots_hint': 'No time slots — use “Configure time slots…” to add some.',
+        'card.timeline_aria': 'Time slots over 24 hours',
+        'card.default_header_title': 'Schedule Manager',
+        'card.alert_select_day': 'Select at least one day.',
+        'card.alert_end_after_start': 'For a same-day slot, end time must be strictly after start time.',
+        'card.alert_overlap': 'Time slots cannot overlap.',
+        'card.alert_min_one_action': 'Each slot must keep at least one action.',
+        'card.alert_cannot_add_overlap': 'Cannot add this slot without overlap. Change existing times first.',
+        'card.alert_day_full': 'The day is already fully covered. Remove or shorten a slot before adding another.',
+        'card.alert_duplicate_slot': 'An identical slot already exists — change times or service.',
+        'card.alert_min_one_entity': 'Keep at least one entity, or use “Edit action” to reconfigure everything.',
+        'card.entity_search_aria': 'Search entities',
+        'card.entity_search_placeholder': 'Search entities',
+        'card.entity_list_aria': 'Compatible entities',
+        'card.entity_manual_empty': 'No compatible entities{q}. Check the action type or use “Edit action”.',
+        'card.entity_manual_empty_q': ' for this search',
+        'card.wizard_no_results': 'No results.',
+        'card.wizard_no_services_domain': 'No services for this domain.',
+        'card.wizard_no_entities': 'No entity compatible with action {action} in this domain.',
+        'card.wizard_no_presets': 'No preset modes for this entity. Use Back or close.',
+        'card.wizard_preset_sub': 'Preset mode · climate.set_preset_mode',
+        'card.wizard_step1': 'Step 1 — choose a device type (domain)',
+        'card.wizard_step2': 'Step 2 — which action for domain',
+        'card.wizard_step2_suffix': ' ?',
+        'card.wizard_step3': 'Step 3 — which entity for',
+        'card.wizard_step3_suffix': '? Only compatible entities are listed.',
+        'card.wizard_step4': 'Step 4 — preset mode for «{name}»',
+        'card.wizard_title': 'Choose an action',
+        'card.wizard_back': 'Back',
+        'card.wizard_close': 'Close',
+        'card.wizard_search_placeholder': 'Search',
+        'card.wizard_search_aria': 'Filter list',
+        'card.choose_action_btn': '+ Choose an action',
+        'card.actions_list_aria': 'Actions in this slot',
+        'card.action_tab_fallback': 'Action {n}',
+        'card.remove_action_aria': 'Remove this action',
+        'card.remove_action_title': 'Remove this action',
+        'card.remove': 'Remove',
+        'card.target_entities_title': 'Target entities',
+        'card.target_entities_hint': 'Click an entity to replace it, × to remove, or “+” then pick from the list (search and rows with icons like Home Assistant’s entity picker). Compatible with ',
+        'card.replace_entity': 'Replace entity',
+        'card.replace_entity_chip_aria': 'Replace {name}',
+        'card.close_picker_aria': 'Close picker',
+        'card.add_entity_heading': 'Add entity',
+        'card.close_entity_picker_aria': 'Close entity picker',
+        'card.add_entity_title': 'Choose an entity to add',
+        'card.add_entity_aria': 'Add entity',
+        'card.custom_action': 'Custom action:',
+        'card.preset_mode_label': 'Preset mode',
+        'card.validation_min_action': 'Each slot must have at least one action with a defined service (use “Choose an action”).',
+        'card.validation_duplicate': 'Two identical slots (times + action + payload) — edit entry no. {n}.',
+        'card.validation_overlap_day': 'Slots overlap on the same day. Fix times before saving.',
+        'card.color_field_title': 'Slot colour on the timeline',
+        'card.color_field_hint': 'Colour shown for the selected slot on the “Time” bar above (not the room colour in Home Assistant).',
+        'card.color_system_title': 'Open the system colour picker',
+        'card.color_system_aria': 'Pick a precise colour with the browser colour picker',
+        'card.color_default': 'Default',
+        'card.editor_timeline_aria': '24-hour slots — click to select, handles to adjust',
+        'card.drag_move_slot': '{label} — drag to move the slot',
+        'card.handle_start': 'Move slot start',
+        'card.handle_end': 'Move slot end',
+        'card.handle_junction': 'Drag to move the transition',
+        'card.handle_start_time': 'Drag to change start time',
+        'card.modal_close': '×',
+        'card.repeat_days': 'Repeat days',
+        'card.no_slots_editor': 'No slots — use “+ Add slot” above.',
+        'card.start_time_label': 'Start time (HH:MM)',
+        'card.no_entity_selected': 'No entity selected',
+        'editor.loading': 'Loading dashboard…',
+        'editor.card_title_section': 'Card title',
+        'editor.show_title_switch': 'Show title on card',
+        'editor.custom_title_optional': 'Custom title (optional)',
+        'editor.title_apply_hint': 'Enter text then click outside the field (or Tab) to apply to configuration and preview. Empty =',
+        'editor.title_disabled_hint': 'Turn “Show title on card” back on to edit the label.',
+        'editor.schedule_toggle_label': 'Per-schedule on/off switch',
+        'editor.schedule_toggle_hint': 'Shows or hides the switch to the right of each schedule name (integration side).',
+        'editor.status_entity_label': 'Schedule Manager status entity',
+        'editor.schedules_on_card_title': 'Schedules to show on the card',
+        'editor.schedules_on_card_hint': 'All boxes checked = show every schedule. Uncheck to hide one (at least one stays visible).',
+        'editor.entity_missing_before_first_code': 'The entity ',
+        'editor.entity_missing_between_codes': ' was not found. Ensure the Schedule Manager integration is loaded; the expected sensor is usually ',
+        'editor.entity_missing_after_second_code': '.',
+        'editor.no_schedules_hint': 'No schedules in the sensor attributes yet. Create one from the card or the {service} service.',
+        'card.save_failed_prefix': 'Could not save:',
+        'card.actions_during_slot': 'Actions during this time slot',
+        'card.remove_slot': 'Remove slot',
+        'card.add_slot': '+ Add slot',
+        'card.cancel': 'Cancel',
+        'card.save': 'Save',
+        'card.end_time_label': 'End time (HH:MM)',
+        'card.edit_action': 'Edit action',
+        'card.add_another_action': '+ Add another action',
+        'card.preset_current_suffix': ' (current)',
+        'card.color_browser_picker_short': 'Browser colour picker',
+        'card.color_apply_aria': 'Apply colour {hex}',
+        'card.time_axis_label': 'Time',
+        'card.close_overlay_aria': 'Close',
+        'card.remove_entity_aria': 'Remove {name}',
+        'card.resize_aria_junction': 'Adjust the transition between two slots',
+        'card.resize_title_junction': 'Drag to move the transition',
+        'card.resize_aria_start': 'Move slot start',
+        'card.resize_title_start': 'Drag to change start time',
+        'card.resize_aria_end': 'Move slot end',
+        'card.resize_title_end': 'Drag to change end time',
+    },
+    fr: {
+        'card.loading': 'Chargement…',
+        'card.entity_missing': 'Entité introuvable :',
+        'card.empty_filter_schedules': 'Aucun planning ne correspond aux schedule_ids de la carte. Vérifiez les UUID dans l’attribut schedules du capteur.',
+        'card.empty_no_schedules': 'Aucun planning enregistré pour l’instant. Créez-en un ci-dessous ou via Outils de développement → Actions :',
+        'card.empty_no_schedules_service': '(champ `name` obligatoire).',
+        'card.placeholder_schedule_name': 'Nom du planning (ex. Semaine)',
+        'card.creating': 'Création…',
+        'card.create_schedule': 'Créer le planning',
+        'card.empty_list': 'Aucun élément à afficher.',
+        'card.configure_slots': 'Configurer les plages…',
+        'card.timeline_hint': 'Aperçu graphique — ouvrez la configuration pour modifier les plages.',
+        'card.no_slots_hint': 'Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.',
+        'card.timeline_aria': 'Plages sur 24 heures',
+        'card.default_header_title': 'Schedule Manager',
+        'card.alert_select_day': 'Sélectionnez au moins un jour.',
+        'card.alert_end_after_start': 'Pour une plage sur une même journée, l’heure de fin doit être strictement après le début.',
+        'card.alert_overlap': 'Les plages horaires ne peuvent pas se chevaucher.',
+        'card.alert_min_one_action': 'Chaque plage doit conserver au moins une action.',
+        'card.alert_cannot_add_overlap': 'Impossible d’ajouter cette plage sans chevauchement. Modifiez les horaires existants.',
+        'card.alert_day_full': 'La journée est déjà entièrement couverte. Supprimez ou raccourcissez une plage avant d’en ajouter une autre.',
+        'card.alert_duplicate_slot': 'Une plage identique existe déjà — modifiez les horaires ou le service.',
+        'card.alert_min_one_entity': 'Conservez au moins une entité, ou utilisez « Modifier l’action » pour tout reconfigurer.',
+        'card.entity_search_aria': 'Rechercher des entités',
+        'card.entity_search_placeholder': 'Rechercher des entités',
+        'card.entity_list_aria': 'Entités compatibles',
+        'card.entity_manual_empty': 'Aucune entité compatible{q}. Vérifiez le type d’action ou utilisez « Modifier l’action ».',
+        'card.entity_manual_empty_q': ' pour cette recherche',
+        'card.wizard_no_results': 'Aucun résultat.',
+        'card.wizard_no_services_domain': 'Aucun service pour ce domaine.',
+        'card.wizard_no_entities': 'Aucune entité compatible avec l’action {action} dans ce domaine.',
+        'card.wizard_no_presets': 'Aucun mode préréglé trouvé pour cette entité. Utilisez Retour ou fermez.',
+        'card.wizard_preset_sub': 'Mode préréglé · climate.set_preset_mode',
+        'card.wizard_step1': 'Étape 1 — choisissez un type d’appareil (domaine)',
+        'card.wizard_step2': 'Étape 2 — quelle action · domaine',
+        'card.wizard_step2_suffix': ' ?',
+        'card.wizard_step3': 'Étape 3 — quelle entité pour',
+        'card.wizard_step3_suffix': ' ? Seules les entités compatibles sont listées.',
+        'card.wizard_step4': 'Étape 4 — mode préréglé pour « {name} »',
+        'card.wizard_title': 'Choisir une action',
+        'card.wizard_back': 'Retour',
+        'card.wizard_close': 'Fermer',
+        'card.wizard_search_placeholder': 'Rechercher',
+        'card.wizard_search_aria': 'Filtrer la liste',
+        'card.choose_action_btn': '+ Choisir une action',
+        'card.actions_list_aria': 'Liste des actions du créneau',
+        'card.action_tab_fallback': 'Action {n}',
+        'card.remove_action_aria': 'Supprimer cette action',
+        'card.remove_action_title': 'Supprimer cette action',
+        'card.remove': 'Supprimer',
+        'card.target_entities_title': 'Entités ciblées',
+        'card.target_entities_hint': 'Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » puis choisissez dans la liste (recherche et lignes avec icône comme le sélecteur d’entités Home Assistant). Compatible avec ',
+        'card.replace_entity': 'Remplacer l’entité',
+        'card.replace_entity_chip_aria': 'Remplacer {name}',
+        'card.close_picker_aria': 'Fermer le sélecteur',
+        'card.add_entity_heading': 'Ajouter une entité',
+        'card.close_entity_picker_aria': 'Fermer le sélecteur d’entité',
+        'card.add_entity_title': 'Choisir une entité à ajouter',
+        'card.add_entity_aria': 'Ajouter une entité',
+        'card.custom_action': 'Action personnalisée :',
+        'card.preset_mode_label': 'Mode préréglé',
+        'card.validation_min_action': 'Chaque plage doit avoir au moins une action avec un service défini (assistant « Choisir une action »).',
+        'card.validation_duplicate': 'Deux plages identiques (horaires + action + payload) — modifiez l’entrée n° {n}.',
+        'card.validation_overlap_day': 'Des plages se chevauchent sur la journée. Corrigez les horaires avant d’enregistrer.',
+        'card.color_field_title': 'Couleur du créneau sur la ligne horaire',
+        'card.color_field_hint': 'Teinte affichée pour la plage sélectionnée sur la frise « Heure » ci‑dessus (pas la couleur de la pièce dans Home Assistant).',
+        'card.color_system_title': 'Ouvrir le sélecteur de couleur du système',
+        'card.color_system_aria': 'Choisir une couleur précise avec le nuancier du navigateur',
+        'card.color_default': 'Défaut',
+        'card.editor_timeline_aria': 'Plages sur 24 heures — cliquer pour sélectionner, poignées pour ajuster',
+        'card.drag_move_slot': '{label} — glisser pour déplacer la plage',
+        'card.handle_start': 'Déplacer le début de la plage',
+        'card.handle_end': 'Déplacer la fin de la plage',
+        'card.handle_junction': 'Glisser pour déplacer la transition',
+        'card.handle_start_time': 'Glisser pour modifier l’heure de début',
+        'card.modal_close': '×',
+        'card.repeat_days': 'Jours de répétition',
+        'card.no_slots_editor': 'Aucune plage — utilisez « + Ajouter une plage » ci-dessus.',
+        'card.start_time_label': 'Heure de début (HH:MM)',
+        'card.no_entity_selected': 'Aucune entité sélectionnée',
+        'editor.loading': 'Chargement du tableau de bord…',
+        'editor.card_title_section': 'Titre de la carte',
+        'editor.show_title_switch': 'Afficher le titre sur la carte',
+        'editor.custom_title_optional': 'Titre personnalisé (optionnel)',
+        'editor.title_apply_hint': 'Saisissez le texte puis cliquez en dehors du champ (ou Tab) pour l’appliquer à la configuration et à l’aperçu. Vide =',
+        'editor.title_disabled_hint': 'Réactivez « Afficher le titre sur la carte » pour modifier le libellé.',
+        'editor.schedule_toggle_label': 'Interrupteur actif / inactif par planning',
+        'editor.schedule_toggle_hint': 'Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté intégration).',
+        'editor.status_entity_label': 'Capteur d’état Schedule Manager',
+        'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
+        'editor.schedules_on_card_hint': 'Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un planning (au moins un reste visible).',
+        'editor.entity_missing_before_first_code': 'L’entité ',
+        'editor.entity_missing_between_codes': ' est introuvable. Vérifiez que l’intégration Schedule Manager est installée et chargée ; le capteur attendu est en général ',
+        'editor.entity_missing_after_second_code': '.',
+        'editor.no_schedules_hint': 'Aucun planning dans les attributs du capteur pour l’instant. Créez un planning depuis la carte ou le service {service}.',
+        'card.save_failed_prefix': 'Enregistrement impossible :',
+        'card.actions_during_slot': 'Actions pendant cette plage',
+        'card.remove_slot': 'Supprimer la plage',
+        'card.add_slot': '+ Ajouter une plage',
+        'card.cancel': 'Annuler',
+        'card.save': 'Enregistrer',
+        'card.end_time_label': 'Heure de fin (HH:MM)',
+        'card.edit_action': 'Modifier l’action',
+        'card.add_another_action': '+ Ajouter une autre action',
+        'card.preset_current_suffix': ' (actuel)',
+        'card.color_browser_picker_short': 'Nuancier du navigateur',
+        'card.color_apply_aria': 'Appliquer la couleur {hex}',
+        'card.time_axis_label': 'Heure',
+        'card.close_overlay_aria': 'Fermer',
+        'card.remove_entity_aria': 'Retirer {name}',
+        'card.resize_aria_junction': 'Ajuster la transition entre deux plages',
+        'card.resize_title_junction': 'Glisser pour déplacer la transition',
+        'card.resize_aria_start': 'Déplacer le début de la plage',
+        'card.resize_title_start': 'Glisser pour modifier l’heure de début',
+        'card.resize_aria_end': 'Déplacer la fin de la plage',
+        'card.resize_title_end': 'Glisser pour modifier l’heure de fin',
+    },
+};
+function msg(hass, key, vars) {
+    const lang = normalizeLang(hass?.locale?.language);
+    let s = MESSAGES[lang][key] ?? MESSAGES.en[key] ?? key;
+    if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+            s = s.split(`{${k}}`).join(String(v));
+        }
+    }
+    return s;
+}
+const WEEKDAY_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAY_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+function weekdayShort(hass, index) {
+    const lang = normalizeLang(hass?.locale?.language);
+    const arr = lang === 'fr' ? WEEKDAY_FR : WEEKDAY_EN;
+    return arr[index % 7] ?? '';
+}
+
 /**
  * Déduit les domaines d’entités « compatibles » avec un type d’action HA.
  * Si `domain.service` est fourni, un seul domaine ; sinon heuristiques pour les noms de service seuls.
@@ -1894,42 +2323,6 @@ function entityCompatibleWithAction(entityId, actionType, hass) {
     return true;
 }
 
-/** Libellé FR pour un domaine (navigation type « Thermostat », « Lumière »). */
-function domainLabelFr(domain) {
-    const map = {
-        alarm_control_panel: 'Alarme',
-        automation: 'Automatisation',
-        binary_sensor: 'Capteur binaire',
-        button: 'Bouton',
-        camera: 'Caméra',
-        climate: 'Climat',
-        cover: 'Volet / store',
-        fan: 'Ventilateur',
-        humidifier: 'Humidificateur',
-        input_boolean: 'Interrupteur virtuel',
-        input_button: 'Bouton virtuel',
-        input_number: 'Nombre',
-        input_select: 'Liste déroulante',
-        input_text: 'Texte',
-        light: 'Lumière',
-        lock: 'Serrure',
-        media_player: 'Média',
-        number: 'Nombre',
-        scene: 'Scène',
-        script: 'Script',
-        select: 'Liste',
-        sensor: 'Capteur',
-        switch: 'Interrupteur',
-        sun: 'Soleil',
-        update: 'Mise à jour',
-        vacuum: 'Aspirateur',
-        valve: 'Vanne',
-        water_heater: 'Chauffe-eau',
-        weather: 'Météo',
-        zone: 'Zone',
-    };
-    return map[domain] ?? domain.replace(/_/g, ' ');
-}
 function domainIcon(domain) {
     const map = {
         alarm_control_panel: 'mdi:shield-home',
@@ -1962,54 +2355,6 @@ function domainIcon(domain) {
     };
     return map[domain] ?? 'mdi:shape-outline';
 }
-/** Titre principal pour une ligne de service (FR quand on connaît le couple domain/service). */
-function servicePrimaryLabel(domain, service) {
-    const known = {
-        'climate.turn_on': 'Allumer',
-        'climate.turn_off': 'Éteindre',
-        'climate.toggle': 'Basculer',
-        'climate.set_preset_mode': 'Choisir un mode préréglé',
-        'climate.set_temperature': 'Régler la température',
-        'climate.set_hvac_mode': 'Régler le mode HVAC',
-        'climate.set_fan_mode': 'Régler le mode ventilation',
-        'light.turn_on': 'Allumer',
-        'light.turn_off': 'Éteindre',
-        'light.toggle': 'Basculer',
-        'switch.turn_on': 'Allumer',
-        'switch.turn_off': 'Éteindre',
-        'switch.toggle': 'Basculer',
-        'fan.turn_on': 'Allumer',
-        'fan.turn_off': 'Éteindre',
-        'cover.open_cover': 'Ouvrir',
-        'cover.close_cover': 'Fermer',
-        'cover.stop_cover': 'Arrêter',
-        'cover.set_cover_position': 'Régler la position',
-        'lock.lock': 'Verrouiller',
-        'lock.unlock': 'Déverrouiller',
-        'media_player.media_play': 'Lecture',
-        'media_player.media_pause': 'Pause',
-        'media_player.turn_on': 'Allumer',
-        'media_player.turn_off': 'Éteindre',
-        'vacuum.start': 'Démarrer',
-        'vacuum.pause': 'Pause',
-        'vacuum.return_to_base': 'Retour à la base',
-        'script.turn_on': 'Exécuter',
-        'scene.turn_on': 'Activer la scène',
-        'input_boolean.turn_on': 'Activer',
-        'input_boolean.turn_off': 'Désactiver',
-        'input_boolean.toggle': 'Basculer',
-        'humidifier.set_humidity': 'Régler l’humidité',
-        'humidifier.turn_on': 'Allumer',
-        'humidifier.turn_off': 'Éteindre',
-        'water_heater.set_temperature': 'Régler la température',
-    };
-    const k = `${domain}.${service}`;
-    if (known[k]) {
-        return known[k];
-    }
-    const t = service.replace(/_/g, ' ');
-    return t.charAt(0).toUpperCase() + t.slice(1);
-}
 function serviceSecondaryHint(domain, service) {
     return `${domain}.${service}`;
 }
@@ -2032,13 +2377,15 @@ function listSelectableDomains(hass) {
         }
         doms.add(d);
     }
-    return [...doms].sort((a, b) => domainLabelFr(a).localeCompare(domainLabelFr(b), 'fr', { sensitivity: 'base' }));
+    return [...doms].sort((a, b) => domainLabel(hass, a).localeCompare(domainLabel(hass, b), collatorLocale(hass), {
+        sensitivity: 'base',
+    }));
 }
 function listEntitiesInDomain(hass, domain) {
     const prefix = `${domain}.`;
     return Object.keys(hass.states)
         .filter((id) => id.startsWith(prefix))
-        .sort((a, b) => friendlyEntityName(hass, a).localeCompare(friendlyEntityName(hass, b), 'fr', {
+        .sort((a, b) => friendlyEntityName(hass, a).localeCompare(friendlyEntityName(hass, b), collatorLocale(hass), {
         sensitivity: 'base',
     }));
 }
@@ -2072,7 +2419,7 @@ function listEntityIdsForAction(hass, actionType) {
             }
         }
     }
-    out.sort((a, b) => friendlyEntityName(hass, a).localeCompare(friendlyEntityName(hass, b), 'fr', {
+    out.sort((a, b) => friendlyEntityName(hass, a).localeCompare(friendlyEntityName(hass, b), collatorLocale(hass), {
         sensitivity: 'base',
     }));
     return out;
@@ -2755,7 +3102,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             id,
             name: typeof sch?.name === 'string' && sch.name.trim() ? sch.name.trim() : id,
         }))
-            .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+            .sort((a, b) => a.name.localeCompare(b.name, collatorLocale(this.hass), { sensitivity: 'base' }));
     }
     _allScheduleIds() {
         return this._scheduleEntries().map((e) => e.id);
@@ -2822,15 +3169,15 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     render() {
         const hass = this.hass;
         if (!hass) {
-            return x `<div class="card-config">Chargement du tableau de bord…</div>`;
+            return x `<div class="card-config">${msg(undefined, 'editor.loading')}</div>`;
         }
         const entries = this._scheduleEntries();
         const entityMissing = !hass.states[this._resolvedStatusEntityId()];
         return x `
       <div class="card-config">
         <div class="field-block">
-          <div class="schedule-list-title">Titre de la carte</div>
-          <ha-formfield label="Afficher le titre sur la carte">
+          <div class="schedule-list-title">${msg(hass, 'editor.card_title_section')}</div>
+          <ha-formfield label=${msg(hass, 'editor.show_title_switch')}>
             <ha-switch
               .checked=${this._config?.show_header !== false}
               @change=${this._onShowHeaderChange}
@@ -2839,7 +3186,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
           ${this._config?.show_header !== false
             ? x `
                 <label class="sm-sub-label" for="sm-editor-card-title"
-                  >Titre personnalisé (optionnel)</label
+                  >${msg(hass, 'editor.custom_title_optional')}</label
                 >
                 <input
                   id="sm-editor-card-title"
@@ -2854,33 +3201,31 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                   @blur=${this._onHeaderTitleBlur}
                 />
                 <p class="hint">
-                  Saisissez le texte puis cliquez en dehors du champ (ou Tab) pour l’appliquer à
-                  la configuration et à l’aperçu. Vide =
+                  ${msg(hass, 'editor.title_apply_hint')}
                   <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>.
                 </p>
               `
             : x `
                 <p class="hint">
-                  Réactivez « Afficher le titre sur la carte » pour modifier le libellé.
+                  ${msg(hass, 'editor.title_disabled_hint')}
                 </p>
               `}
         </div>
         <div class="field-block">
-          <ha-formfield label="Interrupteur actif / inactif par planning">
+          <ha-formfield label=${msg(hass, 'editor.schedule_toggle_label')}>
             <ha-switch
               .checked=${this._config?.show_schedule_enable_toggle !== false}
               @change=${this._onShowScheduleEnableToggleChange}
             ></ha-switch>
           </ha-formfield>
           <p class="hint">
-            Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté
-            intégration).
+            ${msg(hass, 'editor.schedule_toggle_hint')}
           </p>
         </div>
         <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
-            label="Capteur d’état Schedule Manager"
+            label=${msg(hass, 'editor.status_entity_label')}
             .value=${this._statusEntityPickerValue()}
             .includeDomains=${['sensor']}
             .entityFilter=${this._statusEntityFilter}
@@ -2890,11 +3235,11 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
           ${entityMissing
             ? x `
                 <p class="hint">
-                  L’entité
+                  ${msg(hass, 'editor.entity_missing_before_first_code')}
                   <code class="inline">${this._resolvedStatusEntityId()}</code>
-                  est introuvable. Vérifiez que l’intégration Schedule Manager est installée et
-                  chargée ; le capteur attendu est en général
-                  <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>.
+                  ${msg(hass, 'editor.entity_missing_between_codes')}
+                  <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>
+                  ${msg(hass, 'editor.entity_missing_after_second_code')}
                 </p>
               `
             : x ``}
@@ -2905,16 +3250,15 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                 ${entries.length === 0
                 ? x `
                       <p class="hint">
-                        Aucun planning dans les attributs du capteur pour l’instant. Créez un
-                        planning depuis la carte ou le service
-                        <code class="inline">schedule_manager.create_schedule</code>.
+                        ${msg(hass, 'editor.no_schedules_hint', {
+                    service: 'schedule_manager.create_schedule',
+                })}
                       </p>
                     `
                 : x `
-                      <div class="schedule-list-title">Plannings à afficher sur la carte</div>
+                      <div class="schedule-list-title">${msg(hass, 'editor.schedules_on_card_title')}</div>
                       <p class="hint">
-                        Toutes les cases cochées = afficher tous les plannings. Décochez pour
-                        masquer un planning (au moins un reste visible).
+                        ${msg(hass, 'editor.schedules_on_card_hint')}
                       </p>
                       <div class="schedule-list">
                         ${entries.map((row) => x `
@@ -3091,7 +3435,6 @@ ScheduleManagerCardEditor = __decorate([
     e$2('schedule-manager-card-editor')
 ], ScheduleManagerCardEditor);
 
-const WEEKDAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 /** Pastilles de couleur rapides (+ valeur du sélecteur). */
 const BLOCK_COLOR_PRESETS = [
     '#2196F3',
@@ -3404,8 +3747,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         return this.config?.show_header !== false;
     }
     _cardHeaderTitleText() {
-        const t = this.config?.header_title?.trim();
-        return t || DEFAULT_CARD_HEADER_TITLE;
+        const raw = this.config?.header_title?.trim();
+        if (raw) {
+            return raw;
+        }
+        return msg(this.hass, 'card.default_header_title');
     }
     _renderCardHeader() {
         if (!this._showCardHeader()) {
@@ -3439,16 +3785,17 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     }
     render() {
         if (!this.hass || !this.config) {
-            return x `<ha-card><div class="card-content">Chargement…</div></ha-card>`;
+            return x `<ha-card><div class="card-content">${msg(undefined, 'card.loading')}</div></ha-card>`;
         }
         const scheduleIds = this.config.schedule_ids || [];
         const schedulesMap = this.getSchedulesRecord();
-        if (!this.hass.states[this.statusEntityId()]) {
+        const hass = this.hass;
+        if (!hass.states[this.statusEntityId()]) {
             return x `
         <ha-card>
           ${this._renderCardHeader()}
           <div class="card-content">
-            Entité introuvable : <code>${this.statusEntityId()}</code>
+            ${msg(hass, 'card.entity_missing')} <code>${this.statusEntityId()}</code>
           </div>
         </ha-card>
       `;
@@ -3467,6 +3814,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     `;
     }
     renderSchedulesList(scheduleIds, schedulesMap) {
+        const hass = this.hass;
         const totalCount = Object.keys(schedulesMap).length;
         const list = scheduleIds.length > 0
             ? scheduleIds
@@ -3480,25 +3828,21 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             if (scheduleIds.length > 0 && totalCount > 0) {
                 return x `
           <div class="empty-hint">
-            Aucun planning ne correspond aux
-            <code class="inline">schedule_ids</code>
-            de la carte. Vérifiez les UUID dans les attributs du capteur
-            <code class="inline">schedules</code>.
+            ${msg(hass, 'card.empty_filter_schedules')}
           </div>
         `;
             }
             if (totalCount === 0) {
                 return x `
           <div class="empty-hint">
-            Aucun planning enregistré pour l’instant. Créez-en un ci-dessous ou via
-            <strong>Outils de développement → Actions</strong> :
+            ${msg(hass, 'card.empty_no_schedules')}
             <code class="inline">schedule_manager.create_schedule</code>
-            (service <code class="inline">name</code> obligatoire).
+            ${msg(hass, 'card.empty_no_schedules_service')}
           </div>
           <div class="create-row">
             <input
               type="text"
-              placeholder="Nom du planning (ex. Semaine)"
+              placeholder=${msg(hass, 'card.placeholder_schedule_name')}
               .value=${this._newScheduleName}
               @input=${(e) => {
                     this._newScheduleName = e.target.value;
@@ -3514,12 +3858,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
               ?disabled=${this._creating || !this._newScheduleName.trim()}
               @click=${() => this.createScheduleFromInput()}
             >
-              ${this._creating ? 'Création…' : 'Créer le planning'}
+              ${this._creating ? msg(hass, 'card.creating') : msg(hass, 'card.create_schedule')}
             </button>
           </div>
         `;
             }
-            return x `<div class="empty-hint">Aucun élément à afficher.</div>`;
+            return x `<div class="empty-hint">${msg(hass, 'card.empty_list')}</div>`;
         }
         return x `${list.map((s) => this.renderSchedule(s))}`;
     }
@@ -3591,7 +3935,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const showNow = segments.length > 0;
         const nowPct = nowPercentOfDay();
         return x `
-      <div class="timeline-frise sm-scheduler-frise" role="img" aria-label="Plages sur 24 heures">
+      <div class="timeline-frise sm-scheduler-frise" role="img" aria-label=${msg(this.hass, 'card.timeline_aria')}>
         <div class="sm-scheduler-track">
           <div class="sm-scheduler-bar">
             ${segments.map((s, i) => {
@@ -3666,19 +4010,19 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
           class="btn-open-config"
           @click=${() => this.openVisualEditor(schedule)}
         >
-          Configurer les plages…
+          ${msg(this.hass, 'card.configure_slots')}
         </button>
 
         ${blocks.length
             ? x `
               <div class="timeline-hint">
-                Aperçu graphique — ouvrez la configuration pour modifier les plages.
+                ${msg(this.hass, 'card.timeline_hint')}
               </div>
               ${this.renderDayTimeline(blocks)}
             `
             : x `
               <div class="empty-hint">
-                Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.
+                ${msg(this.hass, 'card.no_slots_hint')}
               </div>
             `}
       </div>
@@ -3916,7 +4260,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             days = [...days, day].sort((a, b) => a - b);
         }
         if (days.length === 0) {
-            alert('Sélectionnez au moins un jour.');
+            alert(msg(this.hass, 'card.alert_select_day'));
             return;
         }
         this._visualEdit = { ...this._visualEdit, repeatDays: days };
@@ -3948,13 +4292,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         }
         const next = { ...cur, ...patch };
         if (!isOvernightBlock(next) && !sameDayBlockIntervalExclusiveEnd(next)) {
-            alert('Pour une plage sur une même journée, l’heure de fin doit être strictement après le début.');
+            alert(msg(this.hass, 'card.alert_end_after_start'));
             return;
         }
         const trial = [...this._visualEdit.blocks];
         trial[sel] = next;
         if (hasOverlappingSameDayBlocks(trial)) {
-            alert('Les plages horaires ne peuvent pas se chevaucher.');
+            alert(msg(this.hass, 'card.alert_overlap'));
             return;
         }
         this._visualEdit = { ...this._visualEdit, blocks: trial };
@@ -4024,7 +4368,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const bi = this._visualEdit.selectedIndex;
         const b = this._visualEdit.blocks[bi];
         if (!b || b.actions.length <= 1) {
-            alert('Chaque plage doit conserver au moins une action.');
+            alert(msg(this.hass, 'card.alert_min_one_action'));
             return;
         }
         const actions = b.actions.filter((_, i) => i !== ai);
@@ -4058,14 +4402,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             nextBlocks = [...this._visualEdit.blocks, nb];
             selectedIndex = nextBlocks.length - 1;
             if (hasOverlappingSameDayBlocks(nextBlocks)) {
-                alert('Impossible d’ajouter cette plage sans chevauchement. Modifiez les horaires existants.');
+                alert(msg(this.hass, 'card.alert_cannot_add_overlap'));
                 return;
             }
         }
         else {
             const split = tryInsertSlotAtDayStart(this._visualEdit.blocks, TIMELINE_DRAG_SNAP_MINUTES);
             if (!split) {
-                alert('La journée est déjà entièrement couverte. Supprimez ou raccourcissez une plage avant d’en ajouter une autre.');
+                alert(msg(this.hass, 'card.alert_day_full'));
                 return;
             }
             nextBlocks = split;
@@ -4075,7 +4419,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const fp = blockFingerprint(nb);
         for (const b of this._visualEdit.blocks) {
             if (blockFingerprint(b) === fp) {
-                alert('Une plage identique existe déjà — modifiez les horaires ou le service.');
+                alert(msg(this.hass, 'card.alert_duplicate_slot'));
                 return;
             }
         }
@@ -4146,6 +4490,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const exclude = payloadIds;
         const rows = this.compatibleEntityChoicesForAction(action, exclude);
         const q = this._entityManualListSearch.trim().toLowerCase();
+        const emptyQ = q ? msg(hass, 'card.entity_manual_empty_q') : '';
         const filtered = q === ''
             ? rows
             : rows.filter((r) => r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
@@ -4158,19 +4503,18 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             class="sm-entity-manual-filter"
             autocomplete="off"
             spellcheck="false"
-            aria-label="Rechercher des entités"
-            placeholder="Rechercher des entités"
+            aria-label=${msg(hass, 'card.entity_search_aria')}
+            placeholder=${msg(hass, 'card.entity_search_placeholder')}
             .value=${this._entityManualListSearch}
             @input=${(e) => {
             this._entityManualListSearch = e.target.value;
         }}
           />
         </div>
-        <div class="sm-entity-manual-list" role="listbox" aria-label="Entités compatibles">
+        <div class="sm-entity-manual-list" role="listbox" aria-label=${msg(hass, 'card.entity_list_aria')}>
           ${filtered.length === 0
             ? x `<p class="sm-entity-manual-empty">
-                Aucune entité compatible${q ? ' pour cette recherche' : ''}. Vérifiez le type
-                d’action ou utilisez « Modifier l’action ».
+                ${msg(hass, 'card.entity_manual_empty', { q: emptyQ })}
               </p>`
             : filtered.map((r) => {
                 const st = hass.states[r.id];
@@ -4292,7 +4636,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         }
         const ids = entityIdsFromPayload(action.action_payload).filter((e) => e !== entityId);
         if (ids.length === 0) {
-            alert('Conservez au moins une entité, ou utilisez « Modifier l’action » pour tout reconfigurer.');
+            alert(msg(this.hass, 'card.alert_min_one_entity'));
             return;
         }
         const base = typeof action.action_payload === 'object' && action.action_payload !== null
@@ -4446,9 +4790,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             : 'mdi:gesture-tap-button';
         const title = primary
             ? friendlyEntityName(hass, primary)
-            : 'Aucune entité sélectionnée';
+            : msg(hass, 'card.no_entity_selected');
         const actionLine = parsed
-            ? servicePrimaryLabel(parsed.domain, parsed.service)
+            ? servicePrimaryLabel(hass, parsed.domain, parsed.service)
             : selected.action_type || '—';
         return x `
       <div class="sm-action-summary">
@@ -4466,12 +4810,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     `;
     }
     formatActionTabTitle(action, index) {
-        const t = String(action.action_type ?? '').trim();
-        if (!t) {
-            return `Action ${index + 1}`;
+        const at = String(action.action_type ?? '').trim();
+        if (!at) {
+            return msg(this.hass, 'card.action_tab_fallback', { n: String(index + 1) });
         }
-        const segs = t.split('.');
-        const tail = t.includes('.') ? segs[segs.length - 1] ?? t : t;
+        const segs = at.split('.');
+        const tail = at.includes('.') ? segs[segs.length - 1] ?? at : at;
         return tail.length > 20 ? `${tail.slice(0, 18)}…` : tail;
     }
     /** Une seule action encore sans service : pas de liste — uniquement le bouton principal. */
@@ -4536,10 +4880,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const matches = (text) => !qRaw || text.toLowerCase().includes(qRaw);
         let body = x ``;
         if (step === 'domain') {
-            const domains = listSelectableDomains(hass).filter((d) => matches(domainLabelFr(d)) || matches(d));
+            const domains = listSelectableDomains(hass).filter((d) => matches(domainLabel(hass, d)) || matches(d));
             body =
                 domains.length === 0
-                    ? x `<p class="sm-ap-empty">Aucun résultat.</p>`
+                    ? x `<p class="sm-ap-empty">${msg(hass, 'card.wizard_no_results')}</p>`
                     : x `<div class="sm-ap-scroll">
               ${domains.map((d) => x `
                   <button
@@ -4549,7 +4893,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                   >
                     <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(d)}></ha-icon>
                     <div class="sm-ap-row-text">
-                      <span class="sm-ap-row-primary">${domainLabelFr(d)}</span>
+                      <span class="sm-ap-row-primary">${domainLabel(hass, d)}</span>
                       <span class="sm-ap-row-secondary">${d}</span>
                     </div>
                     <span class="sm-ap-chevron" aria-hidden="true">›</span>
@@ -4560,11 +4904,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         else if (step === 'service' && domainF) {
             const dom = domainF;
             const svcList = servicesForDomain(hass, dom).filter((s) => matches(s) ||
-                matches(servicePrimaryLabel(dom, s)) ||
+                matches(servicePrimaryLabel(hass, dom, s)) ||
                 matches(serviceSecondaryHint(dom, s)));
             body =
                 svcList.length === 0
-                    ? x `<p class="sm-ap-empty">Aucun service pour ce domaine.</p>`
+                    ? x `<p class="sm-ap-empty">${msg(hass, 'card.wizard_no_services_domain')}</p>`
                     : x `<div class="sm-ap-scroll">
               ${svcList.map((s) => x `
                   <button
@@ -4574,7 +4918,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                   >
                     <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(dom)}></ha-icon>
                     <div class="sm-ap-row-text">
-                      <span class="sm-ap-row-primary">${servicePrimaryLabel(dom, s)}</span>
+                      <span class="sm-ap-row-primary">${servicePrimaryLabel(hass, dom, s)}</span>
                       <span class="sm-ap-row-secondary">${serviceSecondaryHint(dom, s)}</span>
                     </div>
                     <span class="sm-ap-chevron" aria-hidden="true">›</span>
@@ -4589,7 +4933,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             body =
                 entities.length === 0
                     ? x `<p class="sm-ap-empty">
-              Aucune entité compatible avec l’action <code>${actionFull}</code> dans ce domaine.
+              ${msg(hass, 'card.wizard_no_entities', { action: actionFull })}
             </p>`
                     : x `<div class="sm-ap-scroll">
               ${entities.map((eid) => x `
@@ -4617,7 +4961,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             body =
                 filtered.length === 0
                     ? x `<p class="sm-ap-empty">
-              Aucun mode préréglé trouvé pour cette entité. Utilisez Retour ou fermez.
+              ${msg(hass, 'card.wizard_no_presets')}
             </p>`
                     : x `<div class="sm-ap-scroll">
               ${filtered.map((mode) => x `
@@ -4632,7 +4976,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                     ></ha-icon>
                     <div class="sm-ap-row-text">
                       <span class="sm-ap-row-primary">${mode}</span>
-                      <span class="sm-ap-row-secondary">Mode préréglé · climate.set_preset_mode</span>
+                      <span class="sm-ap-row-secondary">${msg(hass, 'card.wizard_preset_sub')}</span>
                     </div>
                     <span class="sm-ap-chevron" aria-hidden="true">›</span>
                   </button>
@@ -4640,17 +4984,17 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             </div>`;
         }
         const context = step === 'domain'
-            ? 'Étape 1 — choisissez un type d’appareil (domaine)'
+            ? msg(hass, 'card.wizard_step1')
             : step === 'service' && domainF
-                ? x `Étape 2 — quelle action · domaine
-              <strong>${domainLabelFr(domainF)}</strong> ?`
+                ? x `${msg(hass, 'card.wizard_step2')}
+              <strong>${domainLabel(hass, domainF)}</strong>${msg(hass, 'card.wizard_step2_suffix')}`
                 : step === 'entity' && domainF && svcPick
-                    ? x `Étape 3 — quelle entité pour
-                <code>${domainF}.${svcPick}</code>
-                ? Seules les entités compatibles sont listées.`
+                    ? x `${msg(hass, 'card.wizard_step3')}
+                <code>${domainF}.${svcPick}</code>${msg(hass, 'card.wizard_step3_suffix')}`
                     : step === 'climate_preset' && entityPick
-                        ? x `Étape 4 — mode préréglé pour «
-                  <strong>${friendlyEntityName(hass, entityPick)}</strong> »`
+                        ? msg(hass, 'card.wizard_step4', {
+                            name: friendlyEntityName(hass, entityPick),
+                        })
                         : '';
         return x `
       <div
@@ -4674,17 +5018,17 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             <button
               type="button"
               class="sm-ap-nav-btn"
-              aria-label="Retour"
+              aria-label=${msg(hass, 'card.wizard_back')}
               ?disabled=${step === 'domain'}
               @click=${() => this.actionWizardBack()}
             >
               ‹
             </button>
-            <h3 id="sm-ap-heading" class="sm-ap-heading">Choisir une action</h3>
+            <h3 id="sm-ap-heading" class="sm-ap-heading">${msg(hass, 'card.wizard_title')}</h3>
             <button
               type="button"
               class="sm-ap-nav-btn"
-              aria-label="Fermer"
+              aria-label=${msg(hass, 'card.wizard_close')}
               @click=${() => this.closeActionWizard()}
             >
               ×
@@ -4694,8 +5038,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
           <input
             type="search"
             class="sm-ap-search"
-            placeholder="Rechercher"
-            aria-label="Filtrer la liste"
+            placeholder=${msg(hass, 'card.wizard_search_placeholder')}
+            aria-label=${msg(hass, 'card.wizard_search_aria')}
             .value=${this._actionWizardSearch}
             @input=${this._onWizardSearchInput}
           />
@@ -4717,7 +5061,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             class="sm-action-primary-btn"
             @click=${() => this.openActionWizardAt(0)}
           >
-            + Choisir une action
+            ${msg(hass, 'card.choose_action_btn')}
           </button>
         </div>
       `;
@@ -4725,7 +5069,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const blockIdx = this._visualEdit.selectedIndex;
         return x `
       <div class="sm-action-entry">
-        <div class="sm-actions-stack" role="list" aria-label="Liste des actions du créneau">
+        <div class="sm-actions-stack" role="list" aria-label=${msg(hass, 'card.actions_list_aria')}>
           ${selected.actions.map((action, i) => {
             const primary = this.primaryEntityFromAction(action);
             const parsed = parseDomainService(action.action_type);
@@ -4746,11 +5090,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                         <button
                           type="button"
                           class="sm-action-block-remove"
-                          aria-label="Supprimer cette action"
-                          title="Supprimer cette action"
+                          aria-label=${msg(hass, 'card.remove_action_aria')}
+                          title=${msg(hass, 'card.remove_action_title')}
                           @click=${() => this.visualRemoveAction(i)}
                         >
-                          Supprimer
+                          ${msg(hass, 'card.remove')}
                         </button>
                       `
                 : null}
@@ -4759,12 +5103,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                 ${hasAction
                 ? x `
                       <div class="sm-action-entities-quick">
-                        <span class="sm-action-entities-quick-title">Entités ciblées</span>
+                        <span class="sm-action-entities-quick-title">${msg(hass, 'card.target_entities_title')}</span>
                         <p class="sm-action-entities-quick-hint">
-                          Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » puis
-                          choisissez dans la liste (recherche et lignes avec icône comme le sélecteur
-                          d’entités Home Assistant) —
-                          compatible avec <code>${action.action_type}</code>.
+                          ${msg(hass, 'card.target_entities_hint')}
+                          <code>${action.action_type}</code>.
                         </p>
                         <div class="entity-chips">
                           ${entityIdsFromPayload(action.action_payload).map((eid) => x `
@@ -4772,7 +5114,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                                 <button
                                   type="button"
                                   class="entity-chip-main"
-                                  aria-label="Remplacer ${friendlyEntityName(hass, eid)}"
+                                  aria-label=${msg(hass, 'card.replace_entity_chip_aria', {
+                    name: friendlyEntityName(hass, eid),
+                })}
                                   @click=${() => this.openEntityReplacePicker(blockIdx, i, eid)}
                                 >
                                   <span class="entity-chip-text">
@@ -4783,7 +5127,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                                 <button
                                   type="button"
                                   class="entity-chip-remove"
-                                  aria-label="Retirer ${friendlyEntityName(hass, eid)}"
+                                  aria-label=${msg(hass, 'card.remove_entity_aria', {
+                    name: friendlyEntityName(hass, eid),
+                })}
                                   @click=${(ev) => {
                     ev.stopPropagation();
                     this.visualRemoveEntityAt(i, eid);
@@ -4799,14 +5145,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                     ? x `
                               <div class="sm-entity-replace-block">
                                 <div class="sm-entity-add-row">
-                                  <span class="sm-entity-add-heading">Remplacer l’entité</span>
+                                  <span class="sm-entity-add-heading">${msg(hass, 'card.replace_entity')}</span>
                                   <button
                                     type="button"
                                     class="sm-entity-add-dismiss"
-                                    aria-label="Fermer le sélecteur"
+                                    aria-label=${msg(hass, 'card.close_picker_aria')}
                                     @click=${() => this.closeEntityAddPicker()}
                                   >
-                                    Fermer
+                                    ${msg(hass, 'card.wizard_close')}
                                   </button>
                                 </div>
                                 <div class="sm-entity-picker-shell sm-entity-picker-shell--popover">
@@ -4817,24 +5163,24 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                     : null}
                         <div class="sm-entity-add-block">
                           <div class="sm-entity-add-row">
-                            <span class="sm-entity-add-heading">Ajouter une entité</span>
+                            <span class="sm-entity-add-heading">${msg(hass, 'card.add_entity_heading')}</span>
                             ${this._entityAddPickerOpenKey === this.entityAddPickerKey(blockIdx, i)
                     ? x `
                                   <button
                                     type="button"
                                     class="sm-entity-add-dismiss"
-                                    aria-label="Fermer le sélecteur d’entité"
+                                    aria-label=${msg(hass, 'card.close_entity_picker_aria')}
                                     @click=${() => this.closeEntityAddPicker()}
                                   >
-                                    Fermer
+                                    ${msg(hass, 'card.wizard_close')}
                                   </button>
                                 `
                     : x `
                                   <button
                                     type="button"
                                     class="sm-entity-add-plus"
-                                    title="Choisir une entité à ajouter"
-                                    aria-label="Ajouter une entité"
+                                    title=${msg(hass, 'card.add_entity_title')}
+                                    aria-label=${msg(hass, 'card.add_entity_aria')}
                                     @click=${() => this.toggleEntityAddPicker(blockIdx, i)}
                                   >
                                     +
@@ -4855,7 +5201,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                 ${this.renderClimatePresetForAction(action, i)}
                 ${unknownService
                 ? x `<p class="sm-field-hint">
-                      Action personnalisée : <code>${action.action_type}</code>
+                      ${msg(hass, 'card.custom_action')} <code>${action.action_type}</code>
                     </p>`
                 : null}
                 <button
@@ -4863,7 +5209,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                   class="sm-action-primary-btn sm-action-block-wizard"
                   @click=${() => this.openActionWizardAt(i)}
                 >
-                  ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
+                  ${hasAction ? msg(hass, 'card.edit_action') : msg(hass, 'card.choose_action_btn')}
                 </button>
               </div>
             `;
@@ -4874,7 +5220,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
           class="sm-action-add-another-btn"
           @click=${() => this.visualAddAction()}
         >
-          + Ajouter une autre action
+          ${msg(hass, 'card.add_another_action')}
         </button>
       </div>
     `;
@@ -4908,13 +5254,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const orphan = cur && !modes.includes(cur);
         return x `
       <label class="sm-form-label sm-form-label-last sm-action-climate-preset">
-        Mode préréglé
+        ${msg(this.hass, 'card.preset_mode_label')}
         <select
           class="sm-select"
           .value=${l$1(cur)}
           @change=${(e) => this.visualSetPresetModeAt(actionIndex, e.target.value)}
         >
-          ${orphan ? x `<option value=${cur}>${cur} (actuel)</option>` : null}
+          ${orphan ? x `<option value=${cur}>${cur}${msg(this.hass, 'card.preset_current_suffix')}</option>` : null}
           ${modes.map((m) => x `<option value=${m}>${m}</option>`)}
         </select>
       </label>
@@ -4925,20 +5271,21 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             return;
         }
         const { scheduleId, blocks, repeatDays } = this._visualEdit;
+        const hass = this.hass;
         for (const b of blocks) {
             const ok = (b.actions || []).some((a) => String(a.action_type ?? '').trim());
             if (!ok) {
-                alert('Chaque plage doit avoir au moins une action avec un service défini (assistant « Choisir une action »).');
+                alert(msg(hass, 'card.validation_min_action'));
                 return;
             }
         }
         const dupAt = findDuplicateBlockIndex(blocks);
         if (dupAt >= 0) {
-            alert(`Deux plages identiques (horaires + action + payload) — modifiez l’entrée n° ${dupAt + 1}.`);
+            alert(msg(hass, 'card.validation_duplicate', { n: String(dupAt + 1) }));
             return;
         }
         if (hasOverlappingSameDayBlocks(blocks)) {
-            alert('Des plages se chevauchent sur la journée. Corrigez les horaires avant d’enregistrer.');
+            alert(msg(hass, 'card.validation_overlap_day'));
             return;
         }
         try {
@@ -4949,8 +5296,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             this.closeVisualEditor();
         }
         catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            alert(`Enregistrement impossible : ${msg}`);
+            const errMsg = e instanceof Error ? e.message : String(e);
+            alert(`${msg(hass, 'card.save_failed_prefix')} ${errMsg}`);
             // eslint-disable-next-line no-console
             console.error('schedule_manager.update_schedule failed', e);
         }
@@ -5039,24 +5386,24 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         this._visualEdit = { ...this._visualEdit, blocks: trial };
     }
     renderBlockColorControls(block) {
+        const hass = this.hass;
         const pickerVal = this.blockColorPickerHex(block);
         const custom = this.hasCustomBlockColor(block);
         return x `
       <div class="sm-form-label sm-color-field">
-        <span class="sm-color-field-title">Couleur du créneau sur la ligne horaire</span>
+        <span class="sm-color-field-title">${msg(hass, 'card.color_field_title')}</span>
         <p class="sm-color-field-hint">
-          Teinte affichée pour la plage sélectionnée sur la frise « Heure » ci‑dessus (pas la couleur
-          de la pièce dans Home Assistant).
+          ${msg(hass, 'card.color_field_hint')}
         </p>
         <div class="sm-color-row">
           <label class="sm-color-system-label">
-            <span class="sm-color-system-text">Nuancier du navigateur</span>
+            <span class="sm-color-system-text">${msg(hass, 'card.color_browser_picker_short')}</span>
             <input
               type="color"
               class="sm-color-native"
               .value=${pickerVal}
-              title="Ouvrir le sélecteur de couleur du système"
-              aria-label="Choisir une couleur précise avec le nuancier du navigateur"
+              title=${msg(hass, 'card.color_system_title')}
+              aria-label=${msg(hass, 'card.color_system_aria')}
               @input=${(e) => this.visualSetBlockColor(e.target.value)}
             />
           </label>
@@ -5067,7 +5414,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                   class="sm-color-swatch"
                   style="background:${hex}"
                   title=${hex}
-                  aria-label="Appliquer la couleur ${hex}"
+                  aria-label=${msg(hass, 'card.color_apply_aria', { hex })}
                   @click=${() => this.visualSetBlockColor(hex)}
                 ></button>
               `)}
@@ -5078,13 +5425,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             ?disabled=${!custom}
             @click=${() => this.visualClearBlockColor()}
           >
-            Défaut
+            ${msg(hass, 'card.color_default')}
           </button>
         </div>
       </div>
     `;
     }
     renderEditorTimeline(blocks, selectedIndex) {
+        const hass = this.hass;
         const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
         const caps = this.segmentCapIndices(segments);
         const resizeHandles = timelineResizeHandlesForSelection(blocks, selectedIndex);
@@ -5094,10 +5442,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
       <div
         class="timeline-frise sm-scheduler-frise sm-editor-frise"
         role="group"
-        aria-label="Plages sur 24 heures — cliquer pour sélectionner, poignées pour ajuster"
+        aria-label=${msg(hass, 'card.editor_timeline_aria')}
       >
         <div class="sm-frise-heading">
-          <span class="sm-frise-heading-label">Heure</span>
+          <span class="sm-frise-heading-label">${msg(hass, 'card.time_axis_label')}</span>
         </div>
         <div class="sm-scheduler-track sm-scheduler-track--editor">
           <div class="sm-scheduler-bar">
@@ -5112,7 +5460,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                   class="sm-slot ${sel} ${capS} ${capE}"
                   style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
                   title=${s.blockIndex === selectedIndex
-                ? `${s.label} — glisser pour déplacer la plage`
+                ? msg(hass, 'card.drag_move_slot', { label: s.label })
                 : s.label}
                   @pointerdown=${(e) => this.onSlotPointerDown(e, s.blockIndex)}
                   @click=${(e) => this.onSlotClick(e, s.blockIndex)}
@@ -5124,15 +5472,15 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
           </div>
           ${resizeHandles.map((h) => {
             const label = h.kind === 'junction'
-                ? 'Ajuster la transition entre deux plages'
+                ? msg(hass, 'card.resize_aria_junction')
                 : h.kind === 'start'
-                    ? 'Déplacer le début de la plage'
-                    : 'Déplacer la fin de la plage';
+                    ? msg(hass, 'card.resize_aria_start')
+                    : msg(hass, 'card.resize_aria_end');
             const title = h.kind === 'junction'
-                ? 'Glisser pour déplacer la transition'
+                ? msg(hass, 'card.resize_title_junction')
                 : h.kind === 'start'
-                    ? 'Glisser pour modifier l’heure de début'
-                    : 'Glisser pour modifier l’heure de fin';
+                    ? msg(hass, 'card.resize_title_start')
+                    : msg(hass, 'card.resize_title_end');
             return x `
               <button
                 type="button"
@@ -5174,6 +5522,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const blocks = v.blocks;
         const sel = v.selectedIndex;
         const selected = blocks[sel];
+        const hass = this.hass;
         return x `
       <div
         class="sm-overlay"
@@ -5199,29 +5548,29 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             <button
               type="button"
               class="sm-icon-btn"
-              aria-label="Fermer"
+              aria-label=${msg(hass, 'card.close_overlay_aria')}
               @click=${() => this.closeVisualEditor()}
             >
-              ×
+              ${msg(hass, 'card.modal_close')}
             </button>
           </div>
           <div class="sm-modal-sub">
-            <span>Jours de répétition</span>
+            <span>${msg(hass, 'card.repeat_days')}</span>
             <div class="sm-repeat-days">
-              ${WEEKDAY_LABELS_FR.map((label, day) => x `
+              ${[0, 1, 2, 3, 4, 5, 6].map((day) => x `
                   <button
                     type="button"
                     class="sm-day ${v.repeatDays.includes(day) ? 'on' : ''}"
                     @click=${() => this.visualToggleDay(day)}
                   >
-                    ${label}
+                    ${weekdayShort(hass, day)}
                   </button>
                 `)}
             </div>
           </div>
           <div class="sm-toolbar">
             <button type="button" class="sm-tool-btn sm-tool-accent" @click=${() => this.visualAddBlock()}>
-              + Ajouter une plage
+              ${msg(hass, 'card.add_slot')}
             </button>
             <button
               type="button"
@@ -5229,7 +5578,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
               ?disabled=${blocks.length === 0}
               @click=${() => this.visualRemoveSelected()}
             >
-              Supprimer la plage
+              ${msg(hass, 'card.remove_slot')}
             </button>
           </div>
           ${this.renderEditorTimeline(blocks, sel)}
@@ -5237,7 +5586,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             ? x `
                 <div class="sm-modal-body sm-modal-body-frise-placeholder">
                   <div class="empty-hint">
-                    Aucune plage — utilisez « + Ajouter une plage » ci-dessus.
+                    ${msg(hass, 'card.no_slots_editor')}
                   </div>
                 </div>
               `
@@ -5247,7 +5596,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                 <div class="sm-modal-body">
                   <div class="sm-time-row">
                     <label>
-                      Heure de début (HH:MM)
+                      ${msg(hass, 'card.start_time_label')}
                       <input
                         type="text"
                         inputmode="numeric"
@@ -5260,7 +5609,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                       />
                     </label>
                     <label>
-                      Heure de fin (HH:MM)
+                      ${msg(hass, 'card.end_time_label')}
                       <input
                         type="text"
                         inputmode="numeric"
@@ -5275,7 +5624,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                   </div>
                   ${this.renderBlockColorControls(selected)}
                   <div class="sm-action-card">
-                    <h4>Actions pendant cette plage</h4>
+                    <h4>${msg(hass, 'card.actions_during_slot')}</h4>
                     ${this.renderActionPlanningControls(selected)}
                   </div>
                 </div>
@@ -5283,10 +5632,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             : null}
           <div class="sm-modal-footer">
             <button type="button" class="btn-text danger" @click=${() => this.closeVisualEditor()}>
-              Annuler
+              ${msg(hass, 'card.cancel')}
             </button>
             <button type="button" class="btn-text primary" @click=${() => this.saveVisualEditor()}>
-              Enregistrer
+              ${msg(hass, 'card.save')}
             </button>
           </div>
         </div>

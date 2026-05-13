@@ -7,6 +7,7 @@ import {
   DEFAULT_CARD_HEADER_TITLE,
   SCHEDULE_MANAGER_STATUS_ENTITY_ID,
 } from './types';
+import { collatorLocale, msg } from './i18n';
 import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 
 /** Empreinte stable pour comparer la config affichée (alignée sur hasChanged de la carte). */
@@ -266,7 +267,9 @@ export class ScheduleManagerCardEditor extends LitElement {
         id,
         name: typeof sch?.name === 'string' && sch.name.trim() ? sch.name.trim() : id,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, collatorLocale(this.hass), { sensitivity: 'base' })
+      );
   }
 
   private _allScheduleIds(): string[] {
@@ -366,7 +369,7 @@ export class ScheduleManagerCardEditor extends LitElement {
   render() {
     const hass = this.hass as HomeAssistant | undefined;
     if (!hass) {
-      return html`<div class="card-config">Chargement du tableau de bord…</div>`;
+      return html`<div class="card-config">${msg(undefined, 'editor.loading')}</div>`;
     }
 
     const entries = this._scheduleEntries();
@@ -375,8 +378,8 @@ export class ScheduleManagerCardEditor extends LitElement {
     return html`
       <div class="card-config">
         <div class="field-block">
-          <div class="schedule-list-title">Titre de la carte</div>
-          <ha-formfield label="Afficher le titre sur la carte">
+          <div class="schedule-list-title">${msg(hass, 'editor.card_title_section')}</div>
+          <ha-formfield label=${msg(hass, 'editor.show_title_switch')}>
             <ha-switch
               .checked=${this._config?.show_header !== false}
               @change=${this._onShowHeaderChange}
@@ -385,7 +388,7 @@ export class ScheduleManagerCardEditor extends LitElement {
           ${this._config?.show_header !== false
             ? html`
                 <label class="sm-sub-label" for="sm-editor-card-title"
-                  >Titre personnalisé (optionnel)</label
+                  >${msg(hass, 'editor.custom_title_optional')}</label
                 >
                 <input
                   id="sm-editor-card-title"
@@ -400,33 +403,31 @@ export class ScheduleManagerCardEditor extends LitElement {
                   @blur=${this._onHeaderTitleBlur}
                 />
                 <p class="hint">
-                  Saisissez le texte puis cliquez en dehors du champ (ou Tab) pour l’appliquer à
-                  la configuration et à l’aperçu. Vide =
+                  ${msg(hass, 'editor.title_apply_hint')}
                   <code class="inline">${DEFAULT_CARD_HEADER_TITLE}</code>.
                 </p>
               `
             : html`
                 <p class="hint">
-                  Réactivez « Afficher le titre sur la carte » pour modifier le libellé.
+                  ${msg(hass, 'editor.title_disabled_hint')}
                 </p>
               `}
         </div>
         <div class="field-block">
-          <ha-formfield label="Interrupteur actif / inactif par planning">
+          <ha-formfield label=${msg(hass, 'editor.schedule_toggle_label')}>
             <ha-switch
               .checked=${this._config?.show_schedule_enable_toggle !== false}
               @change=${this._onShowScheduleEnableToggleChange}
             ></ha-switch>
           </ha-formfield>
           <p class="hint">
-            Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté
-            intégration).
+            ${msg(hass, 'editor.schedule_toggle_hint')}
           </p>
         </div>
         <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
-            label="Capteur d’état Schedule Manager"
+            label=${msg(hass, 'editor.status_entity_label')}
             .value=${this._statusEntityPickerValue()}
             .includeDomains=${['sensor']}
             .entityFilter=${this._statusEntityFilter}
@@ -436,11 +437,11 @@ export class ScheduleManagerCardEditor extends LitElement {
           ${entityMissing
             ? html`
                 <p class="hint">
-                  L’entité
+                  ${msg(hass, 'editor.entity_missing_before_first_code')}
                   <code class="inline">${this._resolvedStatusEntityId()}</code>
-                  est introuvable. Vérifiez que l’intégration Schedule Manager est installée et
-                  chargée ; le capteur attendu est en général
-                  <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>.
+                  ${msg(hass, 'editor.entity_missing_between_codes')}
+                  <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>
+                  ${msg(hass, 'editor.entity_missing_after_second_code')}
                 </p>
               `
             : html``}
@@ -451,16 +452,15 @@ export class ScheduleManagerCardEditor extends LitElement {
                 ${entries.length === 0
                   ? html`
                       <p class="hint">
-                        Aucun planning dans les attributs du capteur pour l’instant. Créez un
-                        planning depuis la carte ou le service
-                        <code class="inline">schedule_manager.create_schedule</code>.
+                        ${msg(hass, 'editor.no_schedules_hint', {
+                          service: 'schedule_manager.create_schedule',
+                        })}
                       </p>
                     `
                   : html`
-                      <div class="schedule-list-title">Plannings à afficher sur la carte</div>
+                      <div class="schedule-list-title">${msg(hass, 'editor.schedules_on_card_title')}</div>
                       <p class="hint">
-                        Toutes les cases cochées = afficher tous les plannings. Décochez pour
-                        masquer un planning (au moins un reste visible).
+                        ${msg(hass, 'editor.schedules_on_card_hint')}
                       </p>
                       <div class="schedule-list">
                         ${entries.map(
