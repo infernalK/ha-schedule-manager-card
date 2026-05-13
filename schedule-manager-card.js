@@ -4488,7 +4488,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
                         <span class="sm-action-entities-quick-title">Entités ciblées</span>
                         <p class="sm-action-entities-quick-hint">
                           Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » puis
-                          choisissez dans la liste (recherche et pastilles comme dans Home Assistant) —
+                          choisissez dans la liste (recherche et lignes avec icône comme le sélecteur
+                          d’entités Home Assistant) —
                           compatible avec <code>${action.action_type}</code>.
                         </p>
                         <div class="entity-chips">
