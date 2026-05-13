@@ -182,6 +182,101 @@ export function blockTimelineFill(block: TimeBlock): string {
   return `hsl(${hueForBlock(block)}, 58%, 42%)`;
 }
 
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+function parseHexRgb(input: string): { r: number; g: number; b: number } | null {
+  const t = input.trim();
+  if (/^#[0-9A-Fa-f]{6}$/i.test(t)) {
+    return {
+      r: parseInt(t.slice(1, 3), 16),
+      g: parseInt(t.slice(3, 5), 16),
+      b: parseInt(t.slice(5, 7), 16),
+    };
+  }
+  if (/^#[0-9A-Fa-f]{3}$/i.test(t)) {
+    const h = t.slice(1);
+    return {
+      r: parseInt(h[0] + h[0], 16),
+      g: parseInt(h[1] + h[1], 16),
+      b: parseInt(h[2] + h[2], 16),
+    };
+  }
+  return null;
+}
+
+function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = ((max + min) / 2) * 100;
+  if (max === min) {
+    return { h: 0, s: 0, l };
+  }
+  const d = max - min;
+  const s = l > 50 ? (d / (2 - max - min)) * 100 : (d / (max + min)) * 100;
+  let hh = 0;
+  switch (max) {
+    case rn:
+      hh = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+      break;
+    case gn:
+      hh = ((bn - rn) / d + 2) / 6;
+      break;
+    default:
+      hh = ((rn - gn) / d + 4) / 6;
+      break;
+  }
+  return { h: hh * 360, s, l };
+}
+
+function fillToHsl(fill: string): { h: number; s: number; l: number } {
+  const t = fill.trim();
+  const m = t.match(/^hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$/i);
+  if (m) {
+    return { h: Number(m[1]), s: Number(m[2]), l: Number(m[3]) };
+  }
+  const rgb = parseHexRgb(t);
+  if (rgb) {
+    return rgbToHsl(rgb.r, rgb.g, rgb.b);
+  }
+  return { h: 210, s: 58, l: 42 };
+}
+
+/**
+ * Variables CSS pour le double cadre « créneau actif » : même teinte que le fond, plus saturée / contrastée.
+ */
+export function nowActiveRingCssVars(fill: string): Record<string, string> {
+  const { h, s, l } = fillToHsl(fill);
+  const light = l > 62;
+  let innerS: number;
+  let innerL: number;
+  let outerS: number;
+  let outerL: number;
+  if (light) {
+    innerS = clamp(s + 28, 72, 100);
+    innerL = clamp(l - 6, 36, 62);
+    outerS = clamp(s + 14, 52, 100);
+    outerL = clamp(l - 30, 12, 44);
+  } else {
+    innerS = clamp(s + 22, 62, 100);
+    innerL = clamp(l + 14 + (l < 34 ? 16 : 0), 46, 88);
+    outerS = clamp(s + 10, 48, 100);
+    outerL = clamp(l - 20, 8, 38);
+  }
+  return {
+    '--sm-slot-now-ring-1': `hsl(${round1(h)}, ${round1(innerS)}%, ${round1(innerL)}%)`,
+    '--sm-slot-now-ring-2': `hsl(${round1(h)}, ${round1(outerS)}%, ${round1(outerL)}%)`,
+  };
+}
+
 /**
  * Découpe les plages en segments sur une journée (0:00–24:00), gère le passage minuit.
  */

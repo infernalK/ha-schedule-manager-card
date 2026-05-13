@@ -409,26 +409,26 @@ const styles = i$4 `
     z-index: 2;
   }
 
-  /** Créneau actuel : double trait intérieur (clair + foncé) pour rester lisible sur toute couleur de plage. */
+  /** Créneau actif : double trait dérivé de la couleur du bloc (variables posées en inline). */
   .sm-slot.sm-slot--now-active {
     z-index: 4;
     box-shadow:
-      inset 0 0 0 2px rgba(255, 255, 255, 0.96),
-      inset 0 0 0 4px rgba(0, 0, 0, 0.82);
+      inset 0 0 0 2px var(--sm-slot-now-ring-1, rgba(255, 255, 255, 0.96)),
+      inset 0 0 0 4px var(--sm-slot-now-ring-2, rgba(0, 0, 0, 0.82));
   }
 
   .sm-scheduler-track--editor .sm-slot.is-selected.sm-slot--now-active {
     z-index: 5;
     box-shadow:
-      inset 0 0 0 2px rgba(255, 255, 255, 0.96),
-      inset 0 0 0 4px rgba(0, 0, 0, 0.82),
+      inset 0 0 0 2px var(--sm-slot-now-ring-1, rgba(255, 255, 255, 0.96)),
+      inset 0 0 0 4px var(--sm-slot-now-ring-2, rgba(0, 0, 0, 0.82)),
       inset 0 0 0 7px rgba(255, 255, 255, 0.94),
       0 0 0 1px rgba(0, 0, 0, 0.4);
   }
 
   .sm-slot-label {
-    font-size: 0.72rem;
-    line-height: 1.15;
+    font-size: 0.82rem;
+    line-height: 1.2;
     text-align: center;
     max-width: 100%;
     overflow: hidden;
@@ -2573,6 +2573,96 @@ function blockTimelineFill(block) {
     }
     return `hsl(${hueForBlock(block)}, 58%, 42%)`;
 }
+function clamp(n, lo, hi) {
+    return Math.min(hi, Math.max(lo, n));
+}
+function round1(n) {
+    return Math.round(n * 10) / 10;
+}
+function parseHexRgb(input) {
+    const t = input.trim();
+    if (/^#[0-9A-Fa-f]{6}$/i.test(t)) {
+        return {
+            r: parseInt(t.slice(1, 3), 16),
+            g: parseInt(t.slice(3, 5), 16),
+            b: parseInt(t.slice(5, 7), 16),
+        };
+    }
+    if (/^#[0-9A-Fa-f]{3}$/i.test(t)) {
+        const h = t.slice(1);
+        return {
+            r: parseInt(h[0] + h[0], 16),
+            g: parseInt(h[1] + h[1], 16),
+            b: parseInt(h[2] + h[2], 16),
+        };
+    }
+    return null;
+}
+function rgbToHsl(r, g, b) {
+    const rn = r / 255;
+    const gn = g / 255;
+    const bn = b / 255;
+    const max = Math.max(rn, gn, bn);
+    const min = Math.min(rn, gn, bn);
+    const l = ((max + min) / 2) * 100;
+    if (max === min) {
+        return { h: 0, s: 0, l };
+    }
+    const d = max - min;
+    const s = l > 50 ? (d / (2 - max - min)) * 100 : (d / (max + min)) * 100;
+    let hh = 0;
+    switch (max) {
+        case rn:
+            hh = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+            break;
+        case gn:
+            hh = ((bn - rn) / d + 2) / 6;
+            break;
+        default:
+            hh = ((rn - gn) / d + 4) / 6;
+            break;
+    }
+    return { h: hh * 360, s, l };
+}
+function fillToHsl(fill) {
+    const t = fill.trim();
+    const m = t.match(/^hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$/i);
+    if (m) {
+        return { h: Number(m[1]), s: Number(m[2]), l: Number(m[3]) };
+    }
+    const rgb = parseHexRgb(t);
+    if (rgb) {
+        return rgbToHsl(rgb.r, rgb.g, rgb.b);
+    }
+    return { h: 210, s: 58, l: 42 };
+}
+/**
+ * Variables CSS pour le double cadre « créneau actif » : même teinte que le fond, plus saturée / contrastée.
+ */
+function nowActiveRingCssVars(fill) {
+    const { h, s, l } = fillToHsl(fill);
+    const light = l > 62;
+    let innerS;
+    let innerL;
+    let outerS;
+    let outerL;
+    if (light) {
+        innerS = clamp(s + 28, 72, 100);
+        innerL = clamp(l - 6, 36, 62);
+        outerS = clamp(s + 14, 52, 100);
+        outerL = clamp(l - 30, 12, 44);
+    }
+    else {
+        innerS = clamp(s + 22, 62, 100);
+        innerL = clamp(l + 14 + (l < 34 ? 16 : 0), 46, 88);
+        outerS = clamp(s + 10, 48, 100);
+        outerL = clamp(l - 20, 8, 38);
+    }
+    return {
+        '--sm-slot-now-ring-1': `hsl(${round1(h)}, ${round1(innerS)}%, ${round1(innerL)}%)`,
+        '--sm-slot-now-ring-2': `hsl(${round1(h)}, ${round1(outerS)}%, ${round1(outerL)}%)`,
+    };
+}
 /**
  * Découpe les plages en segments sur une journée (0:00–24:00), gère le passage minuit.
  */
@@ -3950,7 +4040,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         return [...segments].sort((a, b) => a.leftPct !== b.leftPct ? a.leftPct - b.leftPct : b.widthPct - a.widthPct);
     }
     /** Positionnement réel sur la journée (le flex-grow seul faisait occuper toute la barre à un seul bloc). */
-    schedulerSlotAbsoluteStyle(leftPct, widthPct, fill) {
+    schedulerSlotAbsoluteStyle(leftPct, widthPct, fill, nowActive = false) {
         return o$2({
             position: 'absolute',
             left: `${leftPct}%`,
@@ -3959,6 +4049,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             height: '100%',
             boxSizing: 'border-box',
             background: fill,
+            ...(nowActive ? nowActiveRingCssVars(fill) : {}),
         });
     }
     /** Coins arrondis uniquement sur le premier / dernier segment visible (gauche → droite). */
@@ -4005,7 +4096,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             return x `
                 <div
                   class="sm-slot ${capS} ${capE} ${nowActive}"
-                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
+                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill, nowSeg === i)}
                   title=${s.label}
                 >
                   <span class="sm-slot-label">${s.label}</span>
@@ -5512,7 +5603,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             return x `
                 <div
                   class="sm-slot ${sel} ${nowActive} ${capS} ${capE}"
-                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
+                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill, nowSeg === i)}
                   title=${s.blockIndex === selectedIndex
                 ? msg(hass, 'card.drag_move_slot', { label: s.label })
                 : s.label}

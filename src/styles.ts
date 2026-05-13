@@ -209,26 +209,26 @@ export const styles = css`
     z-index: 2;
   }
 
-  /** Créneau actuel : double trait intérieur (clair + foncé) pour rester lisible sur toute couleur de plage. */
+  /** Créneau actif : double trait dérivé de la couleur du bloc (variables posées en inline). */
   .sm-slot.sm-slot--now-active {
     z-index: 4;
     box-shadow:
-      inset 0 0 0 2px rgba(255, 255, 255, 0.96),
-      inset 0 0 0 4px rgba(0, 0, 0, 0.82);
+      inset 0 0 0 2px var(--sm-slot-now-ring-1, rgba(255, 255, 255, 0.96)),
+      inset 0 0 0 4px var(--sm-slot-now-ring-2, rgba(0, 0, 0, 0.82));
   }
 
   .sm-scheduler-track--editor .sm-slot.is-selected.sm-slot--now-active {
     z-index: 5;
     box-shadow:
-      inset 0 0 0 2px rgba(255, 255, 255, 0.96),
-      inset 0 0 0 4px rgba(0, 0, 0, 0.82),
+      inset 0 0 0 2px var(--sm-slot-now-ring-1, rgba(255, 255, 255, 0.96)),
+      inset 0 0 0 4px var(--sm-slot-now-ring-2, rgba(0, 0, 0, 0.82)),
       inset 0 0 0 7px rgba(255, 255, 255, 0.94),
       0 0 0 1px rgba(0, 0, 0, 0.4);
   }
 
   .sm-slot-label {
-    font-size: 0.72rem;
-    line-height: 1.15;
+    font-size: 0.82rem;
+    line-height: 1.2;
     text-align: center;
     max-width: 100%;
     overflow: hidden;

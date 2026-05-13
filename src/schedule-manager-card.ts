@@ -45,6 +45,7 @@ import {
   HA_END_OF_DAY_TIME,
   MINUTES_PER_DAY,
   minuteToHaTimeForSchedule,
+  nowActiveRingCssVars,
   nowPercentOfDay,
   paintOrderSegmentIndexForNowPct,
   sameDayBlockIntervalExclusiveEnd,
@@ -592,7 +593,12 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   /** Positionnement réel sur la journée (le flex-grow seul faisait occuper toute la barre à un seul bloc). */
-  private schedulerSlotAbsoluteStyle(leftPct: number, widthPct: number, fill: string) {
+  private schedulerSlotAbsoluteStyle(
+    leftPct: number,
+    widthPct: number,
+    fill: string,
+    nowActive = false
+  ) {
     return styleMap({
       position: 'absolute',
       left: `${leftPct}%`,
@@ -601,6 +607,7 @@ export class ScheduleManagerCard extends LitElement {
       height: '100%',
       boxSizing: 'border-box',
       background: fill,
+      ...(nowActive ? nowActiveRingCssVars(fill) : {}),
     });
   }
 
@@ -652,7 +659,7 @@ export class ScheduleManagerCard extends LitElement {
               return html`
                 <div
                   class="sm-slot ${capS} ${capE} ${nowActive}"
-                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
+                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill, nowSeg === i)}
                   title=${s.label}
                 >
                   <span class="sm-slot-label">${s.label}</span>
@@ -2403,7 +2410,7 @@ export class ScheduleManagerCard extends LitElement {
               return html`
                 <div
                   class="sm-slot ${sel} ${nowActive} ${capS} ${capE}"
-                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
+                  style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill, nowSeg === i)}
                   title=${s.blockIndex === selectedIndex
                     ? msg(hass, 'card.drag_move_slot', { label: s.label })
                     : s.label}
