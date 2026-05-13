@@ -409,20 +409,21 @@ const styles = i$4 `
     z-index: 2;
   }
 
-  /** Créneau couvrant l’heure actuelle (remplace l’ancienne ligne verticale). */
+  /** Créneau actuel : double trait intérieur (clair + foncé) pour rester lisible sur toute couleur de plage. */
   .sm-slot.sm-slot--now-active {
     z-index: 4;
     box-shadow:
-      inset 0 0 0 2px var(--accent-color, var(--primary-color)),
-      0 0 0 1px rgba(0, 0, 0, 0.35);
+      inset 0 0 0 2px rgba(255, 255, 255, 0.96),
+      inset 0 0 0 4px rgba(0, 0, 0, 0.82);
   }
 
   .sm-scheduler-track--editor .sm-slot.is-selected.sm-slot--now-active {
     z-index: 5;
     box-shadow:
-      inset 0 0 0 2px var(--accent-color, var(--primary-color)),
-      inset 0 0 0 5px rgba(255, 255, 255, 0.95),
-      0 0 0 1px rgba(0, 0, 0, 0.35);
+      inset 0 0 0 2px rgba(255, 255, 255, 0.96),
+      inset 0 0 0 4px rgba(0, 0, 0, 0.82),
+      inset 0 0 0 7px rgba(255, 255, 255, 0.94),
+      0 0 0 1px rgba(0, 0, 0, 0.4);
   }
 
   .sm-slot-label {
