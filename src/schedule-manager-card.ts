@@ -36,7 +36,7 @@ import {
   servicePrimaryLabel,
   serviceSecondaryHint,
 } from './action-wizard-i18n';
-import { entityCompatibleWithAction } from './entity-domains';
+import { climatePresetModesList, entityCompatibleWithAction } from './entity-domains';
 import {
   blockTimelineFill,
   blocksToTimelineSegments,
@@ -1468,12 +1468,11 @@ export class ScheduleManagerCard extends LitElement {
 
   /** Modes préréglés exposés par l’entité climate (pour l’étape assistant). */
   private climatePresetModesForEntityId(entityId: string): string[] | null {
-    const st = this.hass?.states[entityId];
-    const pm = st?.attributes?.preset_modes;
-    if (Array.isArray(pm) && pm.length && pm.every((x): x is string => typeof x === 'string')) {
-      return pm;
+    const hass = this.hass;
+    if (!hass) {
+      return null;
     }
-    return null;
+    return climatePresetModesList(hass, entityId);
   }
 
   private applyWizardSelection(

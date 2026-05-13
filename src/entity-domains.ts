@@ -59,26 +59,36 @@ function isClimateSetHvacModeAction(actionType: string): boolean {
   return t === 'climate.set_hvac_mode';
 }
 
-/** Climat avec au moins un mode préréglé exposé par HA (sinon `set_preset_mode` n’a pas de sens). */
+/**
+ * Liste des modes préréglés exposés par HA pour cette entité climate, ou `null` si aucune
+ * liste exploitable (même règle que le filtre `climate.set_preset_mode`).
+ */
+export function climatePresetModesList(
+  hass: HomeAssistant,
+  entityId: string
+): string[] | null {
+  if (!entityId.startsWith('climate.')) {
+    return null;
+  }
+  const pm = hass.states[entityId]?.attributes?.preset_modes;
+  if (Array.isArray(pm) && pm.length && pm.every((x): x is string => typeof x === 'string')) {
+    return pm;
+  }
+  return null;
+}
+
+/**
+ * Climat dont HA expose au moins un `preset_modes` utilisable (même critère que l’étape
+ * « mode préréglé » de l’assistant : sans liste non vide, `set_preset_mode` n’a pas de sens).
+ */
 export function climateEntityHasPresetModes(
   hass: HomeAssistant,
   entityId: string
 ): boolean {
-  if (!entityId.startsWith('climate.')) {
-    return false;
-  }
-  const pm = hass.states[entityId]?.attributes?.preset_modes;
-  // Absent ou non encore exposé : ne pas exclure du sélecteur (sinon liste vide avec certains climats).
-  if (pm === undefined || pm === null) {
-    return true;
-  }
-  if (!Array.isArray(pm) || pm.length === 0) {
-    return false;
-  }
-  return pm.every((x): x is string => typeof x === 'string');
+  return climatePresetModesList(hass, entityId) !== null;
 }
 
-/** Climat avec au moins un mode HVAC exposé (`hvac_modes` non vide). */
+/** Climat avec `hvac_modes` non vide et typé comme attendu par HA. */
 export function climateEntityHasHvacModes(
   hass: HomeAssistant,
   entityId: string
@@ -87,9 +97,6 @@ export function climateEntityHasHvacModes(
     return false;
   }
   const hm = hass.states[entityId]?.attributes?.hvac_modes;
-  if (hm === undefined || hm === null) {
-    return true;
-  }
   if (!Array.isArray(hm) || hm.length === 0) {
     return false;
   }
@@ -102,7 +109,7 @@ export function climateEntityHasHvacModes(
  * du domaine de l’entité avec le domaine du service (jamais « tout autoriser »).
  *
  * @param hass — si fourni, filtres supplémentaires pour certains services climate
- *   (`preset_modes` / `hvac_modes` non vides).
+ *   (listes `preset_modes` / `hvac_modes` présentes et non vides).
  */
 export function entityCompatibleWithAction(
   entityId: string,
