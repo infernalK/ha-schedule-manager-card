@@ -215,6 +215,16 @@ const styles = i$4 `
     box-sizing: border-box;
   }
 
+  /** Titre de la carte (sous ha-card) : taille réduite par rapport au défaut Lovelace. */
+  .card-header {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
+    margin: 0 0 4px;
+  }
+
   .schedule {
     margin-bottom: 16px;
     padding-bottom: 12px;
@@ -258,13 +268,6 @@ const styles = i$4 `
   .btn-danger:disabled {
     opacity: 0.45;
     cursor: not-allowed;
-  }
-
-  .subsection-title {
-    font-size: 0.85em;
-    font-weight: 600;
-    margin: 12px 0 6px;
-    color: var(--secondary-text-color);
   }
 
   .empty-hint {
@@ -320,13 +323,10 @@ const styles = i$4 `
     line-height: 1.35;
   }
 
-  /* Frise 24 h — même principe que scheduler-card (barre flex 60px + time-bar 18px) */
+  /* Frise 24 h — pas de cadre : la barre de plages se suffit visuellement */
   .timeline-frise {
     margin: 0 0 16px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    background: rgba(127, 127, 127, 0.08);
-    border: 1px solid var(--divider-color);
+    padding: 0;
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -2588,6 +2588,20 @@ function entityIdFromPickerFilterArgument(raw) {
     return '';
 }
 
+/** Empreinte stable pour comparer la config affichée (alignée sur hasChanged de la carte). */
+function editorConfigFingerprint(c) {
+    if (!c) {
+        return '';
+    }
+    return JSON.stringify({
+        type: c.type,
+        status_entity: c.status_entity,
+        header_title: c.header_title,
+        show_header: c.show_header,
+        show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+        schedule_ids: c.schedule_ids ?? null,
+    });
+}
 function editorConfigPropertyChanged(n, o) {
     if (n === o) {
         return false;
@@ -2595,22 +2609,7 @@ function editorConfigPropertyChanged(n, o) {
     if (!n || !o) {
         return true;
     }
-    return (JSON.stringify({
-        type: n.type,
-        status_entity: n.status_entity,
-        header_title: n.header_title,
-        show_header: n.show_header,
-        show_schedule_enable_toggle: n.show_schedule_enable_toggle,
-        schedule_ids: n.schedule_ids ?? null,
-    }) !==
-        JSON.stringify({
-            type: o.type,
-            status_entity: o.status_entity,
-            header_title: o.header_title,
-            show_header: o.show_header,
-            show_schedule_enable_toggle: o.show_schedule_enable_toggle,
-            schedule_ids: o.schedule_ids ?? null,
-        }));
+    return editorConfigFingerprint(n) !== editorConfigFingerprint(o);
 }
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     constructor() {
@@ -2656,6 +2655,42 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         this._headerTitleDraft = this._config.header_title ?? '';
         this.requestUpdate();
     }
+    /** `hui-element-editor` vit dans le shadow parent ; HA peut ne pas rappeler `setConfig` si `deepEqual` est vrai. */
+    _editorParentHost() {
+        const root = this.getRootNode();
+        if (!(root instanceof ShadowRoot)) {
+            return null;
+        }
+        const host = root.host;
+        if (!(host instanceof HTMLElement) || !('value' in host)) {
+            return null;
+        }
+        return host;
+    }
+    /**
+     * Recharge l’état local depuis la valeur du conteneur Lovelace lorsqu’elle diffère de `_config`
+     * (réouverture de l’éditeur, rechargement du YAML, etc.).
+     */
+    _pullConfigFromEditorHostIfStale() {
+        const host = this._editorParentHost();
+        if (!host) {
+            return;
+        }
+        const raw = host.value;
+        if (!raw || typeof raw !== 'object') {
+            return;
+        }
+        const remoteFp = editorConfigFingerprint(raw);
+        const localFp = editorConfigFingerprint(this._config);
+        if (remoteFp === localFp) {
+            return;
+        }
+        this.setConfig(raw);
+    }
+    connectedCallback() {
+        super.connectedCallback();
+        queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+    }
     /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
     _configWithoutUndefinedKeys(c) {
         const out = {};
@@ -2669,27 +2704,11 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         }
         return out;
     }
-    willUpdate(changed) {
-        super.willUpdate(changed);
-        // Certains flux HA posent uniquement la propriété `config` sans rappeler setConfig.
-        // Fusionner avec l’état local ; ne jamais fusionner des valeurs `undefined` (sinon écrasement).
-        if (changed.has('config') && this.config) {
-            const incoming = this._configWithoutUndefinedKeys(this.config);
-            this._config = {
-                ...(this._config ?? {}),
-                ...incoming,
-                type: 'custom:schedule-manager-card',
-            };
-            const active = document.activeElement;
-            const titleEl = this._headerTitleRef.value;
-            const typingTitle = titleEl && (active === titleEl || titleEl.contains(active));
-            if (!typingTitle) {
-                this._headerTitleDraft = this._config.header_title ?? '';
-            }
-        }
-    }
     updated(changed) {
         super.updated(changed);
+        if (changed.has('lovelace') || changed.has('context')) {
+            queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+        }
         if (changed.has('hass') || changed.has('config') || changed.has('_config')) {
             this._maybeApplyDefaultStatusEntity();
         }
@@ -2817,10 +2836,6 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
               @change=${this._onShowHeaderChange}
             ></ha-switch>
           </ha-formfield>
-          <p class="hint">
-            Désactivé = pas de barre de titre sur la carte. Le libellé personnalisé reste mémorisé
-            pour une réactivation ultérieure.
-          </p>
           ${this._config?.show_header !== false
             ? x `
                 <label class="sm-sub-label" for="sm-editor-card-title"
@@ -3054,6 +3069,12 @@ ScheduleManagerCardEditor.styles = i$4 `
 __decorate([
     n$4({ attribute: false })
 ], ScheduleManagerCardEditor.prototype, "hass", void 0);
+__decorate([
+    n$4({ attribute: false })
+], ScheduleManagerCardEditor.prototype, "lovelace", void 0);
+__decorate([
+    n$4({ attribute: false })
+], ScheduleManagerCardEditor.prototype, "context", void 0);
 __decorate([
     n$4({ attribute: false, hasChanged: editorConfigPropertyChanged })
 ], ScheduleManagerCardEditor.prototype, "config", void 0);
@@ -3650,7 +3671,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
 
         ${blocks.length
             ? x `
-              <div class="subsection-title">Vue 24 h</div>
               <div class="timeline-hint">
                 Aperçu graphique — ouvrez la configuration pour modifier les plages.
               </div>

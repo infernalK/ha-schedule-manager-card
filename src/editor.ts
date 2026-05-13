@@ -9,6 +9,21 @@ import {
 } from './types';
 import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 
+/** Empreinte stable pour comparer la config affichée (alignée sur hasChanged de la carte). */
+function editorConfigFingerprint(c?: CardConfig): string {
+  if (!c) {
+    return '';
+  }
+  return JSON.stringify({
+    type: c.type,
+    status_entity: c.status_entity,
+    header_title: c.header_title,
+    show_header: c.show_header,
+    show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+    schedule_ids: c.schedule_ids ?? null,
+  });
+}
+
 function editorConfigPropertyChanged(n?: CardConfig, o?: CardConfig): boolean {
   if (n === o) {
     return false;
@@ -16,29 +31,18 @@ function editorConfigPropertyChanged(n?: CardConfig, o?: CardConfig): boolean {
   if (!n || !o) {
     return true;
   }
-  return (
-    JSON.stringify({
-      type: n.type,
-      status_entity: n.status_entity,
-      header_title: n.header_title,
-      show_header: n.show_header,
-      show_schedule_enable_toggle: n.show_schedule_enable_toggle,
-      schedule_ids: n.schedule_ids ?? null,
-    }) !==
-    JSON.stringify({
-      type: o.type,
-      status_entity: o.status_entity,
-      header_title: o.header_title,
-      show_header: o.show_header,
-      show_schedule_enable_toggle: o.show_schedule_enable_toggle,
-      schedule_ids: o.schedule_ids ?? null,
-    })
-  );
+  return editorConfigFingerprint(n) !== editorConfigFingerprint(o);
 }
 
 @customElement('schedule-manager-card-editor')
 export class ScheduleManagerCardEditor extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
+
+  /** HA met à jour cette référence au rechargement du dashboard ; sert à resynchroniser la config. */
+  @property({ attribute: false }) public lovelace?: unknown;
+
+  /** Contexte d’édition Lovelace (chemin de carte, etc.) ; mis à jour à l’ouverture du panneau. */
+  @property({ attribute: false }) public context?: unknown;
 
   @property({ attribute: false, hasChanged: editorConfigPropertyChanged })
   public config?: CardConfig;
@@ -151,6 +155,45 @@ export class ScheduleManagerCardEditor extends LitElement {
     this.requestUpdate();
   }
 
+  /** `hui-element-editor` vit dans le shadow parent ; HA peut ne pas rappeler `setConfig` si `deepEqual` est vrai. */
+  private _editorParentHost(): (HTMLElement & { value?: unknown }) | null {
+    const root = this.getRootNode();
+    if (!(root instanceof ShadowRoot)) {
+      return null;
+    }
+    const host = root.host;
+    if (!(host instanceof HTMLElement) || !('value' in host)) {
+      return null;
+    }
+    return host as HTMLElement & { value?: unknown };
+  }
+
+  /**
+   * Recharge l’état local depuis la valeur du conteneur Lovelace lorsqu’elle diffère de `_config`
+   * (réouverture de l’éditeur, rechargement du YAML, etc.).
+   */
+  private _pullConfigFromEditorHostIfStale() {
+    const host = this._editorParentHost();
+    if (!host) {
+      return;
+    }
+    const raw = host.value;
+    if (!raw || typeof raw !== 'object') {
+      return;
+    }
+    const remoteFp = editorConfigFingerprint(raw as CardConfig);
+    const localFp = editorConfigFingerprint(this._config);
+    if (remoteFp === localFp) {
+      return;
+    }
+    this.setConfig(raw as CardConfig);
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+  }
+
   /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
   private _configWithoutUndefinedKeys(
     c: CardConfig | Record<string, unknown> | undefined
@@ -167,30 +210,11 @@ export class ScheduleManagerCardEditor extends LitElement {
     return out;
   }
 
-  protected willUpdate(changed: PropertyValues) {
-    super.willUpdate(changed);
-    // Certains flux HA posent uniquement la propriété `config` sans rappeler setConfig.
-    // Fusionner avec l’état local ; ne jamais fusionner des valeurs `undefined` (sinon écrasement).
-    if (changed.has('config') && this.config) {
-      const incoming = this._configWithoutUndefinedKeys(
-        this.config as unknown as Record<string, unknown>
-      ) as unknown as CardConfig;
-      this._config = {
-        ...(this._config ?? {}),
-        ...incoming,
-        type: 'custom:schedule-manager-card',
-      };
-      const active = document.activeElement;
-      const titleEl = this._headerTitleRef.value;
-      const typingTitle = titleEl && (active === titleEl || titleEl.contains(active as Node));
-      if (!typingTitle) {
-        this._headerTitleDraft = this._config.header_title ?? '';
-      }
-    }
-  }
-
   updated(changed: PropertyValues) {
     super.updated(changed);
+    if (changed.has('lovelace') || changed.has('context')) {
+      queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+    }
     if (changed.has('hass') || changed.has('config') || changed.has('_config')) {
       this._maybeApplyDefaultStatusEntity();
     }
@@ -358,10 +382,6 @@ export class ScheduleManagerCardEditor extends LitElement {
               @change=${this._onShowHeaderChange}
             ></ha-switch>
           </ha-formfield>
-          <p class="hint">
-            Désactivé = pas de barre de titre sur la carte. Le libellé personnalisé reste mémorisé
-            pour une réactivation ultérieure.
-          </p>
           ${this._config?.show_header !== false
             ? html`
                 <label class="sm-sub-label" for="sm-editor-card-title"

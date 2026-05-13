@@ -15,6 +15,16 @@ export const styles = css`
     box-sizing: border-box;
   }
 
+  /** Titre de la carte (sous ha-card) : taille réduite par rapport au défaut Lovelace. */
+  .card-header {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
+    margin: 0 0 4px;
+  }
+
   .schedule {
     margin-bottom: 16px;
     padding-bottom: 12px;
@@ -58,13 +68,6 @@ export const styles = css`
   .btn-danger:disabled {
     opacity: 0.45;
     cursor: not-allowed;
-  }
-
-  .subsection-title {
-    font-size: 0.85em;
-    font-weight: 600;
-    margin: 12px 0 6px;
-    color: var(--secondary-text-color);
   }
 
   .empty-hint {
@@ -120,13 +123,10 @@ export const styles = css`
     line-height: 1.35;
   }
 
-  /* Frise 24 h — même principe que scheduler-card (barre flex 60px + time-bar 18px) */
+  /* Frise 24 h — pas de cadre : la barre de plages se suffit visuellement */
   .timeline-frise {
     margin: 0 0 16px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    background: rgba(127, 127, 127, 0.08);
-    border: 1px solid var(--divider-color);
+    padding: 0;
     width: 100%;
     max-width: 100%;
     min-width: 0;

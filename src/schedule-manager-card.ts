@@ -722,7 +722,6 @@ export class ScheduleManagerCard extends LitElement {
 
         ${blocks.length
           ? html`
-              <div class="subsection-title">Vue 24 h</div>
               <div class="timeline-hint">
                 Aperçu graphique — ouvrez la configuration pour modifier les plages.
               </div>
