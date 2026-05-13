@@ -1683,12 +1683,32 @@ function domainsForActionType(actionType) {
     };
     return map[t] ?? [];
 }
+function isClimateSetPresetModeAction(actionType) {
+    const t = String(actionType ?? '').trim().toLowerCase();
+    if (t === 'set_preset_mode') {
+        return true;
+    }
+    return t === 'climate.set_preset_mode';
+}
+/** Climat avec au moins un mode préréglé exposé par HA (sinon `set_preset_mode` n’a pas de sens). */
+function climateEntityHasPresetModes(hass, entityId) {
+    if (!entityId.startsWith('climate.')) {
+        return false;
+    }
+    const pm = hass.states[entityId]?.attributes?.preset_modes;
+    return (Array.isArray(pm) &&
+        pm.length > 0 &&
+        pm.every((x) => typeof x === 'string'));
+}
 /**
  * Indique si une entité peut être associée à une action `domain.service`.
  * Comportement strict : si la carte ne connaît pas le service, on se rabat sur l’égalité
  * du domaine de l’entité avec le domaine du service (jamais « tout autoriser »).
+ *
+ * @param hass — si fourni, filtre supplémentaire pour `climate.set_preset_mode` : uniquement
+ *   les entités `climate.*` qui exposent `preset_modes` non vide.
  */
-function entityCompatibleWithAction(entityId, actionType) {
+function entityCompatibleWithAction(entityId, actionType, hass) {
     if (!entityId.includes('.')) {
         return false;
     }
@@ -1697,16 +1717,27 @@ function entityCompatibleWithAction(entityId, actionType) {
     if (!t) {
         return false;
     }
+    let baseOk = false;
     const compat = domainsForActionType(t);
     if (compat.length > 0) {
-        return compat.includes(entityDom);
+        baseOk = compat.includes(entityDom);
     }
-    const firstDot = t.indexOf('.');
-    if (firstDot > 0) {
-        const serviceDomain = t.slice(0, firstDot);
-        return entityDom === serviceDomain;
+    else {
+        const firstDot = t.indexOf('.');
+        if (firstDot > 0) {
+            const serviceDomain = t.slice(0, firstDot);
+            baseOk = entityDom === serviceDomain;
+        }
     }
-    return false;
+    if (!baseOk) {
+        return false;
+    }
+    if (hass &&
+        entityDom === 'climate' &&
+        isClimateSetPresetModeAction(t)) {
+        return climateEntityHasPresetModes(hass, entityId);
+    }
+    return true;
 }
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -3521,7 +3552,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
     entityFilterForConfiguredAction(selected) {
         const actionType = String(selected.action_type ?? '').trim();
-        return (entityId) => entityCompatibleWithAction(entityId, actionType);
+        const hass = this.hass;
+        return (entityId) => entityCompatibleWithAction(entityId, actionType, hass);
     }
     visualAppendEntity(ev, actionIndexOverride) {
         if (!this._visualEdit || !this.hass) {
@@ -3830,7 +3862,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         else if (step === 'entity' && domainF && svcPick) {
             const actionFull = `${domainF}.${svcPick}`;
             let entities = listEntitiesInDomain(hass, domainF).filter((eid) => matches(friendlyEntityName(hass, eid)) || matches(eid));
-            entities = entities.filter((eid) => entityCompatibleWithAction(eid, actionFull));
+            entities = entities.filter((eid) => entityCompatibleWithAction(eid, actionFull, hass));
             body =
                 entities.length === 0
                     ? x `<p class="sm-ap-empty">

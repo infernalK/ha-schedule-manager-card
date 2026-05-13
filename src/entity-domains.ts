@@ -1,3 +1,5 @@
+import type { HomeAssistant } from './types';
+
 /**
  * Déduit les domaines d’entités « compatibles » avec un type d’action HA.
  * Si `domain.service` est fourni, un seul domaine ; sinon heuristiques pour les noms de service seuls.
@@ -41,14 +43,42 @@ export function entityMatchesDomains(entityId: string, domains: string[]): boole
   return domains.includes(dom);
 }
 
+function isClimateSetPresetModeAction(actionType: string): boolean {
+  const t = String(actionType ?? '').trim().toLowerCase();
+  if (t === 'set_preset_mode') {
+    return true;
+  }
+  return t === 'climate.set_preset_mode';
+}
+
+/** Climat avec au moins un mode préréglé exposé par HA (sinon `set_preset_mode` n’a pas de sens). */
+export function climateEntityHasPresetModes(
+  hass: HomeAssistant,
+  entityId: string
+): boolean {
+  if (!entityId.startsWith('climate.')) {
+    return false;
+  }
+  const pm = hass.states[entityId]?.attributes?.preset_modes;
+  return (
+    Array.isArray(pm) &&
+    pm.length > 0 &&
+    pm.every((x): x is string => typeof x === 'string')
+  );
+}
+
 /**
  * Indique si une entité peut être associée à une action `domain.service`.
  * Comportement strict : si la carte ne connaît pas le service, on se rabat sur l’égalité
  * du domaine de l’entité avec le domaine du service (jamais « tout autoriser »).
+ *
+ * @param hass — si fourni, filtre supplémentaire pour `climate.set_preset_mode` : uniquement
+ *   les entités `climate.*` qui exposent `preset_modes` non vide.
  */
 export function entityCompatibleWithAction(
   entityId: string,
-  actionType: string
+  actionType: string,
+  hass?: HomeAssistant
 ): boolean {
   if (!entityId.includes('.')) {
     return false;
@@ -59,16 +89,29 @@ export function entityCompatibleWithAction(
     return false;
   }
 
+  let baseOk = false;
   const compat = domainsForActionType(t);
   if (compat.length > 0) {
-    return compat.includes(entityDom);
+    baseOk = compat.includes(entityDom);
+  } else {
+    const firstDot = t.indexOf('.');
+    if (firstDot > 0) {
+      const serviceDomain = t.slice(0, firstDot);
+      baseOk = entityDom === serviceDomain;
+    }
   }
 
-  const firstDot = t.indexOf('.');
-  if (firstDot > 0) {
-    const serviceDomain = t.slice(0, firstDot);
-    return entityDom === serviceDomain;
+  if (!baseOk) {
+    return false;
   }
 
-  return false;
+  if (
+    hass &&
+    entityDom === 'climate' &&
+    isClimateSetPresetModeAction(t)
+  ) {
+    return climateEntityHasPresetModes(hass, entityId);
+  }
+
+  return true;
 }

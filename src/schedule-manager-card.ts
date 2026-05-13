@@ -1277,8 +1277,9 @@ export class ScheduleManagerCard extends LitElement {
     selected: BlockAction
   ): (entityId: string) => boolean {
     const actionType = String(selected.action_type ?? '').trim();
+    const hass = this.hass;
     return (entityId: string) =>
-      entityCompatibleWithAction(entityId, actionType);
+      entityCompatibleWithAction(entityId, actionType, hass);
   }
 
   private visualAppendEntity(
@@ -1661,7 +1662,7 @@ export class ScheduleManagerCard extends LitElement {
           matches(friendlyEntityName(hass, eid)) || matches(eid)
       );
       entities = entities.filter((eid) =>
-        entityCompatibleWithAction(eid, actionFull)
+        entityCompatibleWithAction(eid, actionFull, hass)
       );
       body =
         entities.length === 0
