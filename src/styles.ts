@@ -209,6 +209,22 @@ export const styles = css`
     z-index: 2;
   }
 
+  /** Créneau couvrant l’heure actuelle (remplace l’ancienne ligne verticale). */
+  .sm-slot.sm-slot--now-active {
+    z-index: 4;
+    box-shadow:
+      inset 0 0 0 2px var(--accent-color, var(--primary-color)),
+      0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+
+  .sm-scheduler-track--editor .sm-slot.is-selected.sm-slot--now-active {
+    z-index: 5;
+    box-shadow:
+      inset 0 0 0 2px var(--accent-color, var(--primary-color)),
+      inset 0 0 0 5px rgba(255, 255, 255, 0.95),
+      0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+
   .sm-slot-label {
     font-size: 0.72rem;
     line-height: 1.15;
@@ -250,19 +266,6 @@ export const styles = css`
 
   .sm-time-bar-label--right {
     justify-content: flex-end;
-  }
-
-  .timeline-now {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    margin-left: -1px;
-    background: var(--accent-color, var(--primary-color));
-    opacity: 0.95;
-    z-index: 5;
-    pointer-events: none;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   }
 
   .sm-frise-heading {

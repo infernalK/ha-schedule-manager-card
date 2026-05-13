@@ -235,6 +235,32 @@ export function nowPercentOfDay(): number {
   return (m / MINUTES_PER_DAY) * 100;
 }
 
+/**
+ * Index du segment (dans l’ordre d’affichage après `sortTimelineSegmentsForPaint`) qui contient
+ * l’instant courant, en minutes sur la journée. En cas de chevauchement, le dernier index gagne
+ * (plage la plus étroite au-dessus, comme la peinture).
+ */
+export function paintOrderSegmentIndexForNowPct(
+  segmentsPaintOrder: TimelineSegment[],
+  nowPct: number
+): number | null {
+  if (!segmentsPaintOrder.length) {
+    return null;
+  }
+  const nowMin = (nowPct / 100) * MINUTES_PER_DAY;
+  const eps = 1e-4;
+  let last: number | null = null;
+  for (let i = 0; i < segmentsPaintOrder.length; i++) {
+    const s = segmentsPaintOrder[i];
+    const startMin = (s.leftPct / 100) * MINUTES_PER_DAY;
+    const endMin = ((s.leftPct + s.widthPct) / 100) * MINUTES_PER_DAY;
+    if (nowMin + eps >= startMin && nowMin < endMin - eps) {
+      last = i;
+    }
+  }
+  return last;
+}
+
 export function minutesToHaTime(totalMinutes: number): string {
   let m = Math.round(totalMinutes) % MINUTES_PER_DAY;
   if (m < 0) {

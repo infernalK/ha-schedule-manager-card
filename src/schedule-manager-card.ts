@@ -46,6 +46,7 @@ import {
   MINUTES_PER_DAY,
   minuteToHaTimeForSchedule,
   nowPercentOfDay,
+  paintOrderSegmentIndexForNowPct,
   sameDayBlockIntervalExclusiveEnd,
   SCHEDULE_MANAGER_COLOR_KEY,
   snapMinutesToGrid,
@@ -636,8 +637,8 @@ export class ScheduleManagerCard extends LitElement {
   private renderDayTimeline(blocks: TimeBlock[]) {
     const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
     const caps = this.segmentCapIndices(segments);
-    const showNow = segments.length > 0;
     const nowPct = nowPercentOfDay();
+    const nowSeg = paintOrderSegmentIndexForNowPct(segments, nowPct);
     return html`
       <div class="timeline-frise sm-scheduler-frise" role="img" aria-label=${msg(this.hass, 'card.timeline_aria')}>
         <div class="sm-scheduler-track">
@@ -647,9 +648,10 @@ export class ScheduleManagerCard extends LitElement {
               const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
               const capS = caps.capStart.has(i) ? 'sm-slot--cap-start' : '';
               const capE = caps.capEnd.has(i) ? 'sm-slot--cap-end' : '';
+              const nowActive = nowSeg === i ? 'sm-slot--now-active' : '';
               return html`
                 <div
-                  class="sm-slot ${capS} ${capE}"
+                  class="sm-slot ${capS} ${capE} ${nowActive}"
                   style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
                   title=${s.label}
                 >
@@ -658,12 +660,6 @@ export class ScheduleManagerCard extends LitElement {
               `;
             })}
           </div>
-          ${showNow
-            ? html`<div
-                class="timeline-now"
-                style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
-              ></div>`
-            : null}
         </div>
         ${this.renderSchedulerTimeScale('dashboard')}
       </div>
@@ -2384,8 +2380,8 @@ export class ScheduleManagerCard extends LitElement {
     const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
     const caps = this.segmentCapIndices(segments);
     const resizeHandles = timelineResizeHandlesForSelection(blocks, selectedIndex);
-    const showNow = segments.length > 0;
     const nowPct = nowPercentOfDay();
+    const nowSeg = paintOrderSegmentIndexForNowPct(segments, nowPct);
     return html`
       <div
         class="timeline-frise sm-scheduler-frise sm-editor-frise"
@@ -2401,11 +2397,12 @@ export class ScheduleManagerCard extends LitElement {
               const blk = blocks[s.blockIndex];
               const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
               const sel = s.blockIndex === selectedIndex ? 'is-selected' : '';
+              const nowActive = nowSeg === i ? 'sm-slot--now-active' : '';
               const capS = caps.capStart.has(i) ? 'sm-slot--cap-start' : '';
               const capE = caps.capEnd.has(i) ? 'sm-slot--cap-end' : '';
               return html`
                 <div
-                  class="sm-slot ${sel} ${capS} ${capE}"
+                  class="sm-slot ${sel} ${nowActive} ${capS} ${capE}"
                   style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
                   title=${s.blockIndex === selectedIndex
                     ? msg(hass, 'card.drag_move_slot', { label: s.label })
@@ -2447,12 +2444,6 @@ export class ScheduleManagerCard extends LitElement {
               </button>
             `;
           })}
-          ${showNow
-            ? html`<div
-                class="timeline-now"
-                style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
-              ></div>`
-            : null}
         </div>
         ${this.renderSchedulerTimeScale('editor')}
       </div>

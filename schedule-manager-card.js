@@ -409,6 +409,22 @@ const styles = i$4 `
     z-index: 2;
   }
 
+  /** Créneau couvrant l’heure actuelle (remplace l’ancienne ligne verticale). */
+  .sm-slot.sm-slot--now-active {
+    z-index: 4;
+    box-shadow:
+      inset 0 0 0 2px var(--accent-color, var(--primary-color)),
+      0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+
+  .sm-scheduler-track--editor .sm-slot.is-selected.sm-slot--now-active {
+    z-index: 5;
+    box-shadow:
+      inset 0 0 0 2px var(--accent-color, var(--primary-color)),
+      inset 0 0 0 5px rgba(255, 255, 255, 0.95),
+      0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+
   .sm-slot-label {
     font-size: 0.72rem;
     line-height: 1.15;
@@ -450,19 +466,6 @@ const styles = i$4 `
 
   .sm-time-bar-label--right {
     justify-content: flex-end;
-  }
-
-  .timeline-now {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    margin-left: -1px;
-    background: var(--accent-color, var(--primary-color));
-    opacity: 0.95;
-    z-index: 5;
-    pointer-events: none;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   }
 
   .sm-frise-heading {
@@ -2618,6 +2621,28 @@ function nowPercentOfDay() {
     const m = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
     return (m / MINUTES_PER_DAY) * 100;
 }
+/**
+ * Index du segment (dans l’ordre d’affichage après `sortTimelineSegmentsForPaint`) qui contient
+ * l’instant courant, en minutes sur la journée. En cas de chevauchement, le dernier index gagne
+ * (plage la plus étroite au-dessus, comme la peinture).
+ */
+function paintOrderSegmentIndexForNowPct(segmentsPaintOrder, nowPct) {
+    if (!segmentsPaintOrder.length) {
+        return null;
+    }
+    const nowMin = (nowPct / 100) * MINUTES_PER_DAY;
+    const eps = 1e-4;
+    let last = null;
+    for (let i = 0; i < segmentsPaintOrder.length; i++) {
+        const s = segmentsPaintOrder[i];
+        const startMin = (s.leftPct / 100) * MINUTES_PER_DAY;
+        const endMin = ((s.leftPct + s.widthPct) / 100) * MINUTES_PER_DAY;
+        if (nowMin + eps >= startMin && nowMin < endMin - eps) {
+            last = i;
+        }
+    }
+    return last;
+}
 /** Pour le drag sur la frise : minute ≥ fin de journée → `HA_END_OF_DAY_TIME` (pas 24:00:00). */
 function minuteToHaTimeForSchedule(totalMinutes) {
     const r = Math.round(totalMinutes);
@@ -3964,8 +3989,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     renderDayTimeline(blocks) {
         const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
         const caps = this.segmentCapIndices(segments);
-        const showNow = segments.length > 0;
         const nowPct = nowPercentOfDay();
+        const nowSeg = paintOrderSegmentIndexForNowPct(segments, nowPct);
         return x `
       <div class="timeline-frise sm-scheduler-frise" role="img" aria-label=${msg(this.hass, 'card.timeline_aria')}>
         <div class="sm-scheduler-track">
@@ -3975,9 +4000,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
             const capS = caps.capStart.has(i) ? 'sm-slot--cap-start' : '';
             const capE = caps.capEnd.has(i) ? 'sm-slot--cap-end' : '';
+            const nowActive = nowSeg === i ? 'sm-slot--now-active' : '';
             return x `
                 <div
-                  class="sm-slot ${capS} ${capE}"
+                  class="sm-slot ${capS} ${capE} ${nowActive}"
                   style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
                   title=${s.label}
                 >
@@ -3986,12 +4012,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
               `;
         })}
           </div>
-          ${showNow
-            ? x `<div
-                class="timeline-now"
-                style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
-              ></div>`
-            : null}
         </div>
         ${this.renderSchedulerTimeScale('dashboard')}
       </div>
@@ -5468,8 +5488,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const segments = this.sortTimelineSegmentsForPaint(blocksToTimelineSegments(blocks));
         const caps = this.segmentCapIndices(segments);
         const resizeHandles = timelineResizeHandlesForSelection(blocks, selectedIndex);
-        const showNow = segments.length > 0;
         const nowPct = nowPercentOfDay();
+        const nowSeg = paintOrderSegmentIndexForNowPct(segments, nowPct);
         return x `
       <div
         class="timeline-frise sm-scheduler-frise sm-editor-frise"
@@ -5485,11 +5505,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             const blk = blocks[s.blockIndex];
             const fill = blk ? blockTimelineFill(blk) : `hsl(${s.hue}, 58%, 42%)`;
             const sel = s.blockIndex === selectedIndex ? 'is-selected' : '';
+            const nowActive = nowSeg === i ? 'sm-slot--now-active' : '';
             const capS = caps.capStart.has(i) ? 'sm-slot--cap-start' : '';
             const capE = caps.capEnd.has(i) ? 'sm-slot--cap-end' : '';
             return x `
                 <div
-                  class="sm-slot ${sel} ${capS} ${capE}"
+                  class="sm-slot ${sel} ${nowActive} ${capS} ${capE}"
                   style=${this.schedulerSlotAbsoluteStyle(s.leftPct, s.widthPct, fill)}
                   title=${s.blockIndex === selectedIndex
                 ? msg(hass, 'card.drag_move_slot', { label: s.label })
@@ -5529,12 +5550,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
               </button>
             `;
         })}
-          ${showNow
-            ? x `<div
-                class="timeline-now"
-                style="position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;left:${nowPct}%"
-              ></div>`
-            : null}
         </div>
         ${this.renderSchedulerTimeScale('editor')}
       </div>
