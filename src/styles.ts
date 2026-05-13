@@ -559,18 +559,10 @@ export const styles = css`
 
   .sm-color-field-title {
     display: block;
-    margin-bottom: 6px;
+    margin-bottom: 10px;
     font-size: 0.78em;
     color: var(--secondary-text-color);
     font-weight: 600;
-  }
-
-  .sm-color-field-hint {
-    margin: 0 0 10px;
-    font-size: 0.72em;
-    line-height: 1.4;
-    color: var(--secondary-text-color);
-    opacity: 0.92;
   }
 
   .sm-color-row {

@@ -264,8 +264,6 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.validation_duplicate': 'Two identical slots (times + action + payload) — edit entry no. {n}.',
     'card.validation_overlap_day': 'Slots overlap on the same day. Fix times before saving.',
     'card.color_field_title': 'Slot colour on the timeline',
-    'card.color_field_hint':
-      'Colour shown for the selected slot on the “Time” bar above (not the room colour in Home Assistant).',
     'card.color_system_title': 'Open the system colour picker',
     'card.color_system_aria': 'Pick a precise colour with the browser colour picker',
     'card.color_default': 'Default',
@@ -399,8 +397,6 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.validation_overlap_day':
       'Des plages se chevauchent sur la journée. Corrigez les horaires avant d’enregistrer.',
     'card.color_field_title': 'Couleur du créneau sur la ligne horaire',
-    'card.color_field_hint':
-      'Teinte affichée pour la plage sélectionnée sur la frise « Heure » ci‑dessus (pas la couleur de la pièce dans Home Assistant).',
     'card.color_system_title': 'Ouvrir le sélecteur de couleur du système',
     'card.color_system_aria': 'Choisir une couleur précise avec le nuancier du navigateur',
     'card.color_default': 'Défaut',

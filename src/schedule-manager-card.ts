@@ -2330,9 +2330,6 @@ export class ScheduleManagerCard extends LitElement {
     return html`
       <div class="sm-form-label sm-color-field">
         <span class="sm-color-field-title">${msg(hass, 'card.color_field_title')}</span>
-        <p class="sm-color-field-hint">
-          ${msg(hass, 'card.color_field_hint')}
-        </p>
         <div class="sm-color-row">
           <label class="sm-color-system-label">
             <span class="sm-color-system-text">${msg(hass, 'card.color_browser_picker_short')}</span>
