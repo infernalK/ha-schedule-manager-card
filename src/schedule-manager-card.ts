@@ -21,6 +21,16 @@ import {
   stripPayloadForNewService,
 } from './action-service-helpers';
 import {
+  domainIcon,
+  domainLabelFr,
+  entityIcon,
+  friendlyEntityName,
+  listEntitiesInDomain,
+  listSelectableDomains,
+  servicePrimaryLabel,
+  serviceSecondaryHint,
+} from './action-wizard-i18n';
+import {
   blockTimelineFill,
   blocksToTimelineSegments,
   DEFAULT_TIMELINE_SCALE_TICKS,
@@ -214,6 +224,12 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _visualEdit: VisualEditState | null = null;
   @state() private _visualPayloadStr = '';
   @state() private _visualEntityPickerNonce = 0;
+  /** Assistant « Choisir une action » (domaine → entité → service), style Home Assistant. */
+  @state() private _actionWizardOpen = false;
+  @state() private _actionWizardStep: 'domain' | 'entity' | 'service' = 'domain';
+  @state() private _actionWizardSearch = '';
+  @state() private _actionWizardDomain: string | null = null;
+  @state() private _actionWizardEntityId: string | null = null;
   /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
   @state() private _editorFriseWidth = 0;
 
@@ -410,6 +426,7 @@ export class ScheduleManagerCard extends LitElement {
           </div>
         </ha-card>
         ${this.renderVisualEditorOverlay()}
+        ${this.renderActionWizardOverlay()}
       </div>
     `;
   }
@@ -779,6 +796,7 @@ export class ScheduleManagerCard extends LitElement {
     this._editorFriseWidth = 0;
     this._visualEdit = null;
     this._visualPayloadStr = '';
+    this._actionWizardOpen = false;
   }
 
   private endBoundaryDrag() {
@@ -1347,6 +1365,292 @@ export class ScheduleManagerCard extends LitElement {
     this.syncPayloadStrFromSelection();
   }
 
+  private applyWizardSelection(entityId: string, serviceShort: string) {
+    if (!this._visualEdit || !this.hass || !entityId.includes('.')) {
+      return;
+    }
+    const domain = entityId.split('.')[0]!;
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    if (!block) {
+      return;
+    }
+
+    let payload = stripPayloadForNewService(
+      block.action_payload,
+      entityId,
+      SCHEDULE_MANAGER_COLOR_KEY
+    );
+    applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
+
+    this.visualPatchSelected({
+      action_type: `${domain}.${serviceShort}`,
+      action_payload: payload,
+    });
+    this.syncPayloadStrFromSelection();
+    this._visualEntityPickerNonce += 1;
+    this.closeActionWizard();
+  }
+
+  private openActionWizard() {
+    if (!this._visualEdit || !this.hass) {
+      return;
+    }
+    if (!this.mergeJsonPayloadIntoSelectedBlock()) {
+      alert(
+        'Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de continuer.'
+      );
+      return;
+    }
+    this._actionWizardOpen = true;
+    this._actionWizardStep = 'domain';
+    this._actionWizardSearch = '';
+    this._actionWizardDomain = null;
+    this._actionWizardEntityId = null;
+  }
+
+  private closeActionWizard() {
+    this._actionWizardOpen = false;
+  }
+
+  private actionWizardBack() {
+    if (this._actionWizardStep === 'service') {
+      this._actionWizardStep = 'entity';
+      this._actionWizardEntityId = null;
+      this._actionWizardSearch = '';
+    } else if (this._actionWizardStep === 'entity') {
+      this._actionWizardStep = 'domain';
+      this._actionWizardDomain = null;
+      this._actionWizardSearch = '';
+    }
+  }
+
+  private actionWizardPickDomain(domain: string) {
+    this._actionWizardDomain = domain;
+    this._actionWizardStep = 'entity';
+    this._actionWizardSearch = '';
+  }
+
+  private actionWizardPickEntity(eid: string) {
+    this._actionWizardEntityId = eid;
+    this._actionWizardStep = 'service';
+    this._actionWizardSearch = '';
+  }
+
+  private actionWizardApplyService(serviceShort: string) {
+    const id = this._actionWizardEntityId;
+    if (!id) {
+      return;
+    }
+    this.applyWizardSelection(id, serviceShort);
+  }
+
+  private _onWizardSearchInput(ev: Event) {
+    this._actionWizardSearch = (ev.target as HTMLInputElement).value;
+  }
+
+  private _onWizardOverlayKeydown(ev: KeyboardEvent) {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.closeActionWizard();
+    }
+  }
+
+  private renderActionSummary(selected: TimeBlock) {
+    const hass = this.hass!;
+    const primary = this.primaryEntityFromBlock(selected);
+    const parsed = parseDomainService(selected.action_type);
+    const icon = primary
+      ? entityIcon(hass, primary) ?? domainIcon(primary.split('.')[0]!)
+      : 'mdi:gesture-tap-button';
+    const title = primary
+      ? friendlyEntityName(hass, primary)
+      : 'Aucune entité sélectionnée';
+    const actionLine = parsed
+      ? servicePrimaryLabel(parsed.domain, parsed.service)
+      : selected.action_type || '—';
+
+    return html`
+      <div class="sm-action-summary">
+        <ha-icon class="sm-action-summary-icon" .icon=${icon}></ha-icon>
+        <div class="sm-action-summary-text">
+          <div class="sm-action-summary-title">${title}</div>
+          <div class="sm-action-summary-sub">
+            <span>${actionLine}</span>
+            ${selected.action_type
+              ? html`<code class="sm-action-tech">${selected.action_type}</code>`
+              : null}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderActionWizardOverlay() {
+    if (!this._actionWizardOpen || !this.hass || !this._visualEdit) {
+      return html``;
+    }
+
+    const hass = this.hass;
+    const step = this._actionWizardStep;
+    const qRaw = this._actionWizardSearch.trim().toLowerCase();
+    const domainF = this._actionWizardDomain;
+    const entityPick = this._actionWizardEntityId;
+
+    const matches = (text: string) =>
+      !qRaw || text.toLowerCase().includes(qRaw);
+
+    let body = html``;
+
+    if (step === 'domain') {
+      const domains = listSelectableDomains(hass).filter(
+        (d) => matches(domainLabelFr(d)) || matches(d)
+      );
+      body =
+        domains.length === 0
+          ? html`<p class="sm-ap-empty">Aucun résultat.</p>`
+          : html`<div class="sm-ap-scroll">
+              ${domains.map(
+                (d) => html`
+                  <button
+                    type="button"
+                    class="sm-ap-row"
+                    @click=${() => this.actionWizardPickDomain(d)}
+                  >
+                    <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(d)}></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${domainLabelFr(d)}</span>
+                      <span class="sm-ap-row-secondary">${d}</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `
+              )}
+            </div>`;
+    } else if (step === 'entity' && domainF) {
+      const entities = listEntitiesInDomain(hass, domainF).filter(
+        (eid) =>
+          matches(friendlyEntityName(hass, eid)) || matches(eid)
+      );
+      body =
+        entities.length === 0
+          ? html`<p class="sm-ap-empty">Aucune entité dans ce domaine.</p>`
+          : html`<div class="sm-ap-scroll">
+              ${entities.map(
+                (eid) => html`
+                  <button
+                    type="button"
+                    class="sm-ap-row"
+                    @click=${() => this.actionWizardPickEntity(eid)}
+                  >
+                    <ha-icon
+                      class="sm-ap-row-icon"
+                      .icon=${entityIcon(hass, eid) ?? domainIcon(domainF)}
+                    ></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${friendlyEntityName(hass, eid)}</span>
+                      <span class="sm-ap-row-secondary">${eid}</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `
+              )}
+            </div>`;
+    } else if (step === 'service' && entityPick) {
+      const dom = entityPick.includes('.') ? entityPick.split('.')[0]! : '';
+      const svcList = servicesForDomain(hass, dom).filter(
+        (s) =>
+          matches(s) ||
+          matches(servicePrimaryLabel(dom, s)) ||
+          matches(serviceSecondaryHint(dom, s))
+      );
+      body =
+        svcList.length === 0
+          ? html`<p class="sm-ap-empty">Aucun service pour ce domaine.</p>`
+          : html`<div class="sm-ap-scroll">
+              ${svcList.map(
+                (s) => html`
+                  <button
+                    type="button"
+                    class="sm-ap-row sm-ap-row--dense"
+                    @click=${() => this.actionWizardApplyService(s)}
+                  >
+                    <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(dom)}></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${servicePrimaryLabel(dom, s)}</span>
+                      <span class="sm-ap-row-secondary">${serviceSecondaryHint(dom, s)}</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `
+              )}
+            </div>`;
+    }
+
+    const context =
+      step === 'domain'
+        ? 'Étape 1 sur 3 — choisissez un type d’appareil'
+        : step === 'entity' && domainF
+          ? html`Étape 2 sur 3 — entité · <strong>${domainLabelFr(domainF)}</strong>`
+          : step === 'service' && entityPick
+            ? html`Étape 3 sur 3 — que faire sur «
+                <strong>${friendlyEntityName(hass, entityPick)}</strong> » ?`
+            : '';
+
+    return html`
+      <div
+        class="sm-action-wizard-overlay"
+        tabindex="-1"
+        @keydown=${this._onWizardOverlayKeydown}
+        @click=${(e: Event) => {
+          if (e.target === e.currentTarget) {
+            this.closeActionWizard();
+          }
+        }}
+      >
+        <div
+          class="sm-action-wizard-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sm-ap-heading"
+          @click=${(e: Event) => e.stopPropagation()}
+        >
+          <div class="sm-action-wizard-head">
+            <button
+              type="button"
+              class="sm-ap-nav-btn"
+              aria-label="Retour"
+              ?disabled=${step === 'domain'}
+              @click=${() => this.actionWizardBack()}
+            >
+              ‹
+            </button>
+            <h3 id="sm-ap-heading" class="sm-ap-heading">Choisir une action</h3>
+            <button
+              type="button"
+              class="sm-ap-nav-btn"
+              aria-label="Fermer"
+              @click=${() => this.closeActionWizard()}
+            >
+              ×
+            </button>
+          </div>
+          <p class="sm-ap-context">${context}</p>
+          <input
+            type="search"
+            class="sm-ap-search"
+            placeholder="Rechercher"
+            aria-label="Filtrer la liste"
+            .value=${this._actionWizardSearch}
+            @input=${this._onWizardSearchInput}
+          />
+          ${body}
+        </div>
+      </div>
+    `;
+  }
+
   private renderActionPlanningControls(selected: TimeBlock) {
     if (!this.hass || !this._visualEdit) {
       return html``;
@@ -1367,51 +1671,48 @@ export class ScheduleManagerCard extends LitElement {
     );
 
     return html`
-      <div class="sm-form-label">
-        <span>Entité</span>
-        <ha-entity-picker
-          .hass=${this.hass}
-          .allowCustomEntity=${true}
-          label="Choisir une entité"
-          .value=${primary}
-          id=${`sm-viz-ep-primary-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${this._visualEntityPickerNonce}`}
-          @value-changed=${(e: CustomEvent<{ value?: string }>) =>
-            this.visualPrimaryEntityChanged(e)}
-        ></ha-entity-picker>
-        ${!primary
-          ? html`<span class="sm-field-hint">Sélectionnez l’entité à piloter pendant cette plage.</span>`
+      <div class="sm-action-entry">
+        ${this.renderActionSummary(selected)}
+        <button type="button" class="sm-action-primary-btn" @click=${() => this.openActionWizard()}>
+          ${primary || parsed ? 'Modifier l’action' : '+ Choisir une action'}
+        </button>
+        ${unknownService
+          ? html`<p class="sm-field-hint">
+              Action personnalisée : <code>${selected.action_type}</code>
+            </p>`
           : null}
       </div>
 
-      <label class="sm-form-label">
-        Action
-        <select
-          class="sm-select"
-          ?disabled=${!primary || services.length === 0}
-          .value=${selectValue}
-          @change=${(e: Event) => this.visualServiceSelectChanged(e)}
-        >
-          <option value="">— Choisir une action —</option>
-          ${services.map(
-            (s) => html`<option value=${s}>${s}</option>`
-          )}
-        </select>
-        ${unknownService
-          ? html`<span class="sm-field-hint"
-              >Service actuel : <code>${selected.action_type}</code> — absent de la liste (manuel ou intégration non chargée).</span
-            >`
-          : null}
-        ${primary && services.length === 0
-          ? html`<span class="sm-field-hint sm-field-hint-warn"
-              >Aucun service exposé pour le domaine « ${domain} » (rechargez l’interface ou vérifiez Home Assistant).</span
-            >`
-          : null}
-      </label>
-
       <details class="sm-action-advanced">
-        <summary>Service personnalisé (domaine.action)</summary>
+        <summary>Saisie directe (sans assistant)</summary>
+        <div class="sm-form-label">
+          <span>Entité</span>
+          <ha-entity-picker
+            .hass=${this.hass}
+            .allowCustomEntity=${true}
+            label="Choisir une entité"
+            .value=${primary}
+            id=${`sm-viz-ep-primary-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${this._visualEntityPickerNonce}`}
+            @value-changed=${(e: CustomEvent<{ value?: string }>) =>
+              this.visualPrimaryEntityChanged(e)}
+          ></ha-entity-picker>
+        </div>
+
+        <label class="sm-form-label">
+          Action (liste)
+          <select
+            class="sm-select"
+            ?disabled=${!primary || services.length === 0}
+            .value=${selectValue}
+            @change=${(e: Event) => this.visualServiceSelectChanged(e)}
+          >
+            <option value="">— Choisir une action —</option>
+            ${services.map((s) => html`<option value=${s}>${s}</option>`)}
+          </select>
+        </label>
+
         <label class="sm-form-label sm-form-label-inner">
-          Saisie libre
+          Service personnalisé (domaine.action)
           <input
             type="text"
             class="sm-modal-body-input-full"

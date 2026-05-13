@@ -957,6 +957,255 @@ const styles = i$4 `
     font-size: 1rem;
     cursor: pointer;
   }
+
+  /* Résumé + bouton principal « comme » l’UI horaire HA */
+  .sm-action-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .sm-action-summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--divider-color);
+    background: rgba(var(--rgb-primary-text-color, 221, 221, 221), 0.05);
+    min-width: 0;
+  }
+
+  .sm-action-summary-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+    border-radius: 50%;
+    box-sizing: border-box;
+    color: var(--primary-color);
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.12);
+  }
+
+  .sm-action-summary-text {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .sm-action-summary-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--primary-text-color);
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .sm-action-summary-sub {
+    margin-top: 4px;
+    font-size: 0.78em;
+    color: var(--secondary-text-color);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .sm-action-tech {
+    font-size: 0.85em;
+    opacity: 0.85;
+    word-break: break-all;
+  }
+
+  .sm-action-primary-btn {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    text-decoration: none;
+  }
+
+  .sm-action-primary-btn:hover {
+    text-decoration: underline;
+  }
+
+  /* Assistant plein écran au-dessus du modal d’édition */
+  .sm-action-wizard-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) 12px 24px;
+    box-sizing: border-box;
+    overflow: auto;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
+  .sm-action-wizard-panel {
+    width: min(100%, 440px);
+    max-width: calc(100vw - 24px);
+    margin-top: min(10vh, 48px);
+    margin-bottom: 24px;
+    border-radius: 12px;
+    background: var(--card-background-color, var(--ha-card-background, #fff));
+    border: 1px solid var(--divider-color);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    color: var(--primary-text-color);
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .sm-action-wizard-head {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 8px 8px;
+    border-bottom: 1px solid var(--divider-color);
+  }
+
+  .sm-ap-heading {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.25;
+  }
+
+  .sm-ap-nav-btn {
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--primary-text-color);
+    font-size: 1.35rem;
+    line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .sm-ap-nav-btn:hover:not(:disabled) {
+    background: rgba(127, 127, 127, 0.12);
+  }
+
+  .sm-ap-nav-btn:disabled {
+    opacity: 0.28;
+    cursor: default;
+  }
+
+  .sm-ap-context {
+    margin: 10px 16px 6px;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-ap-context strong {
+    color: var(--primary-text-color);
+    font-weight: 600;
+  }
+
+  .sm-ap-search {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 0 16px 10px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+
+  .sm-ap-scroll {
+    max-height: min(52vh, 440px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 0 12px;
+  }
+
+  .sm-ap-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 16px;
+    margin: 0;
+    border: none;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.15);
+    background: transparent;
+    color: var(--primary-text-color);
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+
+  .sm-ap-row:hover {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.06);
+  }
+
+  .sm-ap-row-icon {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-ap-row-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sm-ap-row-primary {
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .sm-ap-row-secondary {
+    font-size: 0.72rem;
+    color: var(--secondary-text-color);
+    word-break: break-all;
+    line-height: 1.25;
+  }
+
+  .sm-ap-row--dense .sm-ap-row-secondary {
+    font-size: 0.68rem;
+  }
+
+  .sm-ap-chevron {
+    flex-shrink: 0;
+    font-size: 1.25rem;
+    color: var(--secondary-text-color);
+    opacity: 0.65;
+    line-height: 1;
+  }
+
+  .sm-ap-empty {
+    margin: 16px;
+    font-size: 0.85rem;
+    color: var(--secondary-text-color);
+    text-align: center;
+  }
 `;
 
 /** Décompose `climate.set_preset_mode` → domain + nom court du service. */
@@ -1039,6 +1288,155 @@ function applyDefaultFieldsForService(domain, service, entityId, payload, hass) 
         }
         return;
     }
+}
+
+/** Libellé FR pour un domaine (navigation type « Thermostat », « Lumière »). */
+function domainLabelFr(domain) {
+    const map = {
+        alarm_control_panel: 'Alarme',
+        automation: 'Automatisation',
+        binary_sensor: 'Capteur binaire',
+        button: 'Bouton',
+        camera: 'Caméra',
+        climate: 'Climat',
+        cover: 'Volet / store',
+        fan: 'Ventilateur',
+        humidifier: 'Humidificateur',
+        input_boolean: 'Interrupteur virtuel',
+        input_button: 'Bouton virtuel',
+        input_number: 'Nombre',
+        input_select: 'Liste déroulante',
+        input_text: 'Texte',
+        light: 'Lumière',
+        lock: 'Serrure',
+        media_player: 'Média',
+        number: 'Nombre',
+        scene: 'Scène',
+        script: 'Script',
+        select: 'Liste',
+        sensor: 'Capteur',
+        switch: 'Interrupteur',
+        sun: 'Soleil',
+        update: 'Mise à jour',
+        vacuum: 'Aspirateur',
+        valve: 'Vanne',
+        water_heater: 'Chauffe-eau',
+        weather: 'Météo',
+        zone: 'Zone',
+    };
+    return map[domain] ?? domain.replace(/_/g, ' ');
+}
+function domainIcon(domain) {
+    const map = {
+        alarm_control_panel: 'mdi:shield-home',
+        automation: 'mdi:robot',
+        binary_sensor: 'mdi:toggle-switch',
+        button: 'mdi:gesture-tap-button',
+        camera: 'mdi:cctv',
+        climate: 'mdi:thermostat',
+        cover: 'mdi:window-open',
+        fan: 'mdi:fan',
+        humidifier: 'mdi:air-humidifier',
+        input_boolean: 'mdi:toggle-switch-outline',
+        input_button: 'mdi:gesture-tap',
+        input_number: 'mdi:numeric',
+        input_select: 'mdi:format-list-bulleted',
+        input_text: 'mdi:form-textbox',
+        light: 'mdi:lightbulb',
+        lock: 'mdi:lock',
+        media_player: 'mdi:speaker',
+        number: 'mdi:numeric',
+        scene: 'mdi:palette',
+        script: 'mdi:script-text',
+        select: 'mdi:format-list-checkbox',
+        sensor: 'mdi:eye',
+        switch: 'mdi:light-switch',
+        vacuum: 'mdi:robot-vacuum',
+        valve: 'mdi:pipe-valve',
+        water_heater: 'mdi:water-boiler',
+        weather: 'mdi:weather-partly-cloudy',
+    };
+    return map[domain] ?? 'mdi:shape-outline';
+}
+/** Titre principal pour une ligne de service (FR quand on connaît le couple domain/service). */
+function servicePrimaryLabel(domain, service) {
+    const known = {
+        'climate.turn_on': 'Allumer',
+        'climate.turn_off': 'Éteindre',
+        'climate.toggle': 'Basculer',
+        'climate.set_preset_mode': 'Choisir un mode préréglé',
+        'climate.set_temperature': 'Régler la température',
+        'climate.set_hvac_mode': 'Régler le mode HVAC',
+        'climate.set_fan_mode': 'Régler le mode ventilation',
+        'light.turn_on': 'Allumer',
+        'light.turn_off': 'Éteindre',
+        'light.toggle': 'Basculer',
+        'switch.turn_on': 'Allumer',
+        'switch.turn_off': 'Éteindre',
+        'switch.toggle': 'Basculer',
+        'fan.turn_on': 'Allumer',
+        'fan.turn_off': 'Éteindre',
+        'cover.open_cover': 'Ouvrir',
+        'cover.close_cover': 'Fermer',
+        'cover.stop_cover': 'Arrêter',
+        'cover.set_cover_position': 'Régler la position',
+        'lock.lock': 'Verrouiller',
+        'lock.unlock': 'Déverrouiller',
+        'media_player.media_play': 'Lecture',
+        'media_player.media_pause': 'Pause',
+        'media_player.turn_on': 'Allumer',
+        'media_player.turn_off': 'Éteindre',
+        'vacuum.start': 'Démarrer',
+        'vacuum.pause': 'Pause',
+        'vacuum.return_to_base': 'Retour à la base',
+        'script.turn_on': 'Exécuter',
+        'scene.turn_on': 'Activer la scène',
+        'input_boolean.turn_on': 'Activer',
+        'input_boolean.turn_off': 'Désactiver',
+        'input_boolean.toggle': 'Basculer',
+        'humidifier.set_humidity': 'Régler l’humidité',
+        'humidifier.turn_on': 'Allumer',
+        'humidifier.turn_off': 'Éteindre',
+        'water_heater.set_temperature': 'Régler la température',
+    };
+    const k = `${domain}.${service}`;
+    if (known[k]) {
+        return known[k];
+    }
+    const t = service.replace(/_/g, ' ');
+    return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function serviceSecondaryHint(domain, service) {
+    return `${domain}.${service}`;
+}
+function friendlyEntityName(hass, entityId) {
+    const fn = hass.states[entityId]?.attributes?.friendly_name;
+    return typeof fn === 'string' && fn.trim() ? fn.trim() : entityId;
+}
+function entityIcon(hass, entityId) {
+    const ic = hass.states[entityId]?.attributes?.icon;
+    return typeof ic === 'string' ? ic : undefined;
+}
+/** Domaines ayant au moins une entité et des services HA connus. */
+function listSelectableDomains(hass) {
+    const svc = hass.services || {};
+    const doms = new Set();
+    for (const eid of Object.keys(hass.states)) {
+        const d = eid.includes('.') ? eid.split('.')[0] : '';
+        if (!d || !svc[d] || Object.keys(svc[d]).length === 0) {
+            continue;
+        }
+        doms.add(d);
+    }
+    return [...doms].sort((a, b) => domainLabelFr(a).localeCompare(domainLabelFr(b), 'fr', { sensitivity: 'base' }));
+}
+function listEntitiesInDomain(hass, domain) {
+    const prefix = `${domain}.`;
+    return Object.keys(hass.states)
+        .filter((id) => id.startsWith(prefix))
+        .sort((a, b) => friendlyEntityName(hass, a).localeCompare(friendlyEntityName(hass, b), 'fr', {
+        sensitivity: 'base',
+    }));
 }
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -1911,6 +2309,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._visualEdit = null;
         this._visualPayloadStr = '';
         this._visualEntityPickerNonce = 0;
+        /** Assistant « Choisir une action » (domaine → entité → service), style Home Assistant. */
+        this._actionWizardOpen = false;
+        this._actionWizardStep = 'domain';
+        this._actionWizardSearch = '';
+        this._actionWizardDomain = null;
+        this._actionWizardEntityId = null;
         /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
         this._editorFriseWidth = 0;
         /** Déplacement horizontal de la plage sélectionnée (durée conservée). */
@@ -2109,6 +2513,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
           </div>
         </ha-card>
         ${this.renderVisualEditorOverlay()}
+        ${this.renderActionWizardOverlay()}
       </div>
     `;
     }
@@ -2439,6 +2844,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._editorFriseWidth = 0;
         this._visualEdit = null;
         this._visualPayloadStr = '';
+        this._actionWizardOpen = false;
     }
     endBoundaryDrag() {
         const d = this._boundaryDrag;
@@ -2898,6 +3304,253 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         });
         this.syncPayloadStrFromSelection();
     }
+    applyWizardSelection(entityId, serviceShort) {
+        if (!this._visualEdit || !this.hass || !entityId.includes('.')) {
+            return;
+        }
+        const domain = entityId.split('.')[0];
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        if (!block) {
+            return;
+        }
+        let payload = stripPayloadForNewService(block.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
+        applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
+        this.visualPatchSelected({
+            action_type: `${domain}.${serviceShort}`,
+            action_payload: payload,
+        });
+        this.syncPayloadStrFromSelection();
+        this._visualEntityPickerNonce += 1;
+        this.closeActionWizard();
+    }
+    openActionWizard() {
+        if (!this._visualEdit || !this.hass) {
+            return;
+        }
+        if (!this.mergeJsonPayloadIntoSelectedBlock()) {
+            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de continuer.');
+            return;
+        }
+        this._actionWizardOpen = true;
+        this._actionWizardStep = 'domain';
+        this._actionWizardSearch = '';
+        this._actionWizardDomain = null;
+        this._actionWizardEntityId = null;
+    }
+    closeActionWizard() {
+        this._actionWizardOpen = false;
+    }
+    actionWizardBack() {
+        if (this._actionWizardStep === 'service') {
+            this._actionWizardStep = 'entity';
+            this._actionWizardEntityId = null;
+            this._actionWizardSearch = '';
+        }
+        else if (this._actionWizardStep === 'entity') {
+            this._actionWizardStep = 'domain';
+            this._actionWizardDomain = null;
+            this._actionWizardSearch = '';
+        }
+    }
+    actionWizardPickDomain(domain) {
+        this._actionWizardDomain = domain;
+        this._actionWizardStep = 'entity';
+        this._actionWizardSearch = '';
+    }
+    actionWizardPickEntity(eid) {
+        this._actionWizardEntityId = eid;
+        this._actionWizardStep = 'service';
+        this._actionWizardSearch = '';
+    }
+    actionWizardApplyService(serviceShort) {
+        const id = this._actionWizardEntityId;
+        if (!id) {
+            return;
+        }
+        this.applyWizardSelection(id, serviceShort);
+    }
+    _onWizardSearchInput(ev) {
+        this._actionWizardSearch = ev.target.value;
+    }
+    _onWizardOverlayKeydown(ev) {
+        if (ev.key === 'Escape') {
+            ev.preventDefault();
+            ev.stopPropagation();
+            this.closeActionWizard();
+        }
+    }
+    renderActionSummary(selected) {
+        const hass = this.hass;
+        const primary = this.primaryEntityFromBlock(selected);
+        const parsed = parseDomainService(selected.action_type);
+        const icon = primary
+            ? entityIcon(hass, primary) ?? domainIcon(primary.split('.')[0])
+            : 'mdi:gesture-tap-button';
+        const title = primary
+            ? friendlyEntityName(hass, primary)
+            : 'Aucune entité sélectionnée';
+        const actionLine = parsed
+            ? servicePrimaryLabel(parsed.domain, parsed.service)
+            : selected.action_type || '—';
+        return x `
+      <div class="sm-action-summary">
+        <ha-icon class="sm-action-summary-icon" .icon=${icon}></ha-icon>
+        <div class="sm-action-summary-text">
+          <div class="sm-action-summary-title">${title}</div>
+          <div class="sm-action-summary-sub">
+            <span>${actionLine}</span>
+            ${selected.action_type
+            ? x `<code class="sm-action-tech">${selected.action_type}</code>`
+            : null}
+          </div>
+        </div>
+      </div>
+    `;
+    }
+    renderActionWizardOverlay() {
+        if (!this._actionWizardOpen || !this.hass || !this._visualEdit) {
+            return x ``;
+        }
+        const hass = this.hass;
+        const step = this._actionWizardStep;
+        const qRaw = this._actionWizardSearch.trim().toLowerCase();
+        const domainF = this._actionWizardDomain;
+        const entityPick = this._actionWizardEntityId;
+        const matches = (text) => !qRaw || text.toLowerCase().includes(qRaw);
+        let body = x ``;
+        if (step === 'domain') {
+            const domains = listSelectableDomains(hass).filter((d) => matches(domainLabelFr(d)) || matches(d));
+            body =
+                domains.length === 0
+                    ? x `<p class="sm-ap-empty">Aucun résultat.</p>`
+                    : x `<div class="sm-ap-scroll">
+              ${domains.map((d) => x `
+                  <button
+                    type="button"
+                    class="sm-ap-row"
+                    @click=${() => this.actionWizardPickDomain(d)}
+                  >
+                    <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(d)}></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${domainLabelFr(d)}</span>
+                      <span class="sm-ap-row-secondary">${d}</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `)}
+            </div>`;
+        }
+        else if (step === 'entity' && domainF) {
+            const entities = listEntitiesInDomain(hass, domainF).filter((eid) => matches(friendlyEntityName(hass, eid)) || matches(eid));
+            body =
+                entities.length === 0
+                    ? x `<p class="sm-ap-empty">Aucune entité dans ce domaine.</p>`
+                    : x `<div class="sm-ap-scroll">
+              ${entities.map((eid) => x `
+                  <button
+                    type="button"
+                    class="sm-ap-row"
+                    @click=${() => this.actionWizardPickEntity(eid)}
+                  >
+                    <ha-icon
+                      class="sm-ap-row-icon"
+                      .icon=${entityIcon(hass, eid) ?? domainIcon(domainF)}
+                    ></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${friendlyEntityName(hass, eid)}</span>
+                      <span class="sm-ap-row-secondary">${eid}</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `)}
+            </div>`;
+        }
+        else if (step === 'service' && entityPick) {
+            const dom = entityPick.includes('.') ? entityPick.split('.')[0] : '';
+            const svcList = servicesForDomain(hass, dom).filter((s) => matches(s) ||
+                matches(servicePrimaryLabel(dom, s)) ||
+                matches(serviceSecondaryHint(dom, s)));
+            body =
+                svcList.length === 0
+                    ? x `<p class="sm-ap-empty">Aucun service pour ce domaine.</p>`
+                    : x `<div class="sm-ap-scroll">
+              ${svcList.map((s) => x `
+                  <button
+                    type="button"
+                    class="sm-ap-row sm-ap-row--dense"
+                    @click=${() => this.actionWizardApplyService(s)}
+                  >
+                    <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(dom)}></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${servicePrimaryLabel(dom, s)}</span>
+                      <span class="sm-ap-row-secondary">${serviceSecondaryHint(dom, s)}</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `)}
+            </div>`;
+        }
+        const context = step === 'domain'
+            ? 'Étape 1 sur 3 — choisissez un type d’appareil'
+            : step === 'entity' && domainF
+                ? x `Étape 2 sur 3 — entité · <strong>${domainLabelFr(domainF)}</strong>`
+                : step === 'service' && entityPick
+                    ? x `Étape 3 sur 3 — que faire sur «
+                <strong>${friendlyEntityName(hass, entityPick)}</strong> » ?`
+                    : '';
+        return x `
+      <div
+        class="sm-action-wizard-overlay"
+        tabindex="-1"
+        @keydown=${this._onWizardOverlayKeydown}
+        @click=${(e) => {
+            if (e.target === e.currentTarget) {
+                this.closeActionWizard();
+            }
+        }}
+      >
+        <div
+          class="sm-action-wizard-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sm-ap-heading"
+          @click=${(e) => e.stopPropagation()}
+        >
+          <div class="sm-action-wizard-head">
+            <button
+              type="button"
+              class="sm-ap-nav-btn"
+              aria-label="Retour"
+              ?disabled=${step === 'domain'}
+              @click=${() => this.actionWizardBack()}
+            >
+              ‹
+            </button>
+            <h3 id="sm-ap-heading" class="sm-ap-heading">Choisir une action</h3>
+            <button
+              type="button"
+              class="sm-ap-nav-btn"
+              aria-label="Fermer"
+              @click=${() => this.closeActionWizard()}
+            >
+              ×
+            </button>
+          </div>
+          <p class="sm-ap-context">${context}</p>
+          <input
+            type="search"
+            class="sm-ap-search"
+            placeholder="Rechercher"
+            aria-label="Filtrer la liste"
+            .value=${this._actionWizardSearch}
+            @input=${this._onWizardSearchInput}
+          />
+          ${body}
+        </div>
+      </div>
+    `;
+    }
     renderActionPlanningControls(selected) {
         if (!this.hass || !this._visualEdit) {
             return x ``;
@@ -2914,48 +3567,47 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             parsed.service &&
             !services.includes(parsed.service));
         return x `
-      <div class="sm-form-label">
-        <span>Entité</span>
-        <ha-entity-picker
-          .hass=${this.hass}
-          .allowCustomEntity=${true}
-          label="Choisir une entité"
-          .value=${primary}
-          id=${`sm-viz-ep-primary-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${this._visualEntityPickerNonce}`}
-          @value-changed=${(e) => this.visualPrimaryEntityChanged(e)}
-        ></ha-entity-picker>
-        ${!primary
-            ? x `<span class="sm-field-hint">Sélectionnez l’entité à piloter pendant cette plage.</span>`
+      <div class="sm-action-entry">
+        ${this.renderActionSummary(selected)}
+        <button type="button" class="sm-action-primary-btn" @click=${() => this.openActionWizard()}>
+          ${primary || parsed ? 'Modifier l’action' : '+ Choisir une action'}
+        </button>
+        ${unknownService
+            ? x `<p class="sm-field-hint">
+              Action personnalisée : <code>${selected.action_type}</code>
+            </p>`
             : null}
       </div>
 
-      <label class="sm-form-label">
-        Action
-        <select
-          class="sm-select"
-          ?disabled=${!primary || services.length === 0}
-          .value=${selectValue}
-          @change=${(e) => this.visualServiceSelectChanged(e)}
-        >
-          <option value="">— Choisir une action —</option>
-          ${services.map((s) => x `<option value=${s}>${s}</option>`)}
-        </select>
-        ${unknownService
-            ? x `<span class="sm-field-hint"
-              >Service actuel : <code>${selected.action_type}</code> — absent de la liste (manuel ou intégration non chargée).</span
-            >`
-            : null}
-        ${primary && services.length === 0
-            ? x `<span class="sm-field-hint sm-field-hint-warn"
-              >Aucun service exposé pour le domaine « ${domain} » (rechargez l’interface ou vérifiez Home Assistant).</span
-            >`
-            : null}
-      </label>
-
       <details class="sm-action-advanced">
-        <summary>Service personnalisé (domaine.action)</summary>
+        <summary>Saisie directe (sans assistant)</summary>
+        <div class="sm-form-label">
+          <span>Entité</span>
+          <ha-entity-picker
+            .hass=${this.hass}
+            .allowCustomEntity=${true}
+            label="Choisir une entité"
+            .value=${primary}
+            id=${`sm-viz-ep-primary-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${this._visualEntityPickerNonce}`}
+            @value-changed=${(e) => this.visualPrimaryEntityChanged(e)}
+          ></ha-entity-picker>
+        </div>
+
+        <label class="sm-form-label">
+          Action (liste)
+          <select
+            class="sm-select"
+            ?disabled=${!primary || services.length === 0}
+            .value=${selectValue}
+            @change=${(e) => this.visualServiceSelectChanged(e)}
+          >
+            <option value="">— Choisir une action —</option>
+            ${services.map((s) => x `<option value=${s}>${s}</option>`)}
+          </select>
+        </label>
+
         <label class="sm-form-label sm-form-label-inner">
-          Saisie libre
+          Service personnalisé (domaine.action)
           <input
             type="text"
             class="sm-modal-body-input-full"
@@ -3432,6 +4084,21 @@ __decorate([
 __decorate([
     t$1()
 ], ScheduleManagerCard.prototype, "_visualEntityPickerNonce", void 0);
+__decorate([
+    t$1()
+], ScheduleManagerCard.prototype, "_actionWizardOpen", void 0);
+__decorate([
+    t$1()
+], ScheduleManagerCard.prototype, "_actionWizardStep", void 0);
+__decorate([
+    t$1()
+], ScheduleManagerCard.prototype, "_actionWizardSearch", void 0);
+__decorate([
+    t$1()
+], ScheduleManagerCard.prototype, "_actionWizardDomain", void 0);
+__decorate([
+    t$1()
+], ScheduleManagerCard.prototype, "_actionWizardEntityId", void 0);
 __decorate([
     t$1()
 ], ScheduleManagerCard.prototype, "_editorFriseWidth", void 0);
