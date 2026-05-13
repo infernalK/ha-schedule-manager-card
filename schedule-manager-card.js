@@ -3686,7 +3686,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             action_payload: payload,
         }, ai);
         this.closeActionWizard();
-        this.requestUpdate();
     }
     openActionWizard() {
         if (!this._visualEdit || !this.hass) {
