@@ -2582,11 +2582,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._creating = false;
         /** Éditeur plein écran (frise + détail plage), style config HA */
         this._visualEdit = null;
-        /** Assistant « Choisir une action » (domaine → entité → service), style Home Assistant. */
+        /** Assistant « Choisir une action » : domaine → service → entité compatible. */
         this._actionWizardOpen = false;
         this._actionWizardStep = 'domain';
         this._actionWizardSearch = '';
         this._actionWizardDomain = null;
+        /** Nom court du service sélectionné (ex. turn_on) avant le choix de l’entité. */
+        this._actionWizardServiceShort = null;
         this._actionWizardEntityId = null;
         /** Réinitialise le sélecteur rapide d’entités après ajout. */
         this._quickEntityPickerNonce = 0;
@@ -3357,12 +3359,15 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
         this._visualEdit = { ...this._visualEdit, blocks: trial };
     }
-    visualPatchSelectedAction(patch) {
+    visualPatchSelectedAction(patch, actionIndexOverride) {
         if (!this._visualEdit) {
             return;
         }
         const sel = this._visualEdit.selectedIndex;
-        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1));
+        const maxAi = Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1);
+        const ai = Math.min(actionIndexOverride !== undefined
+            ? actionIndexOverride
+            : this._visualEdit.selectedActionIndex, maxAi);
         const cur = this._visualEdit.blocks[sel];
         if (!cur?.actions?.length) {
             return;
@@ -3500,17 +3505,22 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         const domains = domainsForActionType(selected.action_type);
         return (entityId) => entityMatchesDomains(entityId, domains);
     }
-    visualAppendEntity(ev) {
+    visualAppendEntity(ev, actionIndexOverride) {
         if (!this._visualEdit || !this.hass) {
             return;
         }
-        const v = String(ev.detail?.value ?? '').trim();
+        const raw = ev.detail?.value ??
+            (ev.target?.value ?? '');
+        const v = String(raw).trim();
         if (!v) {
             return;
         }
         const sel = this._visualEdit.selectedIndex;
         const block = this._visualEdit.blocks[sel];
-        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (block?.actions?.length ?? 1) - 1));
+        const maxAi = Math.max(0, (block?.actions?.length ?? 1) - 1);
+        const ai = Math.min(actionIndexOverride !== undefined
+            ? Math.max(0, Math.min(actionIndexOverride, maxAi))
+            : Math.min(this._visualEdit.selectedActionIndex, maxAi), maxAi);
         const action = block?.actions?.[ai];
         if (!block || !action || !String(action.action_type ?? '').trim()) {
             return;
@@ -3524,16 +3534,19 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             : {};
         const nextIds = [...ids, v];
         base.entity_id = nextIds.length === 1 ? nextIds[0] : nextIds;
-        this.visualPatchSelectedAction({ action_payload: base });
+        this.visualPatchSelectedAction({ action_payload: base }, ai);
         this._quickEntityPickerNonce += 1;
     }
-    visualRemoveEntityChip(entityId) {
+    visualRemoveEntityChip(entityId, actionIndexOverride) {
         if (!this._visualEdit) {
             return;
         }
         const sel = this._visualEdit.selectedIndex;
         const block = this._visualEdit.blocks[sel];
-        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (block?.actions?.length ?? 1) - 1));
+        const maxAi = Math.max(0, (block?.actions?.length ?? 1) - 1);
+        const ai = Math.min(actionIndexOverride !== undefined
+            ? Math.max(0, Math.min(actionIndexOverride, maxAi))
+            : Math.min(this._visualEdit.selectedActionIndex, maxAi), maxAi);
         const action = block?.actions?.[ai];
         if (!block || !action) {
             return;
@@ -3547,7 +3560,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             ? { ...action.action_payload }
             : {};
         base.entity_id = ids.length === 1 ? ids[0] : ids;
-        this.visualPatchSelectedAction({ action_payload: base });
+        this.visualPatchSelectedAction({ action_payload: base }, ai);
         this._quickEntityPickerNonce += 1;
     }
     /** Modes préréglés exposés par l’entité climate (pour l’étape assistant). */
@@ -3597,6 +3610,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._actionWizardStep = 'domain';
         this._actionWizardSearch = '';
         this._actionWizardDomain = null;
+        this._actionWizardServiceShort = null;
         this._actionWizardEntityId = null;
     }
     closeActionWizard() {
@@ -3604,50 +3618,57 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     }
     actionWizardBack() {
         if (this._actionWizardStep === 'climate_preset') {
+            this._actionWizardStep = 'entity';
+            this._actionWizardEntityId = null;
+            this._actionWizardSearch = '';
+            return;
+        }
+        if (this._actionWizardStep === 'entity') {
             this._actionWizardStep = 'service';
+            this._actionWizardEntityId = null;
             this._actionWizardSearch = '';
             return;
         }
         if (this._actionWizardStep === 'service') {
-            this._actionWizardStep = 'entity';
-            this._actionWizardEntityId = null;
-            this._actionWizardSearch = '';
-        }
-        else if (this._actionWizardStep === 'entity') {
             this._actionWizardStep = 'domain';
             this._actionWizardDomain = null;
+            this._actionWizardServiceShort = null;
             this._actionWizardSearch = '';
         }
     }
     actionWizardPickDomain(domain) {
         this._actionWizardDomain = domain;
-        this._actionWizardStep = 'entity';
-        this._actionWizardSearch = '';
-    }
-    actionWizardPickEntity(eid) {
-        this._actionWizardEntityId = eid;
+        this._actionWizardServiceShort = null;
         this._actionWizardStep = 'service';
         this._actionWizardSearch = '';
     }
-    actionWizardApplyService(serviceShort) {
-        const id = this._actionWizardEntityId;
-        if (!id) {
+    actionWizardPickService(serviceShort) {
+        this._actionWizardServiceShort = serviceShort;
+        this._actionWizardStep = 'entity';
+        this._actionWizardEntityId = null;
+        this._actionWizardSearch = '';
+    }
+    actionWizardPickEntity(eid) {
+        const domain = this._actionWizardDomain;
+        const svc = this._actionWizardServiceShort;
+        if (!domain || !svc) {
             return;
         }
-        const dom = id.includes('.') ? id.split('.')[0] ?? '' : '';
-        if (serviceShort === 'set_preset_mode' && dom === 'climate') {
-            const modes = this.climatePresetModesForEntityId(id);
+        this._actionWizardEntityId = eid;
+        if (svc === 'set_preset_mode' && domain === 'climate') {
+            const modes = this.climatePresetModesForEntityId(eid);
             if (modes && modes.length > 0) {
                 this._actionWizardStep = 'climate_preset';
                 this._actionWizardSearch = '';
                 return;
             }
         }
-        this.applyWizardSelection(id, serviceShort);
+        this.applyWizardSelection(eid, svc);
     }
     actionWizardApplyClimatePreset(presetMode) {
         const id = this._actionWizardEntityId;
-        if (!id) {
+        const svc = this._actionWizardServiceShort;
+        if (!id || svc !== 'set_preset_mode') {
             return;
         }
         this.applyWizardSelection(id, 'set_preset_mode', presetMode);
@@ -3720,12 +3741,10 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this.openActionWizard();
     }
     visualAppendEntityAt(actionIndex, ev) {
-        this.visualSelectAction(actionIndex);
-        this.visualAppendEntity(ev);
+        this.visualAppendEntity(ev, actionIndex);
     }
     visualRemoveEntityAt(actionIndex, entityId) {
-        this.visualSelectAction(actionIndex);
-        this.visualRemoveEntityChip(entityId);
+        this.visualRemoveEntityChip(entityId, actionIndex);
     }
     visualSetPresetModeAt(actionIndex, mode) {
         this.visualSelectAction(actionIndex);
@@ -3739,6 +3758,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         const step = this._actionWizardStep;
         const qRaw = this._actionWizardSearch.trim().toLowerCase();
         const domainF = this._actionWizardDomain;
+        const svcPick = this._actionWizardServiceShort;
         const entityPick = this._actionWizardEntityId;
         const matches = (text) => !qRaw || text.toLowerCase().includes(qRaw);
         let body = x ``;
@@ -3764,11 +3784,43 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                 `)}
             </div>`;
         }
-        else if (step === 'entity' && domainF) {
-            const entities = listEntitiesInDomain(hass, domainF).filter((eid) => matches(friendlyEntityName(hass, eid)) || matches(eid));
+        else if (step === 'service' && domainF) {
+            const dom = domainF;
+            const svcList = servicesForDomain(hass, dom).filter((s) => matches(s) ||
+                matches(servicePrimaryLabel(dom, s)) ||
+                matches(serviceSecondaryHint(dom, s)));
+            body =
+                svcList.length === 0
+                    ? x `<p class="sm-ap-empty">Aucun service pour ce domaine.</p>`
+                    : x `<div class="sm-ap-scroll">
+              ${svcList.map((s) => x `
+                  <button
+                    type="button"
+                    class="sm-ap-row sm-ap-row--dense"
+                    @click=${() => this.actionWizardPickService(s)}
+                  >
+                    <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(dom)}></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${servicePrimaryLabel(dom, s)}</span>
+                      <span class="sm-ap-row-secondary">${serviceSecondaryHint(dom, s)}</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `)}
+            </div>`;
+        }
+        else if (step === 'entity' && domainF && svcPick) {
+            const actionFull = `${domainF}.${svcPick}`;
+            const compatDomains = domainsForActionType(actionFull);
+            let entities = listEntitiesInDomain(hass, domainF).filter((eid) => matches(friendlyEntityName(hass, eid)) || matches(eid));
+            if (compatDomains.length > 0) {
+                entities = entities.filter((eid) => entityMatchesDomains(eid, compatDomains));
+            }
             body =
                 entities.length === 0
-                    ? x `<p class="sm-ap-empty">Aucune entité dans ce domaine.</p>`
+                    ? x `<p class="sm-ap-empty">
+              Aucune entité compatible avec l’action <code>${actionFull}</code> dans ce domaine.
+            </p>`
                     : x `<div class="sm-ap-scroll">
               ${entities.map((eid) => x `
                   <button
@@ -3783,31 +3835,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                     <div class="sm-ap-row-text">
                       <span class="sm-ap-row-primary">${friendlyEntityName(hass, eid)}</span>
                       <span class="sm-ap-row-secondary">${eid}</span>
-                    </div>
-                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
-                  </button>
-                `)}
-            </div>`;
-        }
-        else if (step === 'service' && entityPick) {
-            const dom = entityPick.includes('.') ? entityPick.split('.')[0] ?? '' : '';
-            const svcList = servicesForDomain(hass, dom).filter((s) => matches(s) ||
-                matches(servicePrimaryLabel(dom, s)) ||
-                matches(serviceSecondaryHint(dom, s)));
-            body =
-                svcList.length === 0
-                    ? x `<p class="sm-ap-empty">Aucun service pour ce domaine.</p>`
-                    : x `<div class="sm-ap-scroll">
-              ${svcList.map((s) => x `
-                  <button
-                    type="button"
-                    class="sm-ap-row sm-ap-row--dense"
-                    @click=${() => this.actionWizardApplyService(s)}
-                  >
-                    <ha-icon class="sm-ap-row-icon" .icon=${domainIcon(dom)}></ha-icon>
-                    <div class="sm-ap-row-text">
-                      <span class="sm-ap-row-primary">${servicePrimaryLabel(dom, s)}</span>
-                      <span class="sm-ap-row-secondary">${serviceSecondaryHint(dom, s)}</span>
                     </div>
                     <span class="sm-ap-chevron" aria-hidden="true">›</span>
                   </button>
@@ -3843,12 +3870,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             </div>`;
         }
         const context = step === 'domain'
-            ? 'Étape 1 — choisissez un type d’appareil'
-            : step === 'entity' && domainF
-                ? x `Étape 2 — entité · <strong>${domainLabelFr(domainF)}</strong>`
-                : step === 'service' && entityPick
-                    ? x `Étape 3 — que faire sur «
-                <strong>${friendlyEntityName(hass, entityPick)}</strong> » ?`
+            ? 'Étape 1 — choisissez un type d’appareil (domaine)'
+            : step === 'service' && domainF
+                ? x `Étape 2 — quelle action · domaine
+              <strong>${domainLabelFr(domainF)}</strong> ?`
+                : step === 'entity' && domainF && svcPick
+                    ? x `Étape 3 — quelle entité pour
+                <code>${domainF}.${svcPick}</code>
+                ? Seules les entités compatibles sont listées.`
                     : step === 'climate_preset' && entityPick
                         ? x `Étape 4 — mode préréglé pour «
                   <strong>${friendlyEntityName(hass, entityPick)}</strong> »`
@@ -4493,6 +4522,9 @@ __decorate([
 __decorate([
     t$1()
 ], ScheduleManagerCard.prototype, "_actionWizardDomain", void 0);
+__decorate([
+    t$1()
+], ScheduleManagerCard.prototype, "_actionWizardServiceShort", void 0);
 __decorate([
     t$1()
 ], ScheduleManagerCard.prototype, "_actionWizardEntityId", void 0);
