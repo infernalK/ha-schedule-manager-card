@@ -1230,32 +1230,6 @@ function servicesForDomain(hass, domain) {
     }
     return Object.keys(raw).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
-/** Service par défaut raisonnable quand le domaine ou l’entité change. */
-function pickDefaultService(domain, available) {
-    if (!available.length) {
-        return 'turn_on';
-    }
-    const prefs = {
-        climate: 'set_preset_mode',
-        light: 'turn_on',
-        switch: 'turn_on',
-        fan: 'turn_on',
-        cover: 'open_cover',
-        lock: 'lock',
-        alarm_control_panel: 'alarm_arm_home',
-        input_boolean: 'turn_on',
-        input_select: 'select_option',
-        media_player: 'media_play',
-        vacuum: 'start',
-        water_heater: 'set_temperature',
-        humidifier: 'set_humidity',
-    };
-    const pref = prefs[domain];
-    if (pref && available.includes(pref)) {
-        return pref;
-    }
-    return available[0];
-}
 /** Garde uniquement `entity_id` et la couleur d’affichage (réinitialise le reste au changement de service). */
 function stripPayloadForNewService(prevPayload, entityId, colorKey) {
     const out = {};
@@ -2308,7 +2282,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         /** Éditeur plein écran (frise + détail plage), style config HA */
         this._visualEdit = null;
         this._visualPayloadStr = '';
-        this._visualEntityPickerNonce = 0;
         /** Assistant « Choisir une action » (domaine → entité → service), style Home Assistant. */
         this._actionWizardOpen = false;
         this._actionWizardStep = 'domain';
@@ -3185,7 +3158,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             selectedIndex,
         };
         this.syncPayloadStrFromSelection();
-        this._visualEntityPickerNonce += 1;
     }
     visualRemoveSelected() {
         if (!this._visualEdit) {
@@ -3206,105 +3178,21 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             selectedIndex: nextSel,
         };
         this.syncPayloadStrFromSelection();
-        this._visualEntityPickerNonce += 1;
     }
     /** Première entité ciblée (flux principal). Les `entity_id` multiples restent possibles via le JSON. */
     primaryEntityFromBlock(block) {
         return entityIdsFromPayload(block.action_payload)[0] ?? '';
     }
-    visualPrimaryEntityChanged(ev) {
-        if (!this._visualEdit || !this.hass) {
-            return;
+    /** Modes préréglés exposés par l’entité climate (pour l’étape assistant). */
+    climatePresetModesForEntityId(entityId) {
+        const st = this.hass?.states[entityId];
+        const pm = st?.attributes?.preset_modes;
+        if (Array.isArray(pm) && pm.length && pm.every((x) => typeof x === 'string')) {
+            return pm;
         }
-        if (!this.mergeJsonPayloadIntoSelectedBlock()) {
-            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de changer l’entité.');
-            return;
-        }
-        const sel = this._visualEdit.selectedIndex;
-        const block = this._visualEdit.blocks[sel];
-        if (!block) {
-            return;
-        }
-        const raw = ev.detail?.value;
-        const entityId = typeof raw === 'string' ? raw.trim() : '';
-        if (!entityId) {
-            const base = typeof block.action_payload === 'object' && block.action_payload !== null
-                ? { ...block.action_payload }
-                : {};
-            delete base.entity_id;
-            this.visualPatchSelected({ action_payload: base });
-            this.syncPayloadStrFromSelection();
-            this._visualEntityPickerNonce += 1;
-            return;
-        }
-        const newDomain = entityId.includes('.') ? entityId.split('.')[0] : '';
-        if (!newDomain) {
-            return;
-        }
-        const services = servicesForDomain(this.hass, newDomain);
-        let serviceName;
-        if (!services.length) {
-            const parsed = parseDomainService(block.action_type);
-            const fallback = parsed && parsed.domain === newDomain
-                ? parsed.service
-                : pickDefaultService(newDomain, ['turn_on']);
-            serviceName = fallback;
-        }
-        else {
-            const parsed = parseDomainService(block.action_type);
-            if (parsed &&
-                parsed.domain === newDomain &&
-                services.includes(parsed.service)) {
-                serviceName = parsed.service;
-            }
-            else {
-                serviceName = pickDefaultService(newDomain, services);
-            }
-        }
-        let payload = stripPayloadForNewService(block.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
-        applyDefaultFieldsForService(newDomain, serviceName, entityId, payload, this.hass);
-        this.visualPatchSelected({
-            action_type: `${newDomain}.${serviceName}`,
-            action_payload: payload,
-        });
-        this.syncPayloadStrFromSelection();
-        this._visualEntityPickerNonce += 1;
+        return null;
     }
-    visualServiceSelectChanged(ev) {
-        if (!this._visualEdit || !this.hass) {
-            return;
-        }
-        if (!this.mergeJsonPayloadIntoSelectedBlock()) {
-            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de changer l’action.');
-            return;
-        }
-        const service = ev.target.value.trim();
-        if (!service) {
-            return;
-        }
-        const sel = this._visualEdit.selectedIndex;
-        const block = this._visualEdit.blocks[sel];
-        if (!block) {
-            return;
-        }
-        const entityId = this.primaryEntityFromBlock(block);
-        if (!entityId) {
-            alert('Choisissez d’abord une entité.');
-            return;
-        }
-        const domain = entityId.includes('.') ? entityId.split('.')[0] : '';
-        if (!domain) {
-            return;
-        }
-        let payload = stripPayloadForNewService(block.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
-        applyDefaultFieldsForService(domain, service, entityId, payload, this.hass);
-        this.visualPatchSelected({
-            action_type: `${domain}.${service}`,
-            action_payload: payload,
-        });
-        this.syncPayloadStrFromSelection();
-    }
-    applyWizardSelection(entityId, serviceShort) {
+    applyWizardSelection(entityId, serviceShort, climatePresetMode) {
         if (!this._visualEdit || !this.hass || !entityId.includes('.')) {
             return;
         }
@@ -3315,13 +3203,19 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             return;
         }
         let payload = stripPayloadForNewService(block.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
-        applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
+        if (domain === 'climate' &&
+            serviceShort === 'set_preset_mode' &&
+            climatePresetMode !== undefined) {
+            payload.preset_mode = climatePresetMode;
+        }
+        else {
+            applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
+        }
         this.visualPatchSelected({
             action_type: `${domain}.${serviceShort}`,
             action_payload: payload,
         });
         this.syncPayloadStrFromSelection();
-        this._visualEntityPickerNonce += 1;
         this.closeActionWizard();
     }
     openActionWizard() {
@@ -3342,6 +3236,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._actionWizardOpen = false;
     }
     actionWizardBack() {
+        if (this._actionWizardStep === 'climate_preset') {
+            this._actionWizardStep = 'service';
+            this._actionWizardSearch = '';
+            return;
+        }
         if (this._actionWizardStep === 'service') {
             this._actionWizardStep = 'entity';
             this._actionWizardEntityId = null;
@@ -3368,7 +3267,23 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!id) {
             return;
         }
+        const dom = id.includes('.') ? id.split('.')[0] : '';
+        if (serviceShort === 'set_preset_mode' && dom === 'climate') {
+            const modes = this.climatePresetModesForEntityId(id);
+            if (modes && modes.length > 0) {
+                this._actionWizardStep = 'climate_preset';
+                this._actionWizardSearch = '';
+                return;
+            }
+        }
         this.applyWizardSelection(id, serviceShort);
+    }
+    actionWizardApplyClimatePreset(presetMode) {
+        const id = this._actionWizardEntityId;
+        if (!id) {
+            return;
+        }
+        this.applyWizardSelection(id, 'set_preset_mode', presetMode);
     }
     _onWizardSearchInput(ev) {
         this._actionWizardSearch = ev.target.value;
@@ -3491,14 +3406,45 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                 `)}
             </div>`;
         }
+        else if (step === 'climate_preset' && entityPick) {
+            const modes = this.climatePresetModesForEntityId(entityPick) ?? [];
+            const filtered = modes.filter((m) => matches(m));
+            body =
+                filtered.length === 0
+                    ? x `<p class="sm-ap-empty">
+              Aucun mode préréglé trouvé pour cette entité. Utilisez Retour ou fermez.
+            </p>`
+                    : x `<div class="sm-ap-scroll">
+              ${filtered.map((mode) => x `
+                  <button
+                    type="button"
+                    class="sm-ap-row"
+                    @click=${() => this.actionWizardApplyClimatePreset(mode)}
+                  >
+                    <ha-icon
+                      class="sm-ap-row-icon"
+                      .icon=${entityIcon(hass, entityPick) ?? domainIcon('climate')}
+                    ></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${mode}</span>
+                      <span class="sm-ap-row-secondary">Mode préréglé · climate.set_preset_mode</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `)}
+            </div>`;
+        }
         const context = step === 'domain'
-            ? 'Étape 1 sur 3 — choisissez un type d’appareil'
+            ? 'Étape 1 — choisissez un type d’appareil'
             : step === 'entity' && domainF
-                ? x `Étape 2 sur 3 — entité · <strong>${domainLabelFr(domainF)}</strong>`
+                ? x `Étape 2 — entité · <strong>${domainLabelFr(domainF)}</strong>`
                 : step === 'service' && entityPick
-                    ? x `Étape 3 sur 3 — que faire sur «
+                    ? x `Étape 3 — que faire sur «
                 <strong>${friendlyEntityName(hass, entityPick)}</strong> » ?`
-                    : '';
+                    : step === 'climate_preset' && entityPick
+                        ? x `Étape 4 — mode préréglé pour «
+                  <strong>${friendlyEntityName(hass, entityPick)}</strong> »`
+                        : '';
         return x `
       <div
         class="sm-action-wizard-overlay"
@@ -3556,16 +3502,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             return x ``;
         }
         const primary = this.primaryEntityFromBlock(selected);
-        const domain = primary.includes('.') ? primary.split('.')[0] : '';
-        const services = domain ? servicesForDomain(this.hass, domain) : [];
         const parsed = parseDomainService(selected.action_type);
-        const selectValue = parsed && services.includes(parsed.service) ? parsed.service : '';
+        const dom = primary.includes('.') ? primary.split('.')[0] : '';
         const unknownService = Boolean(primary &&
             parsed &&
-            parsed.domain === domain &&
-            domain &&
-            parsed.service &&
-            !services.includes(parsed.service));
+            dom &&
+            parsed.domain === dom &&
+            !servicesForDomain(this.hass, parsed.domain).includes(parsed.service));
         return x `
       <div class="sm-action-entry">
         ${this.renderActionSummary(selected)}
@@ -3578,50 +3521,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             </p>`
             : null}
       </div>
-
-      <details class="sm-action-advanced">
-        <summary>Saisie directe (sans assistant)</summary>
-        <div class="sm-form-label">
-          <span>Entité</span>
-          <ha-entity-picker
-            .hass=${this.hass}
-            .allowCustomEntity=${true}
-            label="Choisir une entité"
-            .value=${primary}
-            id=${`sm-viz-ep-primary-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${this._visualEntityPickerNonce}`}
-            @value-changed=${(e) => this.visualPrimaryEntityChanged(e)}
-          ></ha-entity-picker>
-        </div>
-
-        <label class="sm-form-label">
-          Action (liste)
-          <select
-            class="sm-select"
-            ?disabled=${!primary || services.length === 0}
-            .value=${selectValue}
-            @change=${(e) => this.visualServiceSelectChanged(e)}
-          >
-            <option value="">— Choisir une action —</option>
-            ${services.map((s) => x `<option value=${s}>${s}</option>`)}
-          </select>
-        </label>
-
-        <label class="sm-form-label sm-form-label-inner">
-          Service personnalisé (domaine.action)
-          <input
-            type="text"
-            class="sm-modal-body-input-full"
-            placeholder="ex. climate.set_preset_mode"
-            .value=${selected.action_type}
-            @input=${(e) => {
-            this.visualPatchSelected({
-                action_type: e.target.value,
-            });
-            this.syncPayloadStrFromSelection();
-        }}
-          />
-        </label>
-      </details>
     `;
     }
     async saveVisualEditor() {
@@ -4081,9 +3980,6 @@ __decorate([
 __decorate([
     t$1()
 ], ScheduleManagerCard.prototype, "_visualPayloadStr", void 0);
-__decorate([
-    t$1()
-], ScheduleManagerCard.prototype, "_visualEntityPickerNonce", void 0);
 __decorate([
     t$1()
 ], ScheduleManagerCard.prototype, "_actionWizardOpen", void 0);

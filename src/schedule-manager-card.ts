@@ -16,7 +16,6 @@ import { styles } from './styles';
 import {
   applyDefaultFieldsForService,
   parseDomainService,
-  pickDefaultService,
   servicesForDomain,
   stripPayloadForNewService,
 } from './action-service-helpers';
@@ -223,10 +222,13 @@ export class ScheduleManagerCard extends LitElement {
   /** Éditeur plein écran (frise + détail plage), style config HA */
   @state() private _visualEdit: VisualEditState | null = null;
   @state() private _visualPayloadStr = '';
-  @state() private _visualEntityPickerNonce = 0;
   /** Assistant « Choisir une action » (domaine → entité → service), style Home Assistant. */
   @state() private _actionWizardOpen = false;
-  @state() private _actionWizardStep: 'domain' | 'entity' | 'service' = 'domain';
+  @state() private _actionWizardStep:
+    | 'domain'
+    | 'entity'
+    | 'service'
+    | 'climate_preset' = 'domain';
   @state() private _actionWizardSearch = '';
   @state() private _actionWizardDomain: string | null = null;
   @state() private _actionWizardEntityId: string | null = null;
@@ -1213,7 +1215,6 @@ export class ScheduleManagerCard extends LitElement {
       selectedIndex,
     };
     this.syncPayloadStrFromSelection();
-    this._visualEntityPickerNonce += 1;
   }
 
   private visualRemoveSelected() {
@@ -1235,7 +1236,6 @@ export class ScheduleManagerCard extends LitElement {
       selectedIndex: nextSel,
     };
     this.syncPayloadStrFromSelection();
-    this._visualEntityPickerNonce += 1;
   }
 
   /** Première entité ciblée (flux principal). Les `entity_id` multiples restent possibles via le JSON. */
@@ -1243,129 +1243,21 @@ export class ScheduleManagerCard extends LitElement {
     return entityIdsFromPayload(block.action_payload)[0] ?? '';
   }
 
-  private visualPrimaryEntityChanged(ev: CustomEvent<{ value?: string }>) {
-    if (!this._visualEdit || !this.hass) {
-      return;
+  /** Modes préréglés exposés par l’entité climate (pour l’étape assistant). */
+  private climatePresetModesForEntityId(entityId: string): string[] | null {
+    const st = this.hass?.states[entityId];
+    const pm = st?.attributes?.preset_modes;
+    if (Array.isArray(pm) && pm.length && pm.every((x): x is string => typeof x === 'string')) {
+      return pm;
     }
-    if (!this.mergeJsonPayloadIntoSelectedBlock()) {
-      alert(
-        'Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de changer l’entité.'
-      );
-      return;
-    }
-    const sel = this._visualEdit.selectedIndex;
-    const block = this._visualEdit.blocks[sel];
-    if (!block) {
-      return;
-    }
-    const raw = ev.detail?.value;
-    const entityId = typeof raw === 'string' ? raw.trim() : '';
-
-    if (!entityId) {
-      const base =
-        typeof block.action_payload === 'object' && block.action_payload !== null
-          ? { ...(block.action_payload as Record<string, unknown>) }
-          : {};
-      delete base.entity_id;
-      this.visualPatchSelected({ action_payload: base });
-      this.syncPayloadStrFromSelection();
-      this._visualEntityPickerNonce += 1;
-      return;
-    }
-
-    const newDomain = entityId.includes('.') ? entityId.split('.')[0]! : '';
-    if (!newDomain) {
-      return;
-    }
-
-    const services = servicesForDomain(this.hass, newDomain);
-    let serviceName: string;
-
-    if (!services.length) {
-      const parsed = parseDomainService(block.action_type);
-      const fallback =
-        parsed && parsed.domain === newDomain
-          ? parsed.service
-          : pickDefaultService(newDomain, ['turn_on']);
-      serviceName = fallback;
-    } else {
-      const parsed = parseDomainService(block.action_type);
-      if (
-        parsed &&
-        parsed.domain === newDomain &&
-        services.includes(parsed.service)
-      ) {
-        serviceName = parsed.service;
-      } else {
-        serviceName = pickDefaultService(newDomain, services);
-      }
-    }
-
-    let payload = stripPayloadForNewService(
-      block.action_payload,
-      entityId,
-      SCHEDULE_MANAGER_COLOR_KEY
-    );
-    applyDefaultFieldsForService(
-      newDomain,
-      serviceName,
-      entityId,
-      payload,
-      this.hass
-    );
-
-    this.visualPatchSelected({
-      action_type: `${newDomain}.${serviceName}`,
-      action_payload: payload,
-    });
-    this.syncPayloadStrFromSelection();
-    this._visualEntityPickerNonce += 1;
+    return null;
   }
 
-  private visualServiceSelectChanged(ev: Event) {
-    if (!this._visualEdit || !this.hass) {
-      return;
-    }
-    if (!this.mergeJsonPayloadIntoSelectedBlock()) {
-      alert(
-        'Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de changer l’action.'
-      );
-      return;
-    }
-    const service = (ev.target as HTMLSelectElement).value.trim();
-    if (!service) {
-      return;
-    }
-    const sel = this._visualEdit.selectedIndex;
-    const block = this._visualEdit.blocks[sel];
-    if (!block) {
-      return;
-    }
-    const entityId = this.primaryEntityFromBlock(block);
-    if (!entityId) {
-      alert('Choisissez d’abord une entité.');
-      return;
-    }
-    const domain = entityId.includes('.') ? entityId.split('.')[0]! : '';
-    if (!domain) {
-      return;
-    }
-
-    let payload = stripPayloadForNewService(
-      block.action_payload,
-      entityId,
-      SCHEDULE_MANAGER_COLOR_KEY
-    );
-    applyDefaultFieldsForService(domain, service, entityId, payload, this.hass);
-
-    this.visualPatchSelected({
-      action_type: `${domain}.${service}`,
-      action_payload: payload,
-    });
-    this.syncPayloadStrFromSelection();
-  }
-
-  private applyWizardSelection(entityId: string, serviceShort: string) {
+  private applyWizardSelection(
+    entityId: string,
+    serviceShort: string,
+    climatePresetMode?: string
+  ) {
     if (!this._visualEdit || !this.hass || !entityId.includes('.')) {
       return;
     }
@@ -1381,14 +1273,21 @@ export class ScheduleManagerCard extends LitElement {
       entityId,
       SCHEDULE_MANAGER_COLOR_KEY
     );
-    applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
+    if (
+      domain === 'climate' &&
+      serviceShort === 'set_preset_mode' &&
+      climatePresetMode !== undefined
+    ) {
+      payload.preset_mode = climatePresetMode;
+    } else {
+      applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
+    }
 
     this.visualPatchSelected({
       action_type: `${domain}.${serviceShort}`,
       action_payload: payload,
     });
     this.syncPayloadStrFromSelection();
-    this._visualEntityPickerNonce += 1;
     this.closeActionWizard();
   }
 
@@ -1414,6 +1313,11 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private actionWizardBack() {
+    if (this._actionWizardStep === 'climate_preset') {
+      this._actionWizardStep = 'service';
+      this._actionWizardSearch = '';
+      return;
+    }
     if (this._actionWizardStep === 'service') {
       this._actionWizardStep = 'entity';
       this._actionWizardEntityId = null;
@@ -1442,7 +1346,24 @@ export class ScheduleManagerCard extends LitElement {
     if (!id) {
       return;
     }
+    const dom = id.includes('.') ? id.split('.')[0]! : '';
+    if (serviceShort === 'set_preset_mode' && dom === 'climate') {
+      const modes = this.climatePresetModesForEntityId(id);
+      if (modes && modes.length > 0) {
+        this._actionWizardStep = 'climate_preset';
+        this._actionWizardSearch = '';
+        return;
+      }
+    }
     this.applyWizardSelection(id, serviceShort);
+  }
+
+  private actionWizardApplyClimatePreset(presetMode: string) {
+    const id = this._actionWizardEntityId;
+    if (!id) {
+      return;
+    }
+    this.applyWizardSelection(id, 'set_preset_mode', presetMode);
   }
 
   private _onWizardSearchInput(ev: Event) {
@@ -1586,17 +1507,49 @@ export class ScheduleManagerCard extends LitElement {
                 `
               )}
             </div>`;
+    } else if (step === 'climate_preset' && entityPick) {
+      const modes = this.climatePresetModesForEntityId(entityPick) ?? [];
+      const filtered = modes.filter((m) => matches(m));
+      body =
+        filtered.length === 0
+          ? html`<p class="sm-ap-empty">
+              Aucun mode préréglé trouvé pour cette entité. Utilisez Retour ou fermez.
+            </p>`
+          : html`<div class="sm-ap-scroll">
+              ${filtered.map(
+                (mode) => html`
+                  <button
+                    type="button"
+                    class="sm-ap-row"
+                    @click=${() => this.actionWizardApplyClimatePreset(mode)}
+                  >
+                    <ha-icon
+                      class="sm-ap-row-icon"
+                      .icon=${entityIcon(hass, entityPick) ?? domainIcon('climate')}
+                    ></ha-icon>
+                    <div class="sm-ap-row-text">
+                      <span class="sm-ap-row-primary">${mode}</span>
+                      <span class="sm-ap-row-secondary">Mode préréglé · climate.set_preset_mode</span>
+                    </div>
+                    <span class="sm-ap-chevron" aria-hidden="true">›</span>
+                  </button>
+                `
+              )}
+            </div>`;
     }
 
     const context =
       step === 'domain'
-        ? 'Étape 1 sur 3 — choisissez un type d’appareil'
+        ? 'Étape 1 — choisissez un type d’appareil'
         : step === 'entity' && domainF
-          ? html`Étape 2 sur 3 — entité · <strong>${domainLabelFr(domainF)}</strong>`
+          ? html`Étape 2 — entité · <strong>${domainLabelFr(domainF)}</strong>`
           : step === 'service' && entityPick
-            ? html`Étape 3 sur 3 — que faire sur «
+            ? html`Étape 3 — que faire sur «
                 <strong>${friendlyEntityName(hass, entityPick)}</strong> » ?`
-            : '';
+            : step === 'climate_preset' && entityPick
+              ? html`Étape 4 — mode préréglé pour «
+                  <strong>${friendlyEntityName(hass, entityPick)}</strong> »`
+              : '';
 
     return html`
       <div
@@ -1656,18 +1609,14 @@ export class ScheduleManagerCard extends LitElement {
       return html``;
     }
     const primary = this.primaryEntityFromBlock(selected);
-    const domain = primary.includes('.') ? primary.split('.')[0]! : '';
-    const services = domain ? servicesForDomain(this.hass, domain) : [];
     const parsed = parseDomainService(selected.action_type);
-    const selectValue =
-      parsed && services.includes(parsed.service) ? parsed.service : '';
+    const dom = primary.includes('.') ? primary.split('.')[0]! : '';
     const unknownService = Boolean(
       primary &&
         parsed &&
-        parsed.domain === domain &&
-        domain &&
-        parsed.service &&
-        !services.includes(parsed.service)
+        dom &&
+        parsed.domain === dom &&
+        !servicesForDomain(this.hass, parsed.domain).includes(parsed.service)
     );
 
     return html`
@@ -1682,51 +1631,6 @@ export class ScheduleManagerCard extends LitElement {
             </p>`
           : null}
       </div>
-
-      <details class="sm-action-advanced">
-        <summary>Saisie directe (sans assistant)</summary>
-        <div class="sm-form-label">
-          <span>Entité</span>
-          <ha-entity-picker
-            .hass=${this.hass}
-            .allowCustomEntity=${true}
-            label="Choisir une entité"
-            .value=${primary}
-            id=${`sm-viz-ep-primary-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${this._visualEntityPickerNonce}`}
-            @value-changed=${(e: CustomEvent<{ value?: string }>) =>
-              this.visualPrimaryEntityChanged(e)}
-          ></ha-entity-picker>
-        </div>
-
-        <label class="sm-form-label">
-          Action (liste)
-          <select
-            class="sm-select"
-            ?disabled=${!primary || services.length === 0}
-            .value=${selectValue}
-            @change=${(e: Event) => this.visualServiceSelectChanged(e)}
-          >
-            <option value="">— Choisir une action —</option>
-            ${services.map((s) => html`<option value=${s}>${s}</option>`)}
-          </select>
-        </label>
-
-        <label class="sm-form-label sm-form-label-inner">
-          Service personnalisé (domaine.action)
-          <input
-            type="text"
-            class="sm-modal-body-input-full"
-            placeholder="ex. climate.set_preset_mode"
-            .value=${selected.action_type}
-            @input=${(e: Event) => {
-              this.visualPatchSelected({
-                action_type: (e.target as HTMLInputElement).value,
-              });
-              this.syncPayloadStrFromSelection();
-            }}
-          />
-        </label>
-      </details>
     `;
   }
 
