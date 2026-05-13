@@ -923,6 +923,58 @@ export const styles = css`
     color: var(--primary-text-color);
   }
 
+  .sm-entity-add-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 32px;
+  }
+
+  .sm-entity-add-plus {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid var(--primary-color);
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.12);
+    color: var(--primary-color);
+    font-size: 1.35rem;
+    font-weight: 500;
+    line-height: 1;
+    font-family: inherit;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+
+  .sm-entity-add-plus:hover {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.22);
+  }
+
+  .sm-entity-add-dismiss {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--primary-color);
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  .sm-entity-add-dismiss:hover {
+    text-decoration: underline;
+  }
+
+  .sm-entity-picker-shell--popover {
+    margin-top: 2px;
+    min-height: 48px;
+  }
+
   .sm-action-climate-preset {
     margin-top: 4px;
   }

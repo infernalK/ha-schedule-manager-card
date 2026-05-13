@@ -241,6 +241,8 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _actionWizardEntityId: string | null = null;
   /** Réinitialise le sélecteur rapide d’entités après ajout. */
   @state() private _quickEntityPickerNonce = 0;
+  /** `${blockIdx}-${actionIdx}` quand le panneau d’ajout d’entité (bouton +) est ouvert. */
+  @state() private _entityAddPickerOpenKey: string | null = null;
   /** Réglé à l’ouverture de l’assistant : action à mettre à jour (évite décalage avec selectedActionIndex). */
   private _actionWizardTargetActionIndex = 0;
   /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
@@ -823,6 +825,7 @@ export class ScheduleManagerCard extends LitElement {
     this._visualEdit = null;
     this._actionWizardOpen = false;
     this._quickEntityPickerNonce = 0;
+    this._entityAddPickerOpenKey = null;
   }
 
   private endBoundaryDrag() {
@@ -1079,6 +1082,7 @@ export class ScheduleManagerCard extends LitElement {
     if (idx === this._visualEdit.selectedIndex) {
       return;
     }
+    this._entityAddPickerOpenKey = null;
     this._visualEdit = {
       ...this._visualEdit,
       selectedIndex: idx,
@@ -1150,9 +1154,14 @@ export class ScheduleManagerCard extends LitElement {
       return;
     }
     const max = b.actions.length - 1;
+    const next = Math.max(0, Math.min(ai, max));
+    if (next === this._visualEdit.selectedActionIndex) {
+      return;
+    }
+    this._entityAddPickerOpenKey = null;
     this._visualEdit = {
       ...this._visualEdit,
-      selectedActionIndex: Math.max(0, Math.min(ai, max)),
+      selectedActionIndex: next,
     };
   }
 
@@ -1169,6 +1178,7 @@ export class ScheduleManagerCard extends LitElement {
     const next = { ...b, actions };
     const trial = [...this._visualEdit.blocks];
     trial[bi] = next;
+    this._entityAddPickerOpenKey = null;
     this._visualEdit = {
       ...this._visualEdit,
       blocks: trial,
@@ -1196,6 +1206,7 @@ export class ScheduleManagerCard extends LitElement {
     } else if (ai < selectedActionIndex) {
       selectedActionIndex -= 1;
     }
+    this._entityAddPickerOpenKey = null;
     this._visualEdit = { ...this._visualEdit, blocks: trial, selectedActionIndex };
   }
 
@@ -1245,6 +1256,7 @@ export class ScheduleManagerCard extends LitElement {
         return;
       }
     }
+    this._entityAddPickerOpenKey = null;
     this._visualEdit = {
       ...this._visualEdit,
       blocks: nextBlocks,
@@ -1263,6 +1275,7 @@ export class ScheduleManagerCard extends LitElement {
     if (nextSel >= nextBlocks.length) {
       nextSel = Math.max(0, nextBlocks.length - 1);
     }
+    this._entityAddPickerOpenKey = null;
     this._visualEdit = {
       ...this._visualEdit,
       blocks: nextBlocks,
@@ -1300,16 +1313,16 @@ export class ScheduleManagerCard extends LitElement {
   private visualAppendEntity(
     ev: CustomEvent<{ value?: string }>,
     actionIndexOverride?: number
-  ) {
+  ): boolean {
     if (!this._visualEdit || !this.hass) {
-      return;
+      return false;
     }
     const raw =
       ev.detail?.value ??
       ((ev.target as unknown as { value?: string })?.value ?? '');
     const v = String(raw).trim();
     if (!v) {
-      return;
+      return false;
     }
     const sel = this._visualEdit.selectedIndex;
     const block = this._visualEdit.blocks[sel];
@@ -1322,11 +1335,11 @@ export class ScheduleManagerCard extends LitElement {
     );
     const action = block?.actions?.[ai];
     if (!block || !action || !String(action.action_type ?? '').trim()) {
-      return;
+      return false;
     }
     const ids = entityIdsFromPayload(action.action_payload);
     if (ids.includes(v)) {
-      return;
+      return false;
     }
     const base =
       typeof action.action_payload === 'object' && action.action_payload !== null
@@ -1336,6 +1349,7 @@ export class ScheduleManagerCard extends LitElement {
     base.entity_id = nextIds.length === 1 ? nextIds[0] : nextIds;
     this.visualPatchSelectedAction({ action_payload: base }, ai);
     this._quickEntityPickerNonce += 1;
+    return true;
   }
 
   private visualRemoveEntityChip(
@@ -1434,6 +1448,7 @@ export class ScheduleManagerCard extends LitElement {
     if (!this._visualEdit || !this.hass) {
       return;
     }
+    this.closeEntityAddPicker();
     const bi = this._visualEdit.selectedIndex;
     const n = this._visualEdit.blocks[bi]?.actions?.length ?? 0;
     const maxAi = Math.max(0, n - 1);
@@ -1594,8 +1609,26 @@ export class ScheduleManagerCard extends LitElement {
   private visualAppendEntityAt(
     actionIndex: number,
     ev: CustomEvent<{ value?: string }>
-  ) {
-    this.visualAppendEntity(ev, actionIndex);
+  ): boolean {
+    return this.visualAppendEntity(ev, actionIndex);
+  }
+
+  private entityAddPickerKey(blockIdx: number, actionIdx: number): string {
+    return `${blockIdx}-${actionIdx}`;
+  }
+
+  private closeEntityAddPicker(): void {
+    this._entityAddPickerOpenKey = null;
+  }
+
+  private toggleEntityAddPicker(blockIdx: number, actionIdx: number): void {
+    const k = this.entityAddPickerKey(blockIdx, actionIdx);
+    if (this._entityAddPickerOpenKey === k) {
+      this.closeEntityAddPicker();
+      return;
+    }
+    this._entityAddPickerOpenKey = k;
+    this._quickEntityPickerNonce += 1;
   }
 
   private visualRemoveEntityAt(actionIndex: number, entityId: string) {
@@ -1876,8 +1909,8 @@ export class ScheduleManagerCard extends LitElement {
                       <div class="sm-action-entities-quick">
                         <span class="sm-action-entities-quick-title">Entités ciblées</span>
                         <p class="sm-action-entities-quick-hint">
-                          Retirez une entité avec × ou ajoutez-en une avec la liste ci-dessous (compatible
-                          avec <code>${action.action_type}</code>).
+                          Retirez une entité avec × ou utilisez « + » puis choisissez une entité compatible
+                          avec <code>${action.action_type}</code>.
                         </p>
                         <div class="entity-chips">
                           ${entityIdsFromPayload(action.action_payload).map(
@@ -1899,21 +1932,52 @@ export class ScheduleManagerCard extends LitElement {
                           )}
                         </div>
                         <div class="sm-entity-add-block">
-                          <span class="sm-entity-add-heading">Ajouter une entité</span>
-                          <div class="sm-entity-picker-shell">
-                            <ha-entity-picker
-                              class="sm-action-entities-quick-picker"
-                              .hass=${hass}
-                              .includeDomains=${this.includeDomainsForEntityPicker(action)}
-                              .entityFilter=${this.entityFilterForConfiguredAction(action)}
-                              .allowCustomEntity=${true}
-                              label="Rechercher ou choisir une entité…"
-                              .value=${''}
-                              id=${`sm-quick-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
-                              @value-changed=${(e: CustomEvent<{ value?: string }>) =>
-                                this.visualAppendEntityAt(i, e)}
-                            ></ha-entity-picker>
+                          <div class="sm-entity-add-row">
+                            <span class="sm-entity-add-heading">Ajouter une entité</span>
+                            ${this._entityAddPickerOpenKey === this.entityAddPickerKey(blockIdx, i)
+                              ? html`
+                                  <button
+                                    type="button"
+                                    class="sm-entity-add-dismiss"
+                                    aria-label="Fermer le sélecteur d’entité"
+                                    @click=${() => this.closeEntityAddPicker()}
+                                  >
+                                    Fermer
+                                  </button>
+                                `
+                              : html`
+                                  <button
+                                    type="button"
+                                    class="sm-entity-add-plus"
+                                    title="Choisir une entité à ajouter"
+                                    aria-label="Ajouter une entité"
+                                    @click=${() => this.toggleEntityAddPicker(blockIdx, i)}
+                                  >
+                                    +
+                                  </button>
+                                `}
                           </div>
+                          ${this._entityAddPickerOpenKey === this.entityAddPickerKey(blockIdx, i)
+                            ? html`
+                                <div class="sm-entity-picker-shell sm-entity-picker-shell--popover">
+                                  <ha-entity-picker
+                                    class="sm-action-entities-quick-picker"
+                                    .hass=${hass}
+                                    .includeDomains=${this.includeDomainsForEntityPicker(action)}
+                                    .entityFilter=${this.entityFilterForConfiguredAction(action)}
+                                    .allowCustomEntity=${true}
+                                    label="Rechercher ou choisir une entité…"
+                                    .value=${''}
+                                    id=${`sm-quick-ep-${scheduleKey}-${blockIdx}-${i}-${this._quickEntityPickerNonce}`}
+                                    @value-changed=${(e: CustomEvent<{ value?: string }>) => {
+                                      if (this.visualAppendEntityAt(i, e)) {
+                                        this.closeEntityAddPicker();
+                                      }
+                                    }}
+                                  ></ha-entity-picker>
+                                </div>
+                              `
+                            : null}
                         </div>
                       </div>
                     `

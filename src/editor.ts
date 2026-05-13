@@ -9,9 +9,10 @@ import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 export class ScheduleManagerCardEditor extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
-  @property({ attribute: false }) public config!: CardConfig;
+  @property({ attribute: false }) public config?: CardConfig;
 
-  private _config?: CardConfig;
+  /** Copie éditable ; @state pour que setConfig / _patchConfig déclenchent bien un re-render Lovelace. */
+  @state() private _config?: CardConfig;
 
   /** True si l’utilisateur a vidé le capteur — ne pas réappliquer le défaut automatiquement. */
   @state() private _userClearedStatusEntity = false;
@@ -72,12 +73,24 @@ export class ScheduleManagerCardEditor extends LitElement {
       ...config,
       type: 'custom:schedule-manager-card',
     };
+    this.config = this._config;
     this._userClearedStatusEntity = false;
+  }
+
+  protected willUpdate(changed: PropertyValues) {
+    super.willUpdate(changed);
+    // Certains flux HA posent uniquement la propriété `config` sans rappeler setConfig.
+    if (changed.has('config') && this.config) {
+      this._config = {
+        ...this.config,
+        type: 'custom:schedule-manager-card',
+      };
+    }
   }
 
   updated(changed: PropertyValues) {
     super.updated(changed);
-    if (changed.has('hass') || changed.has('config')) {
+    if (changed.has('hass') || changed.has('config') || changed.has('_config')) {
       this._maybeApplyDefaultStatusEntity();
     }
   }
