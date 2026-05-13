@@ -621,17 +621,6 @@ export const styles = css`
     margin-bottom: 0;
   }
 
-  .sm-payload-textarea {
-    min-height: 72px;
-    resize: vertical;
-    font-family: inherit;
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid var(--divider-color);
-    background: var(--card-background-color);
-    color: var(--primary-text-color);
-  }
-
   .sm-action-card {
     margin-top: 4px;
     padding: 12px;
@@ -828,6 +817,58 @@ export const styles = css`
     margin-bottom: 8px;
   }
 
+  .sm-actions-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .sm-action-tab-wrap {
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--divider-color);
+  }
+
+  .sm-action-tab {
+    padding: 6px 10px;
+    border: none;
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sm-action-tab.is-active {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.15);
+    font-weight: 600;
+  }
+
+  .sm-action-tab--add {
+    border-radius: 8px;
+    border: 1px dashed var(--divider-color);
+    background: transparent;
+  }
+
+  .sm-action-tab-remove {
+    padding: 0 6px;
+    border: none;
+    border-left: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
   .sm-action-summary {
     display: flex;
     align-items: flex-start;
@@ -894,6 +935,41 @@ export const styles = css`
 
   .sm-action-primary-btn:hover {
     text-decoration: underline;
+  }
+
+  .sm-action-entities-quick {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--divider-color);
+  }
+
+  .sm-action-entities-quick-title {
+    display: block;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--secondary-text-color);
+    margin-bottom: 4px;
+  }
+
+  .sm-action-entities-quick-hint {
+    margin: 0 0 8px;
+    font-size: 0.72em;
+    line-height: 1.35;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-action-entities-quick-hint code {
+    font-size: 0.95em;
+    word-break: break-all;
+  }
+
+  .sm-action-entities-quick-picker {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 56px;
+    margin-top: 8px;
   }
 
   /* Assistant plein écran au-dessus du modal d’édition */

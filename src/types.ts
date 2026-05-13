@@ -1,9 +1,14 @@
+export interface BlockAction {
+  id: string;
+  action_type: string;
+  action_payload: unknown;
+}
+
 export interface TimeBlock {
   id?: string;
   start_time: string;
   end_time: string;
-  action_type: string;
-  action_payload: any;
+  actions: BlockAction[];
 }
 
 /** Sous-ensemble de l’objet `hass` Lovelace (pas de dépendance runtime au paquet websocket). */
@@ -38,12 +43,18 @@ export interface ScheduleGroup {
   enabled: boolean;
 }
 
+/** Une entrée d’action dans le payload service (aligné sur l’intégration HA). */
+export interface BlockActionServicePayload {
+  action_type: string;
+  action_payload: Record<string, unknown>;
+  id?: string;
+}
+
 /** Payload envoyé aux services create/update (horaires en chaînes HA). */
 export interface TimeBlockServicePayload {
   start_time: string;
   end_time: string;
-  action_type: string;
-  action_payload: Record<string, unknown>;
+  actions: BlockActionServicePayload[];
   id?: string;
 }
 

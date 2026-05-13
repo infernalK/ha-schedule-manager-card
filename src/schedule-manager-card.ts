@@ -3,6 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { PropertyValues } from 'lit';
 import { styleMap } from 'lit/directives/style-map.js';
 import {
+  BlockAction,
   CardConfig,
   HomeAssistant,
   Schedule,
@@ -11,6 +12,11 @@ import {
   TimeBlockServicePayload,
   SCHEDULE_MANAGER_STATUS_ENTITY_ID,
 } from './types';
+import {
+  newEmptyAction,
+  normalizeScheduleTimeBlocks,
+  normalizeTimeBlock,
+} from './block-model';
 import { ScheduleManagerServices } from './services';
 import { styles } from './styles';
 import {
@@ -29,6 +35,7 @@ import {
   servicePrimaryLabel,
   serviceSecondaryHint,
 } from './action-wizard-i18n';
+import { domainsForActionType, entityMatchesDomains } from './entity-domains';
 import {
   blockTimelineFill,
   blocksToTimelineSegments,
@@ -78,13 +85,6 @@ function payloadWithoutEntityId(payload: unknown): Record<string, unknown> {
   return rec;
 }
 
-/** JSON éditable : sans entity_id ni couleur (couleur = champ dédié). */
-function payloadForJsonEditor(payload: unknown): Record<string, unknown> {
-  const rec = payloadWithoutEntityId(payload);
-  delete rec[SCHEDULE_MANAGER_COLOR_KEY];
-  return rec;
-}
-
 /** Empêcher qu’une même couleur fasse doublon avec une autre plage identique en action. */
 function payloadForDuplicateCheck(payload: unknown): Record<string, unknown> {
   const rec = payloadWithoutEntityId(payload);
@@ -106,13 +106,12 @@ function entityIdsFromPayload(payload: unknown): string[] {
   return [];
 }
 
-/** Ouverture éditeur ou planning vide : une plage couvrant la journée (comportement attendu type scheduler). */
+/** Ouverture éditeur ou planning vide : une plage couvrant la journée, action à définir par l’assistant. */
 function defaultFullDayBlock(): TimeBlock {
   return {
     start_time: '00:00:00',
     end_time: HA_END_OF_DAY_TIME,
-    action_type: 'climate.set_preset_mode',
-    action_payload: { preset_mode: 'comfort' },
+    actions: [newEmptyAction()],
   };
 }
 
@@ -133,6 +132,8 @@ interface VisualEditState {
   blocks: TimeBlock[];
   repeatDays: number[];
   selectedIndex: number;
+  /** Action en cours d’édition dans la plage sélectionnée. */
+  selectedActionIndex: number;
 }
 
 /** Format HH:MM[:SS] pour les services HA (évite `<input type="time">` = crash app Mac Catalyst). */
@@ -199,17 +200,20 @@ function stablePayloadString(payload: unknown): string {
   return JSON.stringify(sortKeysDeep(payload ?? {}));
 }
 
-/** Empêche deux entrées identiques (horaires + action + payload normalisé). */
-function blockFingerprint(block: {
-  start_time: string;
-  end_time: string;
-  action_type: string;
-  action_payload?: unknown;
-}): string {
+/** Empêche deux entrées identiques (horaires + toutes les actions + payloads normalisés). */
+function blockFingerprint(block: TimeBlock): string {
   const st = normalizeTimeForHa(block.start_time);
   const et = normalizeTimeForHa(block.end_time);
-  const at = String(block.action_type).trim();
-  return `${st}|${et}|${at}|${stablePayloadString(payloadForDuplicateCheck(block.action_payload))}`;
+  const parts = [...(block.actions || [])]
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map(
+      (a) =>
+        `${String(a.action_type).trim()}|${stablePayloadString(
+          payloadForDuplicateCheck(a.action_payload)
+        )}`
+    );
+  return `${st}|${et}|${parts.join('||')}`;
 }
 
 @customElement('schedule-manager-card')
@@ -221,7 +225,6 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _creating = false;
   /** Éditeur plein écran (frise + détail plage), style config HA */
   @state() private _visualEdit: VisualEditState | null = null;
-  @state() private _visualPayloadStr = '';
   /** Assistant « Choisir une action » (domaine → entité → service), style Home Assistant. */
   @state() private _actionWizardOpen = false;
   @state() private _actionWizardStep:
@@ -232,6 +235,8 @@ export class ScheduleManagerCard extends LitElement {
   @state() private _actionWizardSearch = '';
   @state() private _actionWizardDomain: string | null = null;
   @state() private _actionWizardEntityId: string | null = null;
+  /** Réinitialise le sélecteur rapide d’entités après ajout. */
+  @state() private _quickEntityPickerNonce = 0;
   /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
   @state() private _editorFriseWidth = 0;
 
@@ -369,10 +374,9 @@ export class ScheduleManagerCard extends LitElement {
    * visaient le mauvais UUID — d’où un planning « fantôme » ou introuvable.
    */
   private withCanonicalId(storageKey: string, schedule: Schedule): Schedule {
-    if (schedule.id === storageKey) {
-      return schedule;
-    }
-    return { ...schedule, id: storageKey };
+    const base =
+      schedule.id === storageKey ? schedule : { ...schedule, id: storageKey };
+    return normalizeScheduleTimeBlocks(base);
   }
 
   private getSchedulesRecord(): Record<string, Schedule> {
@@ -640,16 +644,24 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private blocksToPayload(blocks: TimeBlock[]): TimeBlockServicePayload[] {
-    return (blocks || []).map((b) => ({
-      start_time: normalizeTimeForHa(String(b.start_time)),
-      end_time: normalizeTimeForHa(String(b.end_time)),
-      action_type: b.action_type,
-      action_payload:
-        typeof b.action_payload === 'object' && b.action_payload !== null
-          ? (b.action_payload as Record<string, unknown>)
-          : {},
-      ...(b.id ? { id: b.id } : {}),
-    }));
+    return (blocks || []).map((b) => {
+      const actions = (b.actions || [])
+        .filter((a) => String(a.action_type ?? '').trim())
+        .map((a) => ({
+          action_type: a.action_type,
+          action_payload:
+            typeof a.action_payload === 'object' && a.action_payload !== null
+              ? (a.action_payload as Record<string, unknown>)
+              : {},
+          ...(a.id ? { id: a.id } : {}),
+        }));
+      return {
+        start_time: normalizeTimeForHa(String(b.start_time)),
+        end_time: normalizeTimeForHa(String(b.end_time)),
+        actions,
+        ...(b.id ? { id: b.id } : {}),
+      };
+    });
   }
 
   private renderSchedule(schedule: Schedule | undefined, group: ScheduleGroup | undefined) {
@@ -772,11 +784,14 @@ export class ScheduleManagerCard extends LitElement {
     if (!blocks.length) {
       blocks = [defaultFullDayBlock()];
     } else {
-      blocks = blocks.map((b) => ({
-        ...b,
-        start_time: normalizeTimeForHa(String(b.start_time ?? '')),
-        end_time: normalizeTimeForHa(String(b.end_time ?? '')),
-      }));
+      blocks = blocks.map((b) => {
+        const n = normalizeTimeBlock(b as unknown as Record<string, unknown>);
+        return {
+          ...n,
+          start_time: normalizeTimeForHa(String(n.start_time ?? '')),
+          end_time: normalizeTimeForHa(String(n.end_time ?? '')),
+        };
+      });
     }
     this._visualEdit = {
       scheduleId: schedule.id,
@@ -787,8 +802,8 @@ export class ScheduleManagerCard extends LitElement {
           : [0, 1, 2, 3, 4, 5, 6]),
       ],
       selectedIndex: 0,
+      selectedActionIndex: 0,
     };
-    this.syncPayloadStrFromSelection();
   }
 
   private closeVisualEditor() {
@@ -797,8 +812,8 @@ export class ScheduleManagerCard extends LitElement {
     this._detachEditorFriseObserver();
     this._editorFriseWidth = 0;
     this._visualEdit = null;
-    this._visualPayloadStr = '';
     this._actionWizardOpen = false;
+    this._quickEntityPickerNonce = 0;
   }
 
   private endBoundaryDrag() {
@@ -1029,80 +1044,6 @@ export class ScheduleManagerCard extends LitElement {
     window.addEventListener('pointercancel', this._onBoundaryUp);
   }
 
-  private syncPayloadStrFromSelection() {
-    if (!this._visualEdit) {
-      this._visualPayloadStr = '{}';
-      return;
-    }
-    const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
-    if (!b) {
-      this._visualPayloadStr = '{}';
-      return;
-    }
-    try {
-      this._visualPayloadStr = JSON.stringify(
-        payloadForJsonEditor(b.action_payload),
-        null,
-        2
-      );
-    } catch {
-      this._visualPayloadStr = '{}';
-    }
-  }
-
-  /**
-   * Applique le JSON du formulaire à la plage sélectionnée (sans alerte).
-   * Utilisé avant changement de sélection : JSON invalide ne bloque plus le clic sur la frise.
-   */
-  private mergeJsonPayloadIntoSelectedBlock(): boolean {
-    if (!this._visualEdit) {
-      return false;
-    }
-    const sel = this._visualEdit.selectedIndex;
-    const block = this._visualEdit.blocks[sel];
-    if (!block) {
-      return true;
-    }
-    try {
-      const raw = this._visualPayloadStr.trim() || '{}';
-      const extra = JSON.parse(raw) as Record<string, unknown>;
-      if (typeof extra !== 'object' || extra === null || Array.isArray(extra)) {
-        return false;
-      }
-      delete extra.entity_id;
-      delete extra[SCHEDULE_MANAGER_COLOR_KEY];
-      const entityIds = entityIdsFromPayload(block.action_payload);
-      const action_payload: Record<string, unknown> = { ...extra };
-      if (entityIds.length === 1) {
-        action_payload.entity_id = entityIds[0];
-      } else if (entityIds.length > 1) {
-        action_payload.entity_id = [...entityIds];
-      }
-      const prevRec =
-        typeof block.action_payload === 'object' && block.action_payload !== null
-          ? (block.action_payload as Record<string, unknown>)
-          : {};
-      const prevColor = prevRec[SCHEDULE_MANAGER_COLOR_KEY];
-      if (typeof prevColor === 'string') {
-        action_payload[SCHEDULE_MANAGER_COLOR_KEY] = prevColor;
-      }
-      const nextBlocks = [...this._visualEdit.blocks];
-      nextBlocks[sel] = { ...block, action_payload };
-      this._visualEdit = { ...this._visualEdit, blocks: nextBlocks };
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private applyPayloadEditorToVisualBlocks(): boolean {
-    const ok = this.mergeJsonPayloadIntoSelectedBlock();
-    if (!ok) {
-      alert('Payload JSON invalide pour la plage sélectionnée (objet attendu).');
-    }
-    return ok;
-  }
-
   private visualToggleDay(day: number) {
     if (!this._visualEdit) {
       return;
@@ -1124,17 +1065,21 @@ export class ScheduleManagerCard extends LitElement {
     if (!this._visualEdit) {
       return;
     }
-    this.mergeJsonPayloadIntoSelectedBlock();
     const max = this._visualEdit.blocks.length - 1;
     const idx = Math.max(0, Math.min(index, max));
     if (idx === this._visualEdit.selectedIndex) {
       return;
     }
-    this._visualEdit = { ...this._visualEdit, selectedIndex: idx };
-    this.syncPayloadStrFromSelection();
+    this._visualEdit = {
+      ...this._visualEdit,
+      selectedIndex: idx,
+      selectedActionIndex: 0,
+    };
   }
 
-  private visualPatchSelected(patch: Partial<TimeBlock>) {
+  private visualPatchBlockFields(
+    patch: Partial<Pick<TimeBlock, 'start_time' | 'end_time' | 'id'>>
+  ) {
     if (!this._visualEdit) {
       return;
     }
@@ -1159,11 +1104,88 @@ export class ScheduleManagerCard extends LitElement {
     this._visualEdit = { ...this._visualEdit, blocks: trial };
   }
 
-  private visualAddBlock() {
+  private visualPatchSelectedAction(patch: Partial<BlockAction>) {
     if (!this._visualEdit) {
       return;
     }
-    if (!this.applyPayloadEditorToVisualBlocks()) {
+    const sel = this._visualEdit.selectedIndex;
+    const ai = Math.min(
+      this._visualEdit.selectedActionIndex,
+      Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1)
+    );
+    const cur = this._visualEdit.blocks[sel];
+    if (!cur?.actions?.length) {
+      return;
+    }
+    const actions = cur.actions.map((a, i) =>
+      i === ai ? ({ ...a, ...patch } as BlockAction) : a
+    );
+    const next = { ...cur, actions };
+    const trial = [...this._visualEdit.blocks];
+    trial[sel] = next;
+    this._visualEdit = { ...this._visualEdit, blocks: trial };
+  }
+
+  private visualSelectAction(ai: number) {
+    if (!this._visualEdit) {
+      return;
+    }
+    const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
+    if (!b?.actions?.length) {
+      return;
+    }
+    const max = b.actions.length - 1;
+    this._visualEdit = {
+      ...this._visualEdit,
+      selectedActionIndex: Math.max(0, Math.min(ai, max)),
+    };
+  }
+
+  private visualAddAction() {
+    if (!this._visualEdit) {
+      return;
+    }
+    const bi = this._visualEdit.selectedIndex;
+    const b = this._visualEdit.blocks[bi];
+    if (!b) {
+      return;
+    }
+    const actions = [...b.actions, newEmptyAction()];
+    const next = { ...b, actions };
+    const trial = [...this._visualEdit.blocks];
+    trial[bi] = next;
+    this._visualEdit = {
+      ...this._visualEdit,
+      blocks: trial,
+      selectedActionIndex: actions.length - 1,
+    };
+  }
+
+  private visualRemoveAction(ai: number) {
+    if (!this._visualEdit) {
+      return;
+    }
+    const bi = this._visualEdit.selectedIndex;
+    const b = this._visualEdit.blocks[bi];
+    if (!b || b.actions.length <= 1) {
+      alert('Chaque plage doit conserver au moins une action.');
+      return;
+    }
+    const actions = b.actions.filter((_, i) => i !== ai);
+    const next = { ...b, actions };
+    const trial = [...this._visualEdit.blocks];
+    trial[bi] = next;
+    let selectedActionIndex = this._visualEdit.selectedActionIndex;
+    if (selectedActionIndex >= actions.length) {
+      selectedActionIndex = actions.length - 1;
+    } else if (ai < selectedActionIndex) {
+      selectedActionIndex -= 1;
+    }
+    this._visualEdit = { ...this._visualEdit, blocks: trial, selectedActionIndex };
+  }
+
+  private visualAddBlock() {
+    if (!this._visualEdit) {
       return;
     }
     const gap = suggestGapIntervalMinutes(this._visualEdit.blocks, 60);
@@ -1175,8 +1197,7 @@ export class ScheduleManagerCard extends LitElement {
       nb = {
         start_time: minuteToHaTimeForSchedule(gap.start),
         end_time: minuteToHaTimeForSchedule(gap.end),
-        action_type: 'climate.set_preset_mode',
-        action_payload: { preset_mode: 'comfort' },
+        actions: [newEmptyAction()],
       };
       nextBlocks = [...this._visualEdit.blocks, nb];
       selectedIndex = nextBlocks.length - 1;
@@ -1213,15 +1234,12 @@ export class ScheduleManagerCard extends LitElement {
       ...this._visualEdit,
       blocks: nextBlocks,
       selectedIndex,
+      selectedActionIndex: 0,
     };
-    this.syncPayloadStrFromSelection();
   }
 
   private visualRemoveSelected() {
     if (!this._visualEdit) {
-      return;
-    }
-    if (!this.applyPayloadEditorToVisualBlocks()) {
       return;
     }
     const sel = this._visualEdit.selectedIndex;
@@ -1234,13 +1252,83 @@ export class ScheduleManagerCard extends LitElement {
       ...this._visualEdit,
       blocks: nextBlocks,
       selectedIndex: nextSel,
+      selectedActionIndex: 0,
     };
-    this.syncPayloadStrFromSelection();
   }
 
-  /** Première entité ciblée (flux principal). Les `entity_id` multiples restent possibles via le JSON. */
-  private primaryEntityFromBlock(block: TimeBlock): string {
-    return entityIdsFromPayload(block.action_payload)[0] ?? '';
+  /** Première entité ciblée dans le payload (pour l’UI et les services). */
+  private primaryEntityFromAction(action: BlockAction): string {
+    return entityIdsFromPayload(action.action_payload)[0] ?? '';
+  }
+
+  /** Filtre le sélecteur d’entités selon le domaine du service déjà choisi. */
+  private entityFilterForConfiguredAction(
+    selected: BlockAction
+  ): (entityId: string) => boolean {
+    const domains = domainsForActionType(selected.action_type);
+    return (entityId: string) => entityMatchesDomains(entityId, domains);
+  }
+
+  private visualAppendEntity(ev: CustomEvent<{ value?: string }>) {
+    if (!this._visualEdit || !this.hass) {
+      return;
+    }
+    const v = String(ev.detail?.value ?? '').trim();
+    if (!v) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    const ai = Math.min(
+      this._visualEdit.selectedActionIndex,
+      Math.max(0, (block?.actions?.length ?? 1) - 1)
+    );
+    const action = block?.actions?.[ai];
+    if (!block || !action || !String(action.action_type ?? '').trim()) {
+      return;
+    }
+    const ids = entityIdsFromPayload(action.action_payload);
+    if (ids.includes(v)) {
+      return;
+    }
+    const base =
+      typeof action.action_payload === 'object' && action.action_payload !== null
+        ? { ...(action.action_payload as Record<string, unknown>) }
+        : {};
+    const nextIds = [...ids, v];
+    base.entity_id = nextIds.length === 1 ? nextIds[0] : nextIds;
+    this.visualPatchSelectedAction({ action_payload: base });
+    this._quickEntityPickerNonce += 1;
+  }
+
+  private visualRemoveEntityChip(entityId: string) {
+    if (!this._visualEdit) {
+      return;
+    }
+    const sel = this._visualEdit.selectedIndex;
+    const block = this._visualEdit.blocks[sel];
+    const ai = Math.min(
+      this._visualEdit.selectedActionIndex,
+      Math.max(0, (block?.actions?.length ?? 1) - 1)
+    );
+    const action = block?.actions?.[ai];
+    if (!block || !action) {
+      return;
+    }
+    const ids = entityIdsFromPayload(action.action_payload).filter((e) => e !== entityId);
+    if (ids.length === 0) {
+      alert(
+        'Conservez au moins une entité, ou utilisez « Modifier l’action » pour tout reconfigurer.'
+      );
+      return;
+    }
+    const base =
+      typeof action.action_payload === 'object' && action.action_payload !== null
+        ? { ...(action.action_payload as Record<string, unknown>) }
+        : {};
+    base.entity_id = ids.length === 1 ? ids[0] : ids;
+    this.visualPatchSelectedAction({ action_payload: base });
+    this._quickEntityPickerNonce += 1;
   }
 
   /** Modes préréglés exposés par l’entité climate (pour l’étape assistant). */
@@ -1263,13 +1351,18 @@ export class ScheduleManagerCard extends LitElement {
     }
     const domain = entityId.split('.')[0]!;
     const sel = this._visualEdit.selectedIndex;
+    const ai = Math.min(
+      this._visualEdit.selectedActionIndex,
+      Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1)
+    );
     const block = this._visualEdit.blocks[sel];
-    if (!block) {
+    const curAction = block?.actions?.[ai];
+    if (!block || !curAction) {
       return;
     }
 
     let payload = stripPayloadForNewService(
-      block.action_payload,
+      curAction.action_payload,
       entityId,
       SCHEDULE_MANAGER_COLOR_KEY
     );
@@ -1283,22 +1376,15 @@ export class ScheduleManagerCard extends LitElement {
       applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
     }
 
-    this.visualPatchSelected({
+    this.visualPatchSelectedAction({
       action_type: `${domain}.${serviceShort}`,
       action_payload: payload,
     });
-    this.syncPayloadStrFromSelection();
     this.closeActionWizard();
   }
 
   private openActionWizard() {
     if (!this._visualEdit || !this.hass) {
-      return;
-    }
-    if (!this.mergeJsonPayloadIntoSelectedBlock()) {
-      alert(
-        'Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de continuer.'
-      );
       return;
     }
     this._actionWizardOpen = true;
@@ -1378,9 +1464,12 @@ export class ScheduleManagerCard extends LitElement {
     }
   }
 
-  private renderActionSummary(selected: TimeBlock) {
+  private renderActionSummary(selected: BlockAction) {
+    if (!String(selected.action_type ?? '').trim()) {
+      return html``;
+    }
     const hass = this.hass!;
-    const primary = this.primaryEntityFromBlock(selected);
+    const primary = this.primaryEntityFromAction(selected);
     const parsed = parseDomainService(selected.action_type);
     const icon = primary
       ? entityIcon(hass, primary) ?? domainIcon(primary.split('.')[0]!)
@@ -1406,6 +1495,15 @@ export class ScheduleManagerCard extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  private formatActionTabTitle(action: BlockAction, index: number): string {
+    const t = String(action.action_type ?? '').trim();
+    if (!t) {
+      return `Action ${index + 1}`;
+    }
+    const tail = t.includes('.') ? t.split('.').pop()! : t;
+    return tail.length > 20 ? `${tail.slice(0, 18)}…` : tail;
   }
 
   private renderActionWizardOverlay() {
@@ -1608,11 +1706,18 @@ export class ScheduleManagerCard extends LitElement {
     if (!this.hass || !this._visualEdit) {
       return html``;
     }
-    const primary = this.primaryEntityFromBlock(selected);
-    const parsed = parseDomainService(selected.action_type);
+    const ai = Math.min(
+      this._visualEdit.selectedActionIndex,
+      Math.max(0, selected.actions.length - 1)
+    );
+    const cur = selected.actions[ai]!;
+    const primary = this.primaryEntityFromAction(cur);
+    const parsed = parseDomainService(cur.action_type);
     const dom = primary.includes('.') ? primary.split('.')[0]! : '';
+    const hasAction = Boolean(String(cur.action_type ?? '').trim());
     const unknownService = Boolean(
-      primary &&
+      hasAction &&
+        primary &&
         parsed &&
         dom &&
         parsed.domain === dom &&
@@ -1621,14 +1726,89 @@ export class ScheduleManagerCard extends LitElement {
 
     return html`
       <div class="sm-action-entry">
-        ${this.renderActionSummary(selected)}
+        <div class="sm-actions-toolbar" role="tablist" aria-label="Actions du créneau">
+          ${selected.actions.map(
+            (a, i) => html`
+              <div class="sm-action-tab-wrap">
+                <button
+                  type="button"
+                  role="tab"
+                  class="sm-action-tab ${i === ai ? 'is-active' : ''}"
+                  aria-selected=${i === ai}
+                  @click=${() => this.visualSelectAction(i)}
+                >
+                  ${this.formatActionTabTitle(a, i)}
+                </button>
+                ${selected.actions.length > 1
+                  ? html`
+                      <button
+                        type="button"
+                        class="sm-action-tab-remove"
+                        aria-label="Supprimer cette action"
+                        title="Supprimer cette action"
+                        @click=${() => this.visualRemoveAction(i)}
+                      >
+                        ×
+                      </button>
+                    `
+                  : null}
+              </div>
+            `
+          )}
+          <button
+            type="button"
+            class="sm-action-tab sm-action-tab--add"
+            @click=${() => this.visualAddAction()}
+          >
+            + Action
+          </button>
+        </div>
+        ${this.renderActionSummary(cur)}
         <button type="button" class="sm-action-primary-btn" @click=${() => this.openActionWizard()}>
-          ${primary || parsed ? 'Modifier l’action' : '+ Choisir une action'}
+          ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
         </button>
         ${unknownService
           ? html`<p class="sm-field-hint">
-              Action personnalisée : <code>${selected.action_type}</code>
+              Action personnalisée : <code>${cur.action_type}</code>
             </p>`
+          : null}
+        ${hasAction
+          ? html`
+              <div class="sm-action-entities-quick">
+                <span class="sm-action-entities-quick-title">Entités ciblées</span>
+                <p class="sm-action-entities-quick-hint">
+                  Ajoutez ou retirez des entités sans refaire l’assistant — uniquement celles compatibles
+                  avec <code>${cur.action_type}</code>.
+                </p>
+                <div class="entity-chips">
+                  ${entityIdsFromPayload(cur.action_payload).map(
+                    (eid) => html`
+                      <span class="entity-chip">
+                        <code>${eid}</code>
+                        <button
+                          type="button"
+                          aria-label="Retirer cette entité"
+                          @click=${() => this.visualRemoveEntityChip(eid)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    `
+                  )}
+                </div>
+                <ha-entity-picker
+                  class="sm-action-entities-quick-picker"
+                  .hass=${this.hass}
+                  .entityFilter=${this.entityFilterForConfiguredAction(cur)}
+                  .allowCustomEntity=${true}
+                  label="Ajouter une entité"
+                  .value=${''}
+                  id=${`sm-quick-ep-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${ai}-${this._quickEntityPickerNonce}`}
+                  @value-changed=${(e: CustomEvent<{ value?: string }>) =>
+                    this.visualAppendEntity(e)}
+                ></ha-entity-picker>
+              </div>
+            `
           : null}
       </div>
     `;
@@ -1638,13 +1818,13 @@ export class ScheduleManagerCard extends LitElement {
     if (!this._visualEdit) {
       return;
     }
-    if (!this.applyPayloadEditorToVisualBlocks()) {
-      return;
-    }
     const { scheduleId, blocks, repeatDays } = this._visualEdit;
     for (const b of blocks) {
-      if (!String(b.action_type ?? '').trim()) {
-        alert('Chaque plage doit avoir un type d’action (service).');
+      const ok = (b.actions || []).some((a) => String(a.action_type ?? '').trim());
+      if (!ok) {
+        alert(
+          'Chaque plage doit avoir au moins une action avec un service défini (assistant « Choisir une action »).'
+        );
         return;
       }
     }
@@ -1678,12 +1858,17 @@ export class ScheduleManagerCard extends LitElement {
     if (!modes?.length) {
       return html``;
     }
+    const ai = Math.min(
+      this._visualEdit!.selectedActionIndex,
+      Math.max(0, selected.actions.length - 1)
+    );
+    const action = selected.actions[ai];
     const cur = String(
-      (selected.action_payload as Record<string, unknown>)?.preset_mode ?? ''
+      (action?.action_payload as Record<string, unknown>)?.preset_mode ?? ''
     );
     const orphan = cur && !modes.includes(cur);
     return html`
-      <label class="sm-form-label">
+      <label class="sm-form-label sm-form-label-last">
         Mode préréglé
         <select
           class="sm-select"
@@ -1703,10 +1888,15 @@ export class ScheduleManagerCard extends LitElement {
       return null;
     }
     const block = this._visualEdit.blocks[this._visualEdit.selectedIndex];
-    if (!block || block.action_type.trim() !== 'climate.set_preset_mode') {
+    const ai = Math.min(
+      this._visualEdit.selectedActionIndex,
+      Math.max(0, (block?.actions?.length ?? 1) - 1)
+    );
+    const action = block?.actions?.[ai];
+    if (!block || !action || action.action_type.trim() !== 'climate.set_preset_mode') {
       return null;
     }
-    const ids = entityIdsFromPayload(block.action_payload);
+    const ids = entityIdsFromPayload(action.action_payload);
     for (const id of ids) {
       if (!id.startsWith('climate.')) {
         continue;
@@ -1729,20 +1919,25 @@ export class ScheduleManagerCard extends LitElement {
     }
     const sel = this._visualEdit.selectedIndex;
     const block = this._visualEdit.blocks[sel];
-    if (!block) {
+    const ai = Math.min(
+      this._visualEdit.selectedActionIndex,
+      Math.max(0, (block?.actions?.length ?? 1) - 1)
+    );
+    const action = block?.actions?.[ai];
+    if (!block || !action) {
       return;
     }
     const base =
-      typeof block.action_payload === 'object' && block.action_payload !== null
-        ? { ...(block.action_payload as Record<string, unknown>) }
+      typeof action.action_payload === 'object' && action.action_payload !== null
+        ? { ...(action.action_payload as Record<string, unknown>) }
         : {};
     base.preset_mode = mode;
-    this.visualPatchSelected({ action_payload: base });
-    this.syncPayloadStrFromSelection();
+    this.visualPatchSelectedAction({ action_payload: base });
   }
 
+  /** Couleur affichée sur la frise : métadonnée sur la première action du créneau. */
   private hasCustomBlockColor(block: TimeBlock): boolean {
-    const p = block.action_payload;
+    const p = block.actions?.[0]?.action_payload;
     if (!p || typeof p !== 'object') {
       return false;
     }
@@ -1750,7 +1945,7 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private blockColorPickerHex(block: TimeBlock): string {
-    const p = block.action_payload;
+    const p = block.actions?.[0]?.action_payload;
     if (p && typeof p === 'object') {
       const c = (p as Record<string, unknown>)[SCHEDULE_MANAGER_COLOR_KEY];
       if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.trim())) {
@@ -1766,15 +1961,24 @@ export class ScheduleManagerCard extends LitElement {
     }
     const sel = this._visualEdit.selectedIndex;
     const block = this._visualEdit.blocks[sel];
-    if (!block) {
+    if (!block?.actions?.length) {
       return;
     }
-    const base =
-      typeof block.action_payload === 'object' && block.action_payload !== null
-        ? { ...(block.action_payload as Record<string, unknown>) }
-        : {};
-    base[SCHEDULE_MANAGER_COLOR_KEY] = hex;
-    this.visualPatchSelected({ action_payload: base });
+    const actions = block.actions.map((a, i) => {
+      if (i !== 0) {
+        return a;
+      }
+      const base =
+        typeof a.action_payload === 'object' && a.action_payload !== null
+          ? { ...(a.action_payload as Record<string, unknown>) }
+          : {};
+      base[SCHEDULE_MANAGER_COLOR_KEY] = hex;
+      return { ...a, action_payload: base };
+    });
+    const next = { ...block, actions };
+    const trial = [...this._visualEdit.blocks];
+    trial[sel] = next;
+    this._visualEdit = { ...this._visualEdit, blocks: trial };
   }
 
   private visualClearBlockColor() {
@@ -1783,15 +1987,24 @@ export class ScheduleManagerCard extends LitElement {
     }
     const sel = this._visualEdit.selectedIndex;
     const block = this._visualEdit.blocks[sel];
-    if (!block) {
+    if (!block?.actions?.length) {
       return;
     }
-    const base =
-      typeof block.action_payload === 'object' && block.action_payload !== null
-        ? { ...(block.action_payload as Record<string, unknown>) }
-        : {};
-    delete base[SCHEDULE_MANAGER_COLOR_KEY];
-    this.visualPatchSelected({ action_payload: base });
+    const actions = block.actions.map((a, i) => {
+      if (i !== 0) {
+        return a;
+      }
+      const base =
+        typeof a.action_payload === 'object' && a.action_payload !== null
+          ? { ...(a.action_payload as Record<string, unknown>) }
+          : {};
+      delete base[SCHEDULE_MANAGER_COLOR_KEY];
+      return { ...a, action_payload: base };
+    });
+    const next = { ...block, actions };
+    const trial = [...this._visualEdit.blocks];
+    trial[sel] = next;
+    this._visualEdit = { ...this._visualEdit, blocks: trial };
   }
 
   private renderBlockColorControls(block: TimeBlock) {
@@ -2021,7 +2234,7 @@ export class ScheduleManagerCard extends LitElement {
                         maxlength="8"
                         .value=${haTimeToHHMM(selected.start_time)}
                         @input=${(e: Event) =>
-                          this.visualPatchSelected({
+                          this.visualPatchBlockFields({
                             start_time: normalizeTimeForHa(
                               (e.target as HTMLInputElement).value
                             ),
@@ -2037,7 +2250,7 @@ export class ScheduleManagerCard extends LitElement {
                         maxlength="8"
                         .value=${haTimeToHHMM(selected.end_time)}
                         @input=${(e: Event) =>
-                          this.visualPatchSelected({
+                          this.visualPatchBlockFields({
                             end_time: normalizeTimeForHa(
                               (e.target as HTMLInputElement).value
                             ),
@@ -2047,21 +2260,9 @@ export class ScheduleManagerCard extends LitElement {
                   </div>
                   ${this.renderBlockColorControls(selected)}
                   <div class="sm-action-card">
-                    <h4>Action pendant cette plage</h4>
+                    <h4>Actions pendant cette plage</h4>
                     ${this.renderActionPlanningControls(selected)}
                     ${this.renderClimatePresetSelect(selected)}
-                    <label class="sm-form-label sm-form-label-last">
-                      Paramètres supplémentaires (JSON, sans
-                      <code>entity_id</code>
-                      — défini ci‑dessus ; plusieurs entités possibles ici si besoin)
-                      <textarea
-                        class="sm-payload-textarea"
-                        .value=${this._visualPayloadStr}
-                        @input=${(e: Event) => {
-                          this._visualPayloadStr = (e.target as HTMLTextAreaElement).value;
-                        }}
-                      ></textarea>
-                    </label>
                   </div>
                 </div>
               `

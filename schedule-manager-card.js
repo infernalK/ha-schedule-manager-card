@@ -95,6 +95,60 @@ const t={ATTRIBUTE:1,CHILD:2,PROPERTY:3,BOOLEAN_ATTRIBUTE:4,EVENT:5,ELEMENT:6},e
 /** Capteur créé par l’intégration Schedule Manager (`attributes.schedules`, `attributes.groups`). */
 const SCHEDULE_MANAGER_STATUS_ENTITY_ID = 'sensor.schedule_manager_status';
 
+function randomActionId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `a-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+function newEmptyAction() {
+    return {
+        id: randomActionId(),
+        action_type: '',
+        action_payload: {},
+    };
+}
+/** Normalise une plage depuis le stockage HA (tableau `actions` ou ancien format plat). */
+function normalizeTimeBlock(raw) {
+    const start_time = String(raw.start_time ?? '00:00:00');
+    const end_time = String(raw.end_time ?? '23:59:59');
+    const id = typeof raw.id === 'string' ? raw.id : undefined;
+    const actionsRaw = raw.actions;
+    if (Array.isArray(actionsRaw) && actionsRaw.length > 0) {
+        const actions = actionsRaw.map((a, i) => {
+            const rec = a;
+            return {
+                id: typeof rec.id === 'string' ? rec.id : `${randomActionId()}-${i}`,
+                action_type: String(rec.action_type ?? ''),
+                action_payload: typeof rec.action_payload === 'object' && rec.action_payload !== null
+                    ? rec.action_payload
+                    : {},
+            };
+        });
+        return { id, start_time, end_time, actions };
+    }
+    return {
+        id,
+        start_time,
+        end_time,
+        actions: [
+            {
+                id: randomActionId(),
+                action_type: String(raw.action_type ?? ''),
+                action_payload: typeof raw.action_payload === 'object' && raw.action_payload !== null
+                    ? raw.action_payload
+                    : {},
+            },
+        ],
+    };
+}
+function normalizeScheduleTimeBlocks(schedule) {
+    return {
+        ...schedule,
+        time_blocks: (schedule.time_blocks || []).map((tb) => normalizeTimeBlock(tb)),
+    };
+}
+
 class ScheduleManagerServices {
     constructor(hass) {
         this.hass = hass;
@@ -759,17 +813,6 @@ const styles = i$4 `
     margin-bottom: 0;
   }
 
-  .sm-payload-textarea {
-    min-height: 72px;
-    resize: vertical;
-    font-family: inherit;
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid var(--divider-color);
-    background: var(--card-background-color);
-    color: var(--primary-text-color);
-  }
-
   .sm-action-card {
     margin-top: 4px;
     padding: 12px;
@@ -966,6 +1009,58 @@ const styles = i$4 `
     margin-bottom: 8px;
   }
 
+  .sm-actions-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .sm-action-tab-wrap {
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--divider-color);
+  }
+
+  .sm-action-tab {
+    padding: 6px 10px;
+    border: none;
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font-family: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sm-action-tab.is-active {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.15);
+    font-weight: 600;
+  }
+
+  .sm-action-tab--add {
+    border-radius: 8px;
+    border: 1px dashed var(--divider-color);
+    background: transparent;
+  }
+
+  .sm-action-tab-remove {
+    padding: 0 6px;
+    border: none;
+    border-left: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
   .sm-action-summary {
     display: flex;
     align-items: flex-start;
@@ -1032,6 +1127,41 @@ const styles = i$4 `
 
   .sm-action-primary-btn:hover {
     text-decoration: underline;
+  }
+
+  .sm-action-entities-quick {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--divider-color);
+  }
+
+  .sm-action-entities-quick-title {
+    display: block;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--secondary-text-color);
+    margin-bottom: 4px;
+  }
+
+  .sm-action-entities-quick-hint {
+    margin: 0 0 8px;
+    font-size: 0.72em;
+    line-height: 1.35;
+    color: var(--secondary-text-color);
+  }
+
+  .sm-action-entities-quick-hint code {
+    font-size: 0.95em;
+    word-break: break-all;
+  }
+
+  .sm-action-entities-quick-picker {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 56px;
+    margin-top: 8px;
   }
 
   /* Assistant plein écran au-dessus du modal d’édition */
@@ -1413,6 +1543,46 @@ function listEntitiesInDomain(hass, domain) {
     }));
 }
 
+/**
+ * Déduit les domaines d’entités « compatibles » avec un type d’action HA.
+ * Si `domain.service` est fourni, un seul domaine ; sinon heuristiques pour les noms de service seuls.
+ */
+function domainsForActionType(actionType) {
+    const t = actionType.trim().toLowerCase();
+    if (!t) {
+        return [];
+    }
+    if (t.includes('.')) {
+        const dom = t.split('.')[0];
+        return dom ? [dom] : [];
+    }
+    const map = {
+        set_preset_mode: ['climate'],
+        set_temperature: ['climate'],
+        set_hvac_mode: ['climate'],
+        turn_on: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
+        turn_off: ['switch', 'light', 'climate', 'input_boolean', 'group', 'fan'],
+        toggle: ['switch', 'light', 'input_boolean'],
+        open_cover: ['cover'],
+        close_cover: ['cover'],
+        set_cover_position: ['cover'],
+        stop_cover: ['cover'],
+        lock: ['lock'],
+        unlock: ['lock'],
+        alarm_arm_home: ['alarm_control_panel'],
+        alarm_arm_away: ['alarm_control_panel'],
+        alarm_disarm: ['alarm_control_panel'],
+    };
+    return map[t] ?? [];
+}
+function entityMatchesDomains(entityId, domains) {
+    if (!domains.length) {
+        return true;
+    }
+    const dom = entityId.split('.')[0];
+    return domains.includes(dom);
+}
+
 const MINUTES_PER_DAY = 24 * 60;
 /**
  * Dernière heure acceptée par Home Assistant `cv.time` (pas de 24:00:00 dans les services).
@@ -1480,8 +1650,11 @@ function parseToMinutes(t) {
 function timeStringToMinutes(t) {
     return parseToMinutes(t);
 }
-function segmentLabel(block) {
-    const p = block.action_payload;
+function segmentLabelOne(action) {
+    if (!String(action.action_type ?? '').trim()) {
+        return '—';
+    }
+    const p = action.action_payload;
     if (p && typeof p === 'object') {
         const rec = p;
         if (rec.preset_mode !== undefined) {
@@ -1494,10 +1667,28 @@ function segmentLabel(block) {
             return `${String(rec.position)}%`;
         }
     }
-    const tail = block.action_type.includes('.')
-        ? block.action_type.split('.').pop()
-        : block.action_type;
+    const tail = action.action_type.includes('.')
+        ? action.action_type.split('.').pop()
+        : action.action_type;
     return tail.length > 14 ? `${tail.slice(0, 12)}…` : tail;
+}
+function segmentLabel(block) {
+    const actions = block.actions || [];
+    const configured = actions.filter((a) => String(a.action_type ?? '').trim());
+    if (configured.length === 0) {
+        return '—';
+    }
+    const labels = configured.map((a) => segmentLabelOne(a));
+    if (labels.length === 1) {
+        return labels[0];
+    }
+    const first = labels[0];
+    const suffix = ` +${labels.length - 1}`;
+    const maxMain = Math.max(4, 14 - suffix.length);
+    if (first.length > maxMain) {
+        return `${first.slice(0, maxMain)}…${suffix}`;
+    }
+    return `${first}${suffix}`;
 }
 function hueFromLabel(label) {
     let h = 0;
@@ -1509,21 +1700,27 @@ function hueFromLabel(label) {
 /** Même teinte que les segments de la frise (pastilles liste / barres). */
 function hueForBlock(block) {
     const label = segmentLabel(block);
-    return hueFromLabel(`${label}-${block.action_type}`);
+    const key = (block.actions || [])
+        .map((a) => a.action_type)
+        .filter(Boolean)
+        .join(',');
+    return hueFromLabel(`${label}-${key}`);
 }
 /** Couleur de remplissage segment (#hex ou hsl dérivé du bloc). */
 function blockTimelineFill(block) {
-    const p = block.action_payload;
-    if (p && typeof p === 'object') {
-        const raw = p[SCHEDULE_MANAGER_COLOR_KEY];
-        if (typeof raw === 'string') {
-            const c = raw.trim();
-            if (/^#[0-9A-Fa-f]{6}$/.test(c)) {
-                return c;
-            }
-            if (/^#[0-9A-Fa-f]{3}$/.test(c)) {
-                const h = c.slice(1);
-                return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+    for (const a of block.actions || []) {
+        const p = a.action_payload;
+        if (p && typeof p === 'object') {
+            const raw = p[SCHEDULE_MANAGER_COLOR_KEY];
+            if (typeof raw === 'string') {
+                const c = raw.trim();
+                if (/^#[0-9A-Fa-f]{6}$/.test(c)) {
+                    return c;
+                }
+                if (/^#[0-9A-Fa-f]{3}$/.test(c)) {
+                    const h = c.slice(1);
+                    return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+                }
             }
         }
     }
@@ -1673,8 +1870,7 @@ function tryInsertSlotAtDayStart(blocks, slotMinutes = TIMELINE_DRAG_SNAP_MINUTE
     const newBlock = () => ({
         start_time: '00:00:00',
         end_time: minuteToHaTimeForSchedule(slot),
-        action_type: 'climate.set_preset_mode',
-        action_payload: { preset_mode: 'comfort' },
+        actions: [newEmptyAction()],
     });
     if (first.iv.start >= slot) {
         const withNew = [newBlock(), ...list];
@@ -2166,12 +2362,6 @@ function payloadWithoutEntityId(payload) {
     delete rec.entity_id;
     return rec;
 }
-/** JSON éditable : sans entity_id ni couleur (couleur = champ dédié). */
-function payloadForJsonEditor(payload) {
-    const rec = payloadWithoutEntityId(payload);
-    delete rec[SCHEDULE_MANAGER_COLOR_KEY];
-    return rec;
-}
 /** Empêcher qu’une même couleur fasse doublon avec une autre plage identique en action. */
 function payloadForDuplicateCheck(payload) {
     const rec = payloadWithoutEntityId(payload);
@@ -2191,13 +2381,12 @@ function entityIdsFromPayload(payload) {
     }
     return [];
 }
-/** Ouverture éditeur ou planning vide : une plage couvrant la journée (comportement attendu type scheduler). */
+/** Ouverture éditeur ou planning vide : une plage couvrant la journée, action à définir par l’assistant. */
 function defaultFullDayBlock() {
     return {
         start_time: '00:00:00',
         end_time: HA_END_OF_DAY_TIME,
-        action_type: 'climate.set_preset_mode',
-        action_payload: { preset_mode: 'comfort' },
+        actions: [newEmptyAction()],
     };
 }
 function findDuplicateBlockIndex(blocks) {
@@ -2267,12 +2456,15 @@ function sortKeysDeep(value) {
 function stablePayloadString(payload) {
     return JSON.stringify(sortKeysDeep(payload ?? {}));
 }
-/** Empêche deux entrées identiques (horaires + action + payload normalisé). */
+/** Empêche deux entrées identiques (horaires + toutes les actions + payloads normalisés). */
 function blockFingerprint(block) {
     const st = normalizeTimeForHa(block.start_time);
     const et = normalizeTimeForHa(block.end_time);
-    const at = String(block.action_type).trim();
-    return `${st}|${et}|${at}|${stablePayloadString(payloadForDuplicateCheck(block.action_payload))}`;
+    const parts = [...(block.actions || [])]
+        .slice()
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((a) => `${String(a.action_type).trim()}|${stablePayloadString(payloadForDuplicateCheck(a.action_payload))}`);
+    return `${st}|${et}|${parts.join('||')}`;
 }
 let ScheduleManagerCard = class ScheduleManagerCard extends s {
     constructor() {
@@ -2281,13 +2473,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._creating = false;
         /** Éditeur plein écran (frise + détail plage), style config HA */
         this._visualEdit = null;
-        this._visualPayloadStr = '';
         /** Assistant « Choisir une action » (domaine → entité → service), style Home Assistant. */
         this._actionWizardOpen = false;
         this._actionWizardStep = 'domain';
         this._actionWizardSearch = '';
         this._actionWizardDomain = null;
         this._actionWizardEntityId = null;
+        /** Réinitialise le sélecteur rapide d’entités après ajout. */
+        this._quickEntityPickerNonce = 0;
         /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
         this._editorFriseWidth = 0;
         /** Déplacement horizontal de la plage sélectionnée (durée conservée). */
@@ -2434,10 +2627,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
      * visaient le mauvais UUID — d’où un planning « fantôme » ou introuvable.
      */
     withCanonicalId(storageKey, schedule) {
-        if (schedule.id === storageKey) {
-            return schedule;
-        }
-        return { ...schedule, id: storageKey };
+        const base = schedule.id === storageKey ? schedule : { ...schedule, id: storageKey };
+        return normalizeScheduleTimeBlocks(base);
     }
     getSchedulesRecord() {
         const state = this.hass?.states[this.statusEntityId()];
@@ -2670,15 +2861,23 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
     `;
     }
     blocksToPayload(blocks) {
-        return (blocks || []).map((b) => ({
-            start_time: normalizeTimeForHa(String(b.start_time)),
-            end_time: normalizeTimeForHa(String(b.end_time)),
-            action_type: b.action_type,
-            action_payload: typeof b.action_payload === 'object' && b.action_payload !== null
-                ? b.action_payload
-                : {},
-            ...(b.id ? { id: b.id } : {}),
-        }));
+        return (blocks || []).map((b) => {
+            const actions = (b.actions || [])
+                .filter((a) => String(a.action_type ?? '').trim())
+                .map((a) => ({
+                action_type: a.action_type,
+                action_payload: typeof a.action_payload === 'object' && a.action_payload !== null
+                    ? a.action_payload
+                    : {},
+                ...(a.id ? { id: a.id } : {}),
+            }));
+            return {
+                start_time: normalizeTimeForHa(String(b.start_time)),
+                end_time: normalizeTimeForHa(String(b.end_time)),
+                actions,
+                ...(b.id ? { id: b.id } : {}),
+            };
+        });
     }
     renderSchedule(schedule, group) {
         if (!schedule) {
@@ -2792,11 +2991,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             blocks = [defaultFullDayBlock()];
         }
         else {
-            blocks = blocks.map((b) => ({
-                ...b,
-                start_time: normalizeTimeForHa(String(b.start_time ?? '')),
-                end_time: normalizeTimeForHa(String(b.end_time ?? '')),
-            }));
+            blocks = blocks.map((b) => {
+                const n = normalizeTimeBlock(b);
+                return {
+                    ...n,
+                    start_time: normalizeTimeForHa(String(n.start_time ?? '')),
+                    end_time: normalizeTimeForHa(String(n.end_time ?? '')),
+                };
+            });
         }
         this._visualEdit = {
             scheduleId: schedule.id,
@@ -2807,8 +3009,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                     : [0, 1, 2, 3, 4, 5, 6]),
             ],
             selectedIndex: 0,
+            selectedActionIndex: 0,
         };
-        this.syncPayloadStrFromSelection();
     }
     closeVisualEditor() {
         this.endBoundaryDrag();
@@ -2816,8 +3018,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         this._detachEditorFriseObserver();
         this._editorFriseWidth = 0;
         this._visualEdit = null;
-        this._visualPayloadStr = '';
         this._actionWizardOpen = false;
+        this._quickEntityPickerNonce = 0;
     }
     endBoundaryDrag() {
         const d = this._boundaryDrag;
@@ -2989,75 +3191,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         window.addEventListener('pointerup', this._onBoundaryUp);
         window.addEventListener('pointercancel', this._onBoundaryUp);
     }
-    syncPayloadStrFromSelection() {
-        if (!this._visualEdit) {
-            this._visualPayloadStr = '{}';
-            return;
-        }
-        const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
-        if (!b) {
-            this._visualPayloadStr = '{}';
-            return;
-        }
-        try {
-            this._visualPayloadStr = JSON.stringify(payloadForJsonEditor(b.action_payload), null, 2);
-        }
-        catch {
-            this._visualPayloadStr = '{}';
-        }
-    }
-    /**
-     * Applique le JSON du formulaire à la plage sélectionnée (sans alerte).
-     * Utilisé avant changement de sélection : JSON invalide ne bloque plus le clic sur la frise.
-     */
-    mergeJsonPayloadIntoSelectedBlock() {
-        if (!this._visualEdit) {
-            return false;
-        }
-        const sel = this._visualEdit.selectedIndex;
-        const block = this._visualEdit.blocks[sel];
-        if (!block) {
-            return true;
-        }
-        try {
-            const raw = this._visualPayloadStr.trim() || '{}';
-            const extra = JSON.parse(raw);
-            if (typeof extra !== 'object' || extra === null || Array.isArray(extra)) {
-                return false;
-            }
-            delete extra.entity_id;
-            delete extra[SCHEDULE_MANAGER_COLOR_KEY];
-            const entityIds = entityIdsFromPayload(block.action_payload);
-            const action_payload = { ...extra };
-            if (entityIds.length === 1) {
-                action_payload.entity_id = entityIds[0];
-            }
-            else if (entityIds.length > 1) {
-                action_payload.entity_id = [...entityIds];
-            }
-            const prevRec = typeof block.action_payload === 'object' && block.action_payload !== null
-                ? block.action_payload
-                : {};
-            const prevColor = prevRec[SCHEDULE_MANAGER_COLOR_KEY];
-            if (typeof prevColor === 'string') {
-                action_payload[SCHEDULE_MANAGER_COLOR_KEY] = prevColor;
-            }
-            const nextBlocks = [...this._visualEdit.blocks];
-            nextBlocks[sel] = { ...block, action_payload };
-            this._visualEdit = { ...this._visualEdit, blocks: nextBlocks };
-            return true;
-        }
-        catch {
-            return false;
-        }
-    }
-    applyPayloadEditorToVisualBlocks() {
-        const ok = this.mergeJsonPayloadIntoSelectedBlock();
-        if (!ok) {
-            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu).');
-        }
-        return ok;
-    }
     visualToggleDay(day) {
         if (!this._visualEdit) {
             return;
@@ -3079,16 +3212,18 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!this._visualEdit) {
             return;
         }
-        this.mergeJsonPayloadIntoSelectedBlock();
         const max = this._visualEdit.blocks.length - 1;
         const idx = Math.max(0, Math.min(index, max));
         if (idx === this._visualEdit.selectedIndex) {
             return;
         }
-        this._visualEdit = { ...this._visualEdit, selectedIndex: idx };
-        this.syncPayloadStrFromSelection();
+        this._visualEdit = {
+            ...this._visualEdit,
+            selectedIndex: idx,
+            selectedActionIndex: 0,
+        };
     }
-    visualPatchSelected(patch) {
+    visualPatchBlockFields(patch) {
         if (!this._visualEdit) {
             return;
         }
@@ -3110,11 +3245,80 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
         this._visualEdit = { ...this._visualEdit, blocks: trial };
     }
-    visualAddBlock() {
+    visualPatchSelectedAction(patch) {
         if (!this._visualEdit) {
             return;
         }
-        if (!this.applyPayloadEditorToVisualBlocks()) {
+        const sel = this._visualEdit.selectedIndex;
+        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1));
+        const cur = this._visualEdit.blocks[sel];
+        if (!cur?.actions?.length) {
+            return;
+        }
+        const actions = cur.actions.map((a, i) => i === ai ? { ...a, ...patch } : a);
+        const next = { ...cur, actions };
+        const trial = [...this._visualEdit.blocks];
+        trial[sel] = next;
+        this._visualEdit = { ...this._visualEdit, blocks: trial };
+    }
+    visualSelectAction(ai) {
+        if (!this._visualEdit) {
+            return;
+        }
+        const b = this._visualEdit.blocks[this._visualEdit.selectedIndex];
+        if (!b?.actions?.length) {
+            return;
+        }
+        const max = b.actions.length - 1;
+        this._visualEdit = {
+            ...this._visualEdit,
+            selectedActionIndex: Math.max(0, Math.min(ai, max)),
+        };
+    }
+    visualAddAction() {
+        if (!this._visualEdit) {
+            return;
+        }
+        const bi = this._visualEdit.selectedIndex;
+        const b = this._visualEdit.blocks[bi];
+        if (!b) {
+            return;
+        }
+        const actions = [...b.actions, newEmptyAction()];
+        const next = { ...b, actions };
+        const trial = [...this._visualEdit.blocks];
+        trial[bi] = next;
+        this._visualEdit = {
+            ...this._visualEdit,
+            blocks: trial,
+            selectedActionIndex: actions.length - 1,
+        };
+    }
+    visualRemoveAction(ai) {
+        if (!this._visualEdit) {
+            return;
+        }
+        const bi = this._visualEdit.selectedIndex;
+        const b = this._visualEdit.blocks[bi];
+        if (!b || b.actions.length <= 1) {
+            alert('Chaque plage doit conserver au moins une action.');
+            return;
+        }
+        const actions = b.actions.filter((_, i) => i !== ai);
+        const next = { ...b, actions };
+        const trial = [...this._visualEdit.blocks];
+        trial[bi] = next;
+        let selectedActionIndex = this._visualEdit.selectedActionIndex;
+        if (selectedActionIndex >= actions.length) {
+            selectedActionIndex = actions.length - 1;
+        }
+        else if (ai < selectedActionIndex) {
+            selectedActionIndex -= 1;
+        }
+        this._visualEdit = { ...this._visualEdit, blocks: trial, selectedActionIndex };
+    }
+    visualAddBlock() {
+        if (!this._visualEdit) {
             return;
         }
         const gap = suggestGapIntervalMinutes(this._visualEdit.blocks, 60);
@@ -3125,8 +3329,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             nb = {
                 start_time: minuteToHaTimeForSchedule(gap.start),
                 end_time: minuteToHaTimeForSchedule(gap.end),
-                action_type: 'climate.set_preset_mode',
-                action_payload: { preset_mode: 'comfort' },
+                actions: [newEmptyAction()],
             };
             nextBlocks = [...this._visualEdit.blocks, nb];
             selectedIndex = nextBlocks.length - 1;
@@ -3156,14 +3359,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             ...this._visualEdit,
             blocks: nextBlocks,
             selectedIndex,
+            selectedActionIndex: 0,
         };
-        this.syncPayloadStrFromSelection();
     }
     visualRemoveSelected() {
         if (!this._visualEdit) {
-            return;
-        }
-        if (!this.applyPayloadEditorToVisualBlocks()) {
             return;
         }
         const sel = this._visualEdit.selectedIndex;
@@ -3176,12 +3376,67 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             ...this._visualEdit,
             blocks: nextBlocks,
             selectedIndex: nextSel,
+            selectedActionIndex: 0,
         };
-        this.syncPayloadStrFromSelection();
     }
-    /** Première entité ciblée (flux principal). Les `entity_id` multiples restent possibles via le JSON. */
-    primaryEntityFromBlock(block) {
-        return entityIdsFromPayload(block.action_payload)[0] ?? '';
+    /** Première entité ciblée dans le payload (pour l’UI et les services). */
+    primaryEntityFromAction(action) {
+        return entityIdsFromPayload(action.action_payload)[0] ?? '';
+    }
+    /** Filtre le sélecteur d’entités selon le domaine du service déjà choisi. */
+    entityFilterForConfiguredAction(selected) {
+        const domains = domainsForActionType(selected.action_type);
+        return (entityId) => entityMatchesDomains(entityId, domains);
+    }
+    visualAppendEntity(ev) {
+        if (!this._visualEdit || !this.hass) {
+            return;
+        }
+        const v = String(ev.detail?.value ?? '').trim();
+        if (!v) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (block?.actions?.length ?? 1) - 1));
+        const action = block?.actions?.[ai];
+        if (!block || !action || !String(action.action_type ?? '').trim()) {
+            return;
+        }
+        const ids = entityIdsFromPayload(action.action_payload);
+        if (ids.includes(v)) {
+            return;
+        }
+        const base = typeof action.action_payload === 'object' && action.action_payload !== null
+            ? { ...action.action_payload }
+            : {};
+        const nextIds = [...ids, v];
+        base.entity_id = nextIds.length === 1 ? nextIds[0] : nextIds;
+        this.visualPatchSelectedAction({ action_payload: base });
+        this._quickEntityPickerNonce += 1;
+    }
+    visualRemoveEntityChip(entityId) {
+        if (!this._visualEdit) {
+            return;
+        }
+        const sel = this._visualEdit.selectedIndex;
+        const block = this._visualEdit.blocks[sel];
+        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (block?.actions?.length ?? 1) - 1));
+        const action = block?.actions?.[ai];
+        if (!block || !action) {
+            return;
+        }
+        const ids = entityIdsFromPayload(action.action_payload).filter((e) => e !== entityId);
+        if (ids.length === 0) {
+            alert('Conservez au moins une entité, ou utilisez « Modifier l’action » pour tout reconfigurer.');
+            return;
+        }
+        const base = typeof action.action_payload === 'object' && action.action_payload !== null
+            ? { ...action.action_payload }
+            : {};
+        base.entity_id = ids.length === 1 ? ids[0] : ids;
+        this.visualPatchSelectedAction({ action_payload: base });
+        this._quickEntityPickerNonce += 1;
     }
     /** Modes préréglés exposés par l’entité climate (pour l’étape assistant). */
     climatePresetModesForEntityId(entityId) {
@@ -3198,11 +3453,13 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
         const domain = entityId.split('.')[0];
         const sel = this._visualEdit.selectedIndex;
+        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (this._visualEdit.blocks[sel]?.actions?.length ?? 1) - 1));
         const block = this._visualEdit.blocks[sel];
-        if (!block) {
+        const curAction = block?.actions?.[ai];
+        if (!block || !curAction) {
             return;
         }
-        let payload = stripPayloadForNewService(block.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
+        let payload = stripPayloadForNewService(curAction.action_payload, entityId, SCHEDULE_MANAGER_COLOR_KEY);
         if (domain === 'climate' &&
             serviceShort === 'set_preset_mode' &&
             climatePresetMode !== undefined) {
@@ -3211,19 +3468,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         else {
             applyDefaultFieldsForService(domain, serviceShort, entityId, payload, this.hass);
         }
-        this.visualPatchSelected({
+        this.visualPatchSelectedAction({
             action_type: `${domain}.${serviceShort}`,
             action_payload: payload,
         });
-        this.syncPayloadStrFromSelection();
         this.closeActionWizard();
     }
     openActionWizard() {
         if (!this._visualEdit || !this.hass) {
-            return;
-        }
-        if (!this.mergeJsonPayloadIntoSelectedBlock()) {
-            alert('Payload JSON invalide pour la plage sélectionnée (objet attendu). Corrigez le JSON avant de continuer.');
             return;
         }
         this._actionWizardOpen = true;
@@ -3296,8 +3548,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
     }
     renderActionSummary(selected) {
+        if (!String(selected.action_type ?? '').trim()) {
+            return x ``;
+        }
         const hass = this.hass;
-        const primary = this.primaryEntityFromBlock(selected);
+        const primary = this.primaryEntityFromAction(selected);
         const parsed = parseDomainService(selected.action_type);
         const icon = primary
             ? entityIcon(hass, primary) ?? domainIcon(primary.split('.')[0])
@@ -3322,6 +3577,14 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         </div>
       </div>
     `;
+    }
+    formatActionTabTitle(action, index) {
+        const t = String(action.action_type ?? '').trim();
+        if (!t) {
+            return `Action ${index + 1}`;
+        }
+        const tail = t.includes('.') ? t.split('.').pop() : t;
+        return tail.length > 20 ? `${tail.slice(0, 18)}…` : tail;
     }
     renderActionWizardOverlay() {
         if (!this._actionWizardOpen || !this.hass || !this._visualEdit) {
@@ -3501,24 +3764,98 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!this.hass || !this._visualEdit) {
             return x ``;
         }
-        const primary = this.primaryEntityFromBlock(selected);
-        const parsed = parseDomainService(selected.action_type);
+        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, selected.actions.length - 1));
+        const cur = selected.actions[ai];
+        const primary = this.primaryEntityFromAction(cur);
+        const parsed = parseDomainService(cur.action_type);
         const dom = primary.includes('.') ? primary.split('.')[0] : '';
-        const unknownService = Boolean(primary &&
+        const hasAction = Boolean(String(cur.action_type ?? '').trim());
+        const unknownService = Boolean(hasAction &&
+            primary &&
             parsed &&
             dom &&
             parsed.domain === dom &&
             !servicesForDomain(this.hass, parsed.domain).includes(parsed.service));
         return x `
       <div class="sm-action-entry">
-        ${this.renderActionSummary(selected)}
+        <div class="sm-actions-toolbar" role="tablist" aria-label="Actions du créneau">
+          ${selected.actions.map((a, i) => x `
+              <div class="sm-action-tab-wrap">
+                <button
+                  type="button"
+                  role="tab"
+                  class="sm-action-tab ${i === ai ? 'is-active' : ''}"
+                  aria-selected=${i === ai}
+                  @click=${() => this.visualSelectAction(i)}
+                >
+                  ${this.formatActionTabTitle(a, i)}
+                </button>
+                ${selected.actions.length > 1
+            ? x `
+                      <button
+                        type="button"
+                        class="sm-action-tab-remove"
+                        aria-label="Supprimer cette action"
+                        title="Supprimer cette action"
+                        @click=${() => this.visualRemoveAction(i)}
+                      >
+                        ×
+                      </button>
+                    `
+            : null}
+              </div>
+            `)}
+          <button
+            type="button"
+            class="sm-action-tab sm-action-tab--add"
+            @click=${() => this.visualAddAction()}
+          >
+            + Action
+          </button>
+        </div>
+        ${this.renderActionSummary(cur)}
         <button type="button" class="sm-action-primary-btn" @click=${() => this.openActionWizard()}>
-          ${primary || parsed ? 'Modifier l’action' : '+ Choisir une action'}
+          ${hasAction ? 'Modifier l’action' : '+ Choisir une action'}
         </button>
         ${unknownService
             ? x `<p class="sm-field-hint">
-              Action personnalisée : <code>${selected.action_type}</code>
+              Action personnalisée : <code>${cur.action_type}</code>
             </p>`
+            : null}
+        ${hasAction
+            ? x `
+              <div class="sm-action-entities-quick">
+                <span class="sm-action-entities-quick-title">Entités ciblées</span>
+                <p class="sm-action-entities-quick-hint">
+                  Ajoutez ou retirez des entités sans refaire l’assistant — uniquement celles compatibles
+                  avec <code>${cur.action_type}</code>.
+                </p>
+                <div class="entity-chips">
+                  ${entityIdsFromPayload(cur.action_payload).map((eid) => x `
+                      <span class="entity-chip">
+                        <code>${eid}</code>
+                        <button
+                          type="button"
+                          aria-label="Retirer cette entité"
+                          @click=${() => this.visualRemoveEntityChip(eid)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    `)}
+                </div>
+                <ha-entity-picker
+                  class="sm-action-entities-quick-picker"
+                  .hass=${this.hass}
+                  .entityFilter=${this.entityFilterForConfiguredAction(cur)}
+                  .allowCustomEntity=${true}
+                  label="Ajouter une entité"
+                  .value=${''}
+                  id=${`sm-quick-ep-${this._visualEdit.scheduleId}-${this._visualEdit.selectedIndex}-${ai}-${this._quickEntityPickerNonce}`}
+                  @value-changed=${(e) => this.visualAppendEntity(e)}
+                ></ha-entity-picker>
+              </div>
+            `
             : null}
       </div>
     `;
@@ -3527,13 +3864,11 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!this._visualEdit) {
             return;
         }
-        if (!this.applyPayloadEditorToVisualBlocks()) {
-            return;
-        }
         const { scheduleId, blocks, repeatDays } = this._visualEdit;
         for (const b of blocks) {
-            if (!String(b.action_type ?? '').trim()) {
-                alert('Chaque plage doit avoir un type d’action (service).');
+            const ok = (b.actions || []).some((a) => String(a.action_type ?? '').trim());
+            if (!ok) {
+                alert('Chaque plage doit avoir au moins une action avec un service défini (assistant « Choisir une action »).');
                 return;
             }
         }
@@ -3563,10 +3898,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         if (!modes?.length) {
             return x ``;
         }
-        const cur = String(selected.action_payload?.preset_mode ?? '');
+        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, selected.actions.length - 1));
+        const action = selected.actions[ai];
+        const cur = String(action?.action_payload?.preset_mode ?? '');
         const orphan = cur && !modes.includes(cur);
         return x `
-      <label class="sm-form-label">
+      <label class="sm-form-label sm-form-label-last">
         Mode préréglé
         <select
           class="sm-select"
@@ -3584,10 +3921,12 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
             return null;
         }
         const block = this._visualEdit.blocks[this._visualEdit.selectedIndex];
-        if (!block || block.action_type.trim() !== 'climate.set_preset_mode') {
+        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (block?.actions?.length ?? 1) - 1));
+        const action = block?.actions?.[ai];
+        if (!block || !action || action.action_type.trim() !== 'climate.set_preset_mode') {
             return null;
         }
-        const ids = entityIdsFromPayload(block.action_payload);
+        const ids = entityIdsFromPayload(action.action_payload);
         for (const id of ids) {
             if (!id.startsWith('climate.')) {
                 continue;
@@ -3609,25 +3948,27 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
         const sel = this._visualEdit.selectedIndex;
         const block = this._visualEdit.blocks[sel];
-        if (!block) {
+        const ai = Math.min(this._visualEdit.selectedActionIndex, Math.max(0, (block?.actions?.length ?? 1) - 1));
+        const action = block?.actions?.[ai];
+        if (!block || !action) {
             return;
         }
-        const base = typeof block.action_payload === 'object' && block.action_payload !== null
-            ? { ...block.action_payload }
+        const base = typeof action.action_payload === 'object' && action.action_payload !== null
+            ? { ...action.action_payload }
             : {};
         base.preset_mode = mode;
-        this.visualPatchSelected({ action_payload: base });
-        this.syncPayloadStrFromSelection();
+        this.visualPatchSelectedAction({ action_payload: base });
     }
+    /** Couleur affichée sur la frise : métadonnée sur la première action du créneau. */
     hasCustomBlockColor(block) {
-        const p = block.action_payload;
+        const p = block.actions?.[0]?.action_payload;
         if (!p || typeof p !== 'object') {
             return false;
         }
         return typeof p[SCHEDULE_MANAGER_COLOR_KEY] === 'string';
     }
     blockColorPickerHex(block) {
-        const p = block.action_payload;
+        const p = block.actions?.[0]?.action_payload;
         if (p && typeof p === 'object') {
             const c = p[SCHEDULE_MANAGER_COLOR_KEY];
             if (typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.trim())) {
@@ -3642,14 +3983,23 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
         const sel = this._visualEdit.selectedIndex;
         const block = this._visualEdit.blocks[sel];
-        if (!block) {
+        if (!block?.actions?.length) {
             return;
         }
-        const base = typeof block.action_payload === 'object' && block.action_payload !== null
-            ? { ...block.action_payload }
-            : {};
-        base[SCHEDULE_MANAGER_COLOR_KEY] = hex;
-        this.visualPatchSelected({ action_payload: base });
+        const actions = block.actions.map((a, i) => {
+            if (i !== 0) {
+                return a;
+            }
+            const base = typeof a.action_payload === 'object' && a.action_payload !== null
+                ? { ...a.action_payload }
+                : {};
+            base[SCHEDULE_MANAGER_COLOR_KEY] = hex;
+            return { ...a, action_payload: base };
+        });
+        const next = { ...block, actions };
+        const trial = [...this._visualEdit.blocks];
+        trial[sel] = next;
+        this._visualEdit = { ...this._visualEdit, blocks: trial };
     }
     visualClearBlockColor() {
         if (!this._visualEdit) {
@@ -3657,14 +4007,23 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
         }
         const sel = this._visualEdit.selectedIndex;
         const block = this._visualEdit.blocks[sel];
-        if (!block) {
+        if (!block?.actions?.length) {
             return;
         }
-        const base = typeof block.action_payload === 'object' && block.action_payload !== null
-            ? { ...block.action_payload }
-            : {};
-        delete base[SCHEDULE_MANAGER_COLOR_KEY];
-        this.visualPatchSelected({ action_payload: base });
+        const actions = block.actions.map((a, i) => {
+            if (i !== 0) {
+                return a;
+            }
+            const base = typeof a.action_payload === 'object' && a.action_payload !== null
+                ? { ...a.action_payload }
+                : {};
+            delete base[SCHEDULE_MANAGER_COLOR_KEY];
+            return { ...a, action_payload: base };
+        });
+        const next = { ...block, actions };
+        const trial = [...this._visualEdit.blocks];
+        trial[sel] = next;
+        this._visualEdit = { ...this._visualEdit, blocks: trial };
     }
     renderBlockColorControls(block) {
         const pickerVal = this.blockColorPickerHex(block);
@@ -3882,7 +4241,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                         autocomplete="off"
                         maxlength="8"
                         .value=${haTimeToHHMM(selected.start_time)}
-                        @input=${(e) => this.visualPatchSelected({
+                        @input=${(e) => this.visualPatchBlockFields({
                 start_time: normalizeTimeForHa(e.target.value),
             })}
                       />
@@ -3895,7 +4254,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                         autocomplete="off"
                         maxlength="8"
                         .value=${haTimeToHHMM(selected.end_time)}
-                        @input=${(e) => this.visualPatchSelected({
+                        @input=${(e) => this.visualPatchBlockFields({
                 end_time: normalizeTimeForHa(e.target.value),
             })}
                       />
@@ -3903,21 +4262,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s {
                   </div>
                   ${this.renderBlockColorControls(selected)}
                   <div class="sm-action-card">
-                    <h4>Action pendant cette plage</h4>
+                    <h4>Actions pendant cette plage</h4>
                     ${this.renderActionPlanningControls(selected)}
                     ${this.renderClimatePresetSelect(selected)}
-                    <label class="sm-form-label sm-form-label-last">
-                      Paramètres supplémentaires (JSON, sans
-                      <code>entity_id</code>
-                      — défini ci‑dessus ; plusieurs entités possibles ici si besoin)
-                      <textarea
-                        class="sm-payload-textarea"
-                        .value=${this._visualPayloadStr}
-                        @input=${(e) => {
-                this._visualPayloadStr = e.target.value;
-            }}
-                      ></textarea>
-                    </label>
                   </div>
                 </div>
               `
@@ -3979,9 +4326,6 @@ __decorate([
 ], ScheduleManagerCard.prototype, "_visualEdit", void 0);
 __decorate([
     t$1()
-], ScheduleManagerCard.prototype, "_visualPayloadStr", void 0);
-__decorate([
-    t$1()
 ], ScheduleManagerCard.prototype, "_actionWizardOpen", void 0);
 __decorate([
     t$1()
@@ -3995,6 +4339,9 @@ __decorate([
 __decorate([
     t$1()
 ], ScheduleManagerCard.prototype, "_actionWizardEntityId", void 0);
+__decorate([
+    t$1()
+], ScheduleManagerCard.prototype, "_quickEntityPickerNonce", void 0);
 __decorate([
     t$1()
 ], ScheduleManagerCard.prototype, "_editorFriseWidth", void 0);

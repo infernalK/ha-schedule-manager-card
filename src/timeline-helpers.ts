@@ -1,4 +1,5 @@
-import type { TimeBlock } from './types';
+import { newEmptyAction } from './block-model';
+import type { BlockAction, TimeBlock } from './types';
 
 export const MINUTES_PER_DAY = 24 * 60;
 
@@ -99,8 +100,11 @@ export function timeStringToMinutes(t: string): number {
   return parseToMinutes(t);
 }
 
-export function segmentLabel(block: TimeBlock): string {
-  const p = block.action_payload;
+function segmentLabelOne(action: BlockAction): string {
+  if (!String(action.action_type ?? '').trim()) {
+    return '—';
+  }
+  const p = action.action_payload;
   if (p && typeof p === 'object') {
     const rec = p as Record<string, unknown>;
     if (rec.preset_mode !== undefined) {
@@ -113,10 +117,29 @@ export function segmentLabel(block: TimeBlock): string {
       return `${String(rec.position)}%`;
     }
   }
-  const tail = block.action_type.includes('.')
-    ? block.action_type.split('.').pop()!
-    : block.action_type;
+  const tail = action.action_type.includes('.')
+    ? action.action_type.split('.').pop()!
+    : action.action_type;
   return tail.length > 14 ? `${tail.slice(0, 12)}…` : tail;
+}
+
+export function segmentLabel(block: TimeBlock): string {
+  const actions = block.actions || [];
+  const configured = actions.filter((a) => String(a.action_type ?? '').trim());
+  if (configured.length === 0) {
+    return '—';
+  }
+  const labels = configured.map((a) => segmentLabelOne(a));
+  if (labels.length === 1) {
+    return labels[0]!;
+  }
+  const first = labels[0]!;
+  const suffix = ` +${labels.length - 1}`;
+  const maxMain = Math.max(4, 14 - suffix.length);
+  if (first.length > maxMain) {
+    return `${first.slice(0, maxMain)}…${suffix}`;
+  }
+  return `${first}${suffix}`;
 }
 
 function hueFromLabel(label: string): number {
@@ -130,22 +153,28 @@ function hueFromLabel(label: string): number {
 /** Même teinte que les segments de la frise (pastilles liste / barres). */
 export function hueForBlock(block: TimeBlock): number {
   const label = segmentLabel(block);
-  return hueFromLabel(`${label}-${block.action_type}`);
+  const key = (block.actions || [])
+    .map((a) => a.action_type)
+    .filter(Boolean)
+    .join(',');
+  return hueFromLabel(`${label}-${key}`);
 }
 
 /** Couleur de remplissage segment (#hex ou hsl dérivé du bloc). */
 export function blockTimelineFill(block: TimeBlock): string {
-  const p = block.action_payload;
-  if (p && typeof p === 'object') {
-    const raw = (p as Record<string, unknown>)[SCHEDULE_MANAGER_COLOR_KEY];
-    if (typeof raw === 'string') {
-      const c = raw.trim();
-      if (/^#[0-9A-Fa-f]{6}$/.test(c)) {
-        return c;
-      }
-      if (/^#[0-9A-Fa-f]{3}$/.test(c)) {
-        const h = c.slice(1);
-        return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+  for (const a of block.actions || []) {
+    const p = a.action_payload;
+    if (p && typeof p === 'object') {
+      const raw = (p as Record<string, unknown>)[SCHEDULE_MANAGER_COLOR_KEY];
+      if (typeof raw === 'string') {
+        const c = raw.trim();
+        if (/^#[0-9A-Fa-f]{6}$/.test(c)) {
+          return c;
+        }
+        if (/^#[0-9A-Fa-f]{3}$/.test(c)) {
+          const h = c.slice(1);
+          return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+        }
       }
     }
   }
@@ -329,8 +358,7 @@ export function tryInsertSlotAtDayStart(
   const newBlock = (): TimeBlock => ({
     start_time: '00:00:00',
     end_time: minuteToHaTimeForSchedule(slot),
-    action_type: 'climate.set_preset_mode',
-    action_payload: { preset_mode: 'comfort' },
+    actions: [newEmptyAction()],
   });
 
   if (first.iv.start >= slot) {
