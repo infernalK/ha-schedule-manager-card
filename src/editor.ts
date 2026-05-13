@@ -143,37 +143,38 @@ export class ScheduleManagerCardEditor extends LitElement {
   `;
 
   setConfig(config: CardConfig) {
-    this._applyIncomingConfigRecord(config);
+    if (!config || typeof config !== 'object') {
+      return;
+    }
+    const merged = this._mergeLovelaceShallow(this._config, config);
+    this._applyIncomingConfigRecord(merged);
     this._userClearedStatusEntity = false;
     // Référence distincte : évite que Lovelace et Lit partagent la même référence mutable.
     this.config = { ...(this._config as object) } as CardConfig;
     this.requestUpdate();
   }
 
-  /** Normalise une config HA → état local `_config` (fusion : les clés absentes de l’objet entrant ne suppriment pas les valeurs déjà connues — évite les setConfig / host.value partiels qui effaçaient `schedule_ids`, etc.). */
+  /**
+   * Fusion superficielle : les clés absentes de `incoming` ne retirent pas les valeurs déjà dans `prev`
+   * (setConfig / host.value souvent partiels côté Lovelace).
+   */
+  private _mergeLovelaceShallow(prev: CardConfig | undefined, incoming: CardConfig): CardConfig {
+    const p = { ...((prev ?? {}) as unknown as object) } as Record<string, unknown>;
+    const inc = this._configWithoutUndefinedKeys(incoming as unknown as Record<string, unknown>);
+    return { ...p, ...inc, type: 'custom:schedule-manager-card' } as unknown as CardConfig;
+  }
+
+  /** Normalise une config HA → état local `_config`. */
   private _applyIncomingConfigRecord(config: CardConfig) {
-    const raw = config as unknown as Record<string, unknown>;
-    const prev = this._configWithoutUndefinedKeys(
-      (this._config ?? {}) as Record<string, unknown>
+    const base = this._configWithoutUndefinedKeys(
+      config as unknown as Record<string, unknown>
     );
-    const merged: Record<string, unknown> = { ...prev };
-
-    for (const key of Object.keys(raw)) {
-      const v = raw[key];
-      if (v !== undefined) {
-        merged[key] = v;
-      } else {
-        delete merged[key];
-      }
-    }
-
-    const sid = merged.schedule_ids;
+    const sid = base.schedule_ids;
     if (Array.isArray(sid)) {
-      merged.schedule_ids = [...sid];
+      base.schedule_ids = [...sid];
     }
-
     this._config = {
-      ...merged,
+      ...base,
       type: 'custom:schedule-manager-card',
     } as CardConfig;
     const te = this._headerTitleRef.value;
@@ -212,6 +213,18 @@ export class ScheduleManagerCardEditor extends LitElement {
       return;
     }
     const raw = { ...(hostVal as object) } as Record<string, unknown>;
+    // `host.value` est souvent partiel ou vide au premier tick ; compléter avec la prop `config`
+    // (Lovelace l’injecte parfois après le microtask / avant que host soit à jour).
+    if (this.config && typeof this.config === 'object') {
+      const prop = this._configWithoutUndefinedKeys(
+        this.config as unknown as Record<string, unknown>
+      );
+      for (const [k, v] of Object.entries(prop)) {
+        if (!(k in raw) && v !== undefined) {
+          raw[k] = v;
+        }
+      }
+    }
     // Le parent n’expose parfois pas encore `schedule_ids` alors que la vue enregistrée le contient :
     // ne pas écraser la liste explicite locale avec un objet incomplet.
     if (
@@ -232,12 +245,22 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+    // Après la pile courante : laisse le temps à Lovelace d’appeler `setConfig` / d’assigner `config`.
+    window.setTimeout(() => this._pullConfigFromEditorHostIfStale(), 0);
   }
 
   protected firstUpdated(_changed: PropertyValues) {
     super.firstUpdated(_changed);
-    queueMicrotask(() => this._pullConfigFromEditorHostIfStale());
+    window.setTimeout(() => this._pullConfigFromEditorHostIfStale(), 0);
+  }
+
+  protected willUpdate(_changed: PropertyValues) {
+    super.willUpdate(_changed);
+    if (!this._config && this.config && typeof this.config === 'object') {
+      this._applyIncomingConfigRecord(
+        this._mergeLovelaceShallow(undefined, this.config)
+      );
+    }
   }
 
   /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
@@ -264,7 +287,9 @@ export class ScheduleManagerCardEditor extends LitElement {
       const prev = changed.get('config') as CardConfig | undefined;
       if (this.config !== prev) {
         if (editorConfigFingerprint(this.config) !== editorConfigFingerprint(this._config)) {
-          this._applyIncomingConfigRecord(this.config);
+          this._applyIncomingConfigRecord(
+            this._mergeLovelaceShallow(this._config, this.config)
+          );
         }
       }
     }
