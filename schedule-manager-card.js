@@ -3194,26 +3194,28 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     /**
      * Recharge l’état local depuis la valeur du conteneur Lovelace lorsqu’elle diffère de `_config`
      * (réouverture de l’éditeur, rechargement du YAML, etc.).
+     *
+     * La prop `config` est la source de vérité une fois que Lovelace l’a injectée : `host.value` peut
+     * rester en retard ou contenir un ancien brouillon — l’utiliser en priorité écrasait la config
+     * réellement enregistrée (YAML correct sur la page config, autre chose en mode édition tableau).
      */
     _pullConfigFromEditorHostIfStale() {
-        const host = this._editorParentHost();
-        if (!host) {
-            return;
-        }
-        const hostVal = host.value;
-        if (!hostVal || typeof hostVal !== 'object') {
-            return;
-        }
-        const raw = { ...hostVal };
-        // `host.value` est souvent partiel ou vide au premier tick ; compléter avec la prop `config`
-        // (Lovelace l’injecte parfois après le microtask / avant que host soit à jour).
+        let raw = null;
         if (this.config && typeof this.config === 'object') {
-            const prop = this._configWithoutUndefinedKeys(this.config);
-            for (const [k, v] of Object.entries(prop)) {
-                if (!(k in raw) && v !== undefined) {
-                    raw[k] = v;
-                }
+            raw = {
+                ...this._configWithoutUndefinedKeys(this.config),
+            };
+        }
+        else {
+            const host = this._editorParentHost();
+            if (!host) {
+                return;
             }
+            const hostVal = host.value;
+            if (!hostVal || typeof hostVal !== 'object') {
+                return;
+            }
+            raw = { ...hostVal };
         }
         // Le parent n’expose parfois pas encore `schedule_ids` alors que la vue enregistrée le contient :
         // ne pas écraser la liste explicite locale avec un objet incomplet.
