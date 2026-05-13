@@ -150,17 +150,30 @@ export class ScheduleManagerCardEditor extends LitElement {
     this.requestUpdate();
   }
 
-  /** Normalise une config HA → état local `_config` (sans toucher à `this.config`). */
+  /** Normalise une config HA → état local `_config` (fusion : les clés absentes de l’objet entrant ne suppriment pas les valeurs déjà connues — évite les setConfig / host.value partiels qui effaçaient `schedule_ids`, etc.). */
   private _applyIncomingConfigRecord(config: CardConfig) {
-    const base = this._configWithoutUndefinedKeys(
-      config as unknown as Record<string, unknown>
+    const raw = config as unknown as Record<string, unknown>;
+    const prev = this._configWithoutUndefinedKeys(
+      (this._config ?? {}) as Record<string, unknown>
     );
-    const sid = base.schedule_ids;
-    if (Array.isArray(sid)) {
-      base.schedule_ids = [...sid];
+    const merged: Record<string, unknown> = { ...prev };
+
+    for (const key of Object.keys(raw)) {
+      const v = raw[key];
+      if (v !== undefined) {
+        merged[key] = v;
+      } else {
+        delete merged[key];
+      }
     }
+
+    const sid = merged.schedule_ids;
+    if (Array.isArray(sid)) {
+      merged.schedule_ids = [...sid];
+    }
+
     this._config = {
-      ...base,
+      ...merged,
       type: 'custom:schedule-manager-card',
     } as CardConfig;
     const te = this._headerTitleRef.value;
@@ -194,16 +207,27 @@ export class ScheduleManagerCardEditor extends LitElement {
     if (!host) {
       return;
     }
-    const raw = host.value;
-    if (!raw || typeof raw !== 'object') {
+    const hostVal = host.value;
+    if (!hostVal || typeof hostVal !== 'object') {
       return;
     }
-    const remoteFp = editorConfigFingerprint(raw as CardConfig);
+    const raw = { ...(hostVal as object) } as Record<string, unknown>;
+    // Le parent n’expose parfois pas encore `schedule_ids` alors que la vue enregistrée le contient :
+    // ne pas écraser la liste explicite locale avec un objet incomplet.
+    if (
+      !('schedule_ids' in raw) &&
+      this._config &&
+      Array.isArray(this._config.schedule_ids) &&
+      this._config.schedule_ids.length > 0
+    ) {
+      raw.schedule_ids = [...this._config.schedule_ids];
+    }
+    const remoteFp = editorConfigFingerprint(raw as unknown as CardConfig);
     const localFp = editorConfigFingerprint(this._config);
     if (remoteFp === localFp) {
       return;
     }
-    this.setConfig(raw as CardConfig);
+    this.setConfig(raw as unknown as CardConfig);
   }
 
   connectedCallback() {

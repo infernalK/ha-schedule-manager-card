@@ -3117,15 +3117,26 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         this.config = { ...this._config };
         this.requestUpdate();
     }
-    /** Normalise une config HA → état local `_config` (sans toucher à `this.config`). */
+    /** Normalise une config HA → état local `_config` (fusion : les clés absentes de l’objet entrant ne suppriment pas les valeurs déjà connues — évite les setConfig / host.value partiels qui effaçaient `schedule_ids`, etc.). */
     _applyIncomingConfigRecord(config) {
-        const base = this._configWithoutUndefinedKeys(config);
-        const sid = base.schedule_ids;
+        const raw = config;
+        const prev = this._configWithoutUndefinedKeys((this._config ?? {}));
+        const merged = { ...prev };
+        for (const key of Object.keys(raw)) {
+            const v = raw[key];
+            if (v !== undefined) {
+                merged[key] = v;
+            }
+            else {
+                delete merged[key];
+            }
+        }
+        const sid = merged.schedule_ids;
         if (Array.isArray(sid)) {
-            base.schedule_ids = [...sid];
+            merged.schedule_ids = [...sid];
         }
         this._config = {
-            ...base,
+            ...merged,
             type: 'custom:schedule-manager-card',
         };
         const te = this._headerTitleRef.value;
@@ -3157,9 +3168,18 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         if (!host) {
             return;
         }
-        const raw = host.value;
-        if (!raw || typeof raw !== 'object') {
+        const hostVal = host.value;
+        if (!hostVal || typeof hostVal !== 'object') {
             return;
+        }
+        const raw = { ...hostVal };
+        // Le parent n’expose parfois pas encore `schedule_ids` alors que la vue enregistrée le contient :
+        // ne pas écraser la liste explicite locale avec un objet incomplet.
+        if (!('schedule_ids' in raw) &&
+            this._config &&
+            Array.isArray(this._config.schedule_ids) &&
+            this._config.schedule_ids.length > 0) {
+            raw.schedule_ids = [...this._config.schedule_ids];
         }
         const remoteFp = editorConfigFingerprint(raw);
         const localFp = editorConfigFingerprint(this._config);
