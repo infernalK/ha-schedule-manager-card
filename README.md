@@ -24,6 +24,8 @@ Carte Lovelace pour afficher et piloter les plannings de l’intégration **Sche
 3. Catégorie : **Tableau de bord** (ou **Lovelace** selon la version de HACS) — **pas** « Intégration ».
 4. Validez, puis onglet **Tableau de bord** → recherchez **Schedule Manager Card** → **Télécharger**.
 
+Lien d’installation rapide (à adapter à votre instance) : [my.home-assistant.io → hacs_repository](https://my.home-assistant.io/create-link/?redirect=hacs_repository) avec l’URL du dépôt ci-dessus.
+
 **Erreur HACS : « Repository structure for main is not compliant »** : HACS vérifie que le fichier indiqué dans `hacs.json` (`schedule-manager-card.js`) **existe bien à la racine de la branche `main` sur GitHub**. Sans ce fichier compilé, l’ajout du dépôt est toujours refusé. Ce dépôt inclut le JS généré ; après un clone, exécutez `npm ci && npm run build`, commitez `schedule-manager-card.js`, puis poussez vers `main`. Vous pouvez aussi lancer l’action **Build bundle** sur GitHub si elle est configurée.
 
 Après installation HACS : **Paramètres** → **Appareils et services** → **Ressources** (ou via le tableau de bord) → vérifiez que la ressource pointe vers le fichier JS de la carte en **module JavaScript**.
