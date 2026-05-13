@@ -403,7 +403,7 @@ export const styles = css`
     display: inline-block;
     width: auto;
     max-width: 100%;
-    margin: 4px 0 12px;
+    margin: 0 0 12px;
     padding: 6px 2px;
     border: none;
     border-radius: 4px;

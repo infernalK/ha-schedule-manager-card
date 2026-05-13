@@ -292,7 +292,7 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
       'Shows or hides the switch to the right of each schedule name (integration side).',
     'editor.show_repeat_days_on_card_label': 'Show repeat days on the card',
     'editor.show_repeat_days_on_card_hint':
-      'When enabled, each schedule shows which weekdays it runs (between the title row and “Configure time slots…”).',
+      'When enabled, each schedule shows which weekdays it runs (below the title, above the 24-hour bar).',
     'editor.status_entity_label': 'Schedule Manager status entity',
     'editor.schedules_on_card_title': 'Schedules to show on the card',
     'editor.schedules_on_card_hint':
@@ -432,7 +432,7 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
       'Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté intégration).',
     'editor.show_repeat_days_on_card_label': 'Afficher les jours de répétition sur la carte',
     'editor.show_repeat_days_on_card_hint':
-      'Si activé, chaque planning indique les jours de la semaine concernés (entre le titre et « Configurer les plages… »).',
+      'Si activé, chaque planning indique les jours de la semaine concernés (sous le titre, au-dessus de la frise horaire).',
     'editor.status_entity_label': 'Capteur d’état Schedule Manager',
     'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
     'editor.schedules_on_card_hint':

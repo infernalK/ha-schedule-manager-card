@@ -771,14 +771,6 @@ export class ScheduleManagerCard extends LitElement {
             : html``}
         </div>
         ${this.renderScheduleRepeatDays(schedule)}
-        <button
-          type="button"
-          class="btn-open-config"
-          @click=${() => this.openVisualEditor(schedule)}
-        >
-          ${msg(this.hass, 'card.configure_slots')}
-        </button>
-
         ${blocks.length
           ? html`${this.renderDayTimeline(blocks)}`
           : html`
@@ -786,6 +778,13 @@ export class ScheduleManagerCard extends LitElement {
                 ${msg(this.hass, 'card.no_slots_hint')}
               </div>
             `}
+        <button
+          type="button"
+          class="btn-open-config"
+          @click=${() => this.openVisualEditor(schedule)}
+        >
+          ${msg(this.hass, 'card.configure_slots')}
+        </button>
       </div>
     `;
   }
