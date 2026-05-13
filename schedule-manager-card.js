@@ -2830,10 +2830,15 @@ function entityIdsFromPayload(payload) {
     }
     const e = payload.entity_id;
     if (typeof e === 'string') {
-        return [e];
+        const t = e.trim();
+        return t && t.includes('.') ? [t] : [];
     }
     if (Array.isArray(e)) {
-        return e.filter((x) => typeof x === 'string');
+        const raw = e
+            .filter((x) => typeof x === 'string')
+            .map((x) => x.trim())
+            .filter((x) => x.includes('.'));
+        return [...new Set(raw)];
     }
     return [];
 }
@@ -3805,7 +3810,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
     primaryEntityFromAction(action) {
         return entityIdsFromPayload(action.action_payload)[0] ?? '';
     }
-    /** Première entité ciblée dans le payload (pour l’UI et les services). */
+    /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
     entityFilterForConfiguredAction(selected) {
         const actionType = String(selected.action_type ?? '').trim();
         const hass = this.hass;
@@ -3817,17 +3822,23 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             return entityCompatibleWithAction(entityId, actionType, hass);
         };
     }
-    /** Entités `hass.states` compatibles avec l’action (même règles que l’ancien picker HA). */
+    /** Entités `hass.states` compatibles avec l’action, hors `excludeEntityIds` (déjà ciblées). */
     compatibleEntityChoicesForAction(action, excludeEntityIds) {
         const hass = this.hass;
         if (!hass) {
             return [];
         }
+        const actionType = String(action.action_type ?? '').trim();
+        const parsed = parseDomainService(actionType);
+        const domainPrefix = parsed?.domain ? `${parsed.domain}.` : null;
         const filterFn = this.entityFilterForConfiguredAction(action);
-        const omit = new Set(excludeEntityIds);
+        const omit = new Set(excludeEntityIds.filter((id) => id.includes('.')));
         const out = [];
         for (const id of Object.keys(hass.states)) {
             if (!id.includes('.') || omit.has(id)) {
+                continue;
+            }
+            if (domainPrefix && !id.startsWith(domainPrefix)) {
                 continue;
             }
             const st = hass.states[id];
@@ -3866,9 +3877,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
             return x ``;
         }
         const payloadIds = entityIdsFromPayload(action.action_payload);
-        const exclude = mode === 'replace' && oldEntityId
-            ? payloadIds.filter((id) => id !== oldEntityId)
-            : payloadIds;
+        const exclude = payloadIds;
         const rows = this.compatibleEntityChoicesForAction(action, exclude);
         const q = this._entityManualListSearch.trim().toLowerCase();
         const filtered = q === ''
@@ -4488,7 +4497,8 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$1 {
                         <span class="sm-action-entities-quick-title">Entités ciblées</span>
                         <p class="sm-action-entities-quick-hint">
                           Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » puis
-                          choisissez dans la liste (recherche et pastilles comme dans Home Assistant) —
+                          choisissez dans la liste (recherche et lignes avec icône comme le sélecteur
+                          d’entités Home Assistant) —
                           compatible avec <code>${action.action_type}</code>.
                         </p>
                         <div class="entity-chips">

@@ -99,10 +99,15 @@ function entityIdsFromPayload(payload: unknown): string[] {
   }
   const e = (payload as Record<string, unknown>).entity_id;
   if (typeof e === 'string') {
-    return [e];
+    const t = e.trim();
+    return t && t.includes('.') ? [t] : [];
   }
   if (Array.isArray(e)) {
-    return e.filter((x): x is string => typeof x === 'string');
+    const raw = e
+      .filter((x): x is string => typeof x === 'string')
+      .map((x) => x.trim())
+      .filter((x) => x.includes('.'));
+    return [...new Set(raw)];
   }
   return [];
 }
@@ -1225,7 +1230,7 @@ export class ScheduleManagerCard extends LitElement {
     return entityIdsFromPayload(action.action_payload)[0] ?? '';
   }
 
-  /** Première entité ciblée dans le payload (pour l’UI et les services). */
+  /** Filtre le sélecteur d’entités selon le service configuré (strict, jamais « tout autoriser »). */
   private entityFilterForConfiguredAction(
     selected: BlockAction
   ): (entity: unknown) => boolean {
@@ -1240,7 +1245,7 @@ export class ScheduleManagerCard extends LitElement {
     };
   }
 
-  /** Entités `hass.states` compatibles avec l’action (même règles que l’ancien picker HA). */
+  /** Entités `hass.states` compatibles avec l’action, hors `excludeEntityIds` (déjà ciblées). */
   private compatibleEntityChoicesForAction(
     action: BlockAction,
     excludeEntityIds: readonly string[]
@@ -1249,11 +1254,17 @@ export class ScheduleManagerCard extends LitElement {
     if (!hass) {
       return [];
     }
+    const actionType = String(action.action_type ?? '').trim();
+    const parsed = parseDomainService(actionType);
+    const domainPrefix = parsed?.domain ? `${parsed.domain}.` : null;
     const filterFn = this.entityFilterForConfiguredAction(action);
-    const omit = new Set(excludeEntityIds);
+    const omit = new Set(excludeEntityIds.filter((id) => id.includes('.')));
     const out: { id: string; name: string }[] = [];
     for (const id of Object.keys(hass.states)) {
       if (!id.includes('.') || omit.has(id)) {
+        continue;
+      }
+      if (domainPrefix && !id.startsWith(domainPrefix)) {
         continue;
       }
       const st = hass.states[id];
@@ -1302,10 +1313,7 @@ export class ScheduleManagerCard extends LitElement {
       return html``;
     }
     const payloadIds = entityIdsFromPayload(action.action_payload);
-    const exclude =
-      mode === 'replace' && oldEntityId
-        ? payloadIds.filter((id) => id !== oldEntityId)
-        : payloadIds;
+    const exclude = payloadIds;
     const rows = this.compatibleEntityChoicesForAction(action, exclude);
     const q = this._entityManualListSearch.trim().toLowerCase();
     const filtered =
