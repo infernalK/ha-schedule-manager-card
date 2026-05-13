@@ -250,8 +250,6 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.remove_action_title': 'Remove this action',
     'card.remove': 'Remove',
     'card.target_entities_title': 'Target entities',
-    'card.target_entities_hint':
-      'Click an entity to replace it, × to remove, or “+” then pick from the list (search and rows with icons like Home Assistant’s entity picker). Compatible with ',
     'card.replace_entity': 'Replace entity',
     'card.replace_entity_chip_aria': 'Replace {name}',
     'card.close_picker_aria': 'Close picker',
@@ -385,8 +383,6 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.remove_action_title': 'Supprimer cette action',
     'card.remove': 'Supprimer',
     'card.target_entities_title': 'Entités ciblées',
-    'card.target_entities_hint':
-      'Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » puis choisissez dans la liste (recherche et lignes avec icône comme le sélecteur d’entités Home Assistant). Compatible avec ',
     'card.replace_entity': 'Remplacer l’entité',
     'card.replace_entity_chip_aria': 'Remplacer {name}',
     'card.close_picker_aria': 'Fermer le sélecteur',

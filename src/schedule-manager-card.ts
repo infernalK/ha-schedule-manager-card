@@ -2019,10 +2019,6 @@ export class ScheduleManagerCard extends LitElement {
                   ? html`
                       <div class="sm-action-entities-quick">
                         <span class="sm-action-entities-quick-title">${msg(hass, 'card.target_entities_title')}</span>
-                        <p class="sm-action-entities-quick-hint">
-                          ${msg(hass, 'card.target_entities_hint')}
-                          <code>${action.action_type}</code>.
-                        </p>
                         <div class="entity-chips">
                           ${entityIdsFromPayload(action.action_payload).map(
                             (eid) => html`

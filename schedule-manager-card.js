@@ -1525,19 +1525,7 @@ const styles = i$4 `
     font-size: 0.78em;
     font-weight: 600;
     color: var(--secondary-text-color);
-    margin-bottom: 4px;
-  }
-
-  .sm-action-entities-quick-hint {
-    margin: 0 0 8px;
-    font-size: 0.72em;
-    line-height: 1.35;
-    color: var(--secondary-text-color);
-  }
-
-  .sm-action-entities-quick-hint code {
-    font-size: 0.95em;
-    word-break: break-all;
+    margin-bottom: 8px;
   }
 
   /* Assistant plein écran au-dessus du modal d’édition */
@@ -1996,7 +1984,6 @@ const MESSAGES = {
         'card.remove_action_title': 'Remove this action',
         'card.remove': 'Remove',
         'card.target_entities_title': 'Target entities',
-        'card.target_entities_hint': 'Click an entity to replace it, × to remove, or “+” then pick from the list (search and rows with icons like Home Assistant’s entity picker). Compatible with ',
         'card.replace_entity': 'Replace entity',
         'card.replace_entity_chip_aria': 'Replace {name}',
         'card.close_picker_aria': 'Close picker',
@@ -2112,7 +2099,6 @@ const MESSAGES = {
         'card.remove_action_title': 'Supprimer cette action',
         'card.remove': 'Supprimer',
         'card.target_entities_title': 'Entités ciblées',
-        'card.target_entities_hint': 'Cliquez sur une entité pour la remplacer, × pour la retirer, ou « + » puis choisissez dans la liste (recherche et lignes avec icône comme le sélecteur d’entités Home Assistant). Compatible avec ',
         'card.replace_entity': 'Remplacer l’entité',
         'card.replace_entity_chip_aria': 'Remplacer {name}',
         'card.close_picker_aria': 'Fermer le sélecteur',
@@ -5234,10 +5220,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
                 ? x `
                       <div class="sm-action-entities-quick">
                         <span class="sm-action-entities-quick-title">${msg(hass, 'card.target_entities_title')}</span>
-                        <p class="sm-action-entities-quick-hint">
-                          ${msg(hass, 'card.target_entities_hint')}
-                          <code>${action.action_type}</code>.
-                        </p>
                         <div class="entity-chips">
                           ${entityIdsFromPayload(action.action_payload).map((eid) => x `
                               <span class="entity-chip" title=${eid}>

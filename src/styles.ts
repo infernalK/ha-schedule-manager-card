@@ -1325,19 +1325,7 @@ export const styles = css`
     font-size: 0.78em;
     font-weight: 600;
     color: var(--secondary-text-color);
-    margin-bottom: 4px;
-  }
-
-  .sm-action-entities-quick-hint {
-    margin: 0 0 8px;
-    font-size: 0.72em;
-    line-height: 1.35;
-    color: var(--secondary-text-color);
-  }
-
-  .sm-action-entities-quick-hint code {
-    font-size: 0.95em;
-    word-break: break-all;
+    margin-bottom: 8px;
   }
 
   /* Assistant plein écran au-dessus du modal d’édition */
