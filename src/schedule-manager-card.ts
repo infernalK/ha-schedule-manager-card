@@ -2216,6 +2216,8 @@ export class ScheduleManagerCard extends LitElement {
       });
       this.closeVisualEditor();
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`Enregistrement impossible : ${msg}`);
       // eslint-disable-next-line no-console
       console.error('schedule_manager.update_schedule failed', e);
     }
