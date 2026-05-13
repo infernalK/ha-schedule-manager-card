@@ -370,6 +370,7 @@ const styles = i$4 `
 
   .sm-scheduler-track--editor .sm-slot {
     cursor: pointer;
+    touch-action: manipulation;
   }
 
   .sm-scheduler-track--editor .sm-slot.is-selected {
@@ -388,6 +389,11 @@ const styles = i$4 `
 
   .sm-slot--cap-end {
     border-radius: 0 10px 10px 0;
+  }
+
+  /* Une seule plage sur la frise : les deux classes s’appliquent — sans cette règle, cap-end écrase cap-start (bord gauche carré). */
+  .sm-slot--cap-start.sm-slot--cap-end {
+    border-radius: 10px;
   }
 
   .sm-slot:hover {
@@ -721,8 +727,19 @@ const styles = i$4 `
   }
 
   .sm-editor-frise {
-    margin: 0 16px 12px;
+    /* Pas de marge horizontale : avec width:100% sur .timeline-frise cela dépassait le modal (100% + 32px). */
+    margin: 0 0 12px;
     min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  /* Frise éditeur : un peu plus d’air pour les poignées (translateX -50% sur les bords). */
+  .timeline-frise.sm-editor-frise {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .sm-color-field {
@@ -1002,16 +1019,6 @@ const styles = i$4 `
     margin-right: auto;
   }
 
-  .sm-editor-frise {
-    overflow-x: visible;
-    overflow-y: visible;
-  }
-
-  .sm-scheduler-track--editor .sm-slot {
-    touch-action: manipulation;
-  }
-
-  /* Poignées : centrées sur l’heure (translateX dans le style inline), pas deux disques noirs collés */
   .sm-scheduler-handle {
     position: absolute;
     top: 0;
