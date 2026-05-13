@@ -275,6 +275,8 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.handle_start_time': 'Drag to change start time',
     'card.modal_close': '×',
     'card.repeat_days': 'Repeat days',
+    'card.repeat_days_all_short': 'Every day',
+    'card.repeat_days_row_aria': 'Repeat days for this schedule',
     'card.no_slots_editor': 'No slots — use “+ Add slot” above.',
     'card.start_time_label': 'Start time (HH:MM)',
     'card.no_entity_selected': 'No entity selected',
@@ -288,6 +290,9 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'editor.schedule_toggle_label': 'Per-schedule on/off switch',
     'editor.schedule_toggle_hint':
       'Shows or hides the switch to the right of each schedule name (integration side).',
+    'editor.show_repeat_days_on_card_label': 'Show repeat days on the card',
+    'editor.show_repeat_days_on_card_hint':
+      'When enabled, each schedule shows which weekdays it runs (between the title row and “Configure time slots…”).',
     'editor.status_entity_label': 'Schedule Manager status entity',
     'editor.schedules_on_card_title': 'Schedules to show on the card',
     'editor.schedules_on_card_hint':
@@ -409,6 +414,8 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.handle_start_time': 'Glisser pour modifier l’heure de début',
     'card.modal_close': '×',
     'card.repeat_days': 'Jours de répétition',
+    'card.repeat_days_all_short': 'Tous les jours',
+    'card.repeat_days_row_aria': 'Jours de répétition pour ce planning',
     'card.no_slots_editor': 'Aucune plage — utilisez « + Ajouter une plage » ci-dessus.',
     'card.start_time_label': 'Heure de début (HH:MM)',
     'card.no_entity_selected': 'Aucune entité sélectionnée',
@@ -423,6 +430,9 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'editor.schedule_toggle_label': 'Interrupteur actif / inactif par planning',
     'editor.schedule_toggle_hint':
       'Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté intégration).',
+    'editor.show_repeat_days_on_card_label': 'Afficher les jours de répétition sur la carte',
+    'editor.show_repeat_days_on_card_hint':
+      'Si activé, chaque planning indique les jours de la semaine concernés (entre le titre et « Configurer les plages… »).',
     'editor.status_entity_label': 'Capteur d’état Schedule Manager',
     'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
     'editor.schedules_on_card_hint':

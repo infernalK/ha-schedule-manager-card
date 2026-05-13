@@ -65,6 +65,8 @@ export interface CardConfig {
   header_title?: string;
   /** Si `false`, masque l’interrupteur actif/inactif sur chaque planning (défaut: affiché). */
   show_schedule_enable_toggle?: boolean;
+  /** Si `false`, masque la ligne des jours de répétition sous chaque planning (défaut: affichée). */
+  show_repeat_days_on_card?: boolean;
 }
 
 /** Titre affiché lorsque `header_title` est vide / absent. */

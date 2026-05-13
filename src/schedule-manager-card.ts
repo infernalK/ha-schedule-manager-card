@@ -243,6 +243,7 @@ function scheduleManagerCardConfigChanged(
           header_title: c.header_title,
           show_header: c.show_header,
           show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+          show_repeat_days_on_card: c.show_repeat_days_on_card,
           schedule_ids: c.schedule_ids ?? null,
         })
       : '';
@@ -562,6 +563,55 @@ export class ScheduleManagerCard extends LitElement {
     return html`${list.map((s) => this.renderSchedule(s))}`;
   }
 
+  private _showRepeatDaysOnCard(): boolean {
+    return this.config?.show_repeat_days_on_card !== false;
+  }
+
+  /** Jours affichés sur la carte : `all` si absent / complet sur la semaine. */
+  private scheduleRepeatDaysDisplay(schedule: Schedule): number[] | 'all' {
+    const raw = schedule.repeat_days;
+    if (!raw || raw.length === 0) {
+      return 'all';
+    }
+    const uniq = [
+      ...new Set(
+        raw.filter((d): d is number => typeof d === 'number' && d >= 0 && d <= 6)
+      ),
+    ].sort((a, b) => a - b);
+    if (uniq.length === 0) {
+      return 'all';
+    }
+    if (uniq.length === 7) {
+      return 'all';
+    }
+    return uniq;
+  }
+
+  private renderScheduleRepeatDays(schedule: Schedule) {
+    if (!this._showRepeatDaysOnCard()) {
+      return html``;
+    }
+    const hass = this.hass;
+    const mode = this.scheduleRepeatDaysDisplay(schedule);
+    return html`
+      <div
+        class="sm-schedule-repeat-days"
+        role="group"
+        aria-label=${msg(hass, 'card.repeat_days_row_aria')}
+      >
+        ${mode === 'all'
+          ? html`<span class="sm-schedule-repeat-pill sm-schedule-repeat-pill--all">${msg(
+              hass,
+              'card.repeat_days_all_short'
+            )}</span>`
+          : mode.map(
+              (d) =>
+                html`<span class="sm-schedule-repeat-pill">${weekdayShort(hass, d)}</span>`
+            )}
+      </div>
+    `;
+  }
+
   /**
    * Barre d’heures sous la frise (même structure que scheduler-card : flex 18px de haut).
    */
@@ -720,7 +770,7 @@ export class ScheduleManagerCard extends LitElement {
               `
             : html``}
         </div>
-
+        ${this.renderScheduleRepeatDays(schedule)}
         <button
           type="button"
           class="btn-open-config"

@@ -51,6 +51,34 @@ export const styles = css`
     gap: 8px;
   }
 
+  .sm-schedule-repeat-days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin: 0 0 10px;
+  }
+
+  .sm-schedule-repeat-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+    border: 1px solid var(--divider-color);
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.12);
+    color: var(--primary-text-color);
+  }
+
+  .sm-schedule-repeat-pill--all {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
   .btn-danger {
     padding: 6px 10px;
     font-size: 0.85em;
@@ -473,7 +501,10 @@ export const styles = css`
   .sm-modal-sub span {
     display: block;
     margin-bottom: 8px;
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
   }
 
   .sm-repeat-days {
@@ -560,9 +591,10 @@ export const styles = css`
   .sm-color-field-title {
     display: block;
     margin-bottom: 10px;
-    font-size: 0.78em;
-    color: var(--secondary-text-color);
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
   }
 
   .sm-color-row {

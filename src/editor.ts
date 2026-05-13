@@ -21,6 +21,7 @@ function editorConfigFingerprint(c?: CardConfig): string {
     header_title: c.header_title,
     show_header: c.show_header,
     show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+    show_repeat_days_on_card: c.show_repeat_days_on_card,
     schedule_ids: c.schedule_ids ?? null,
   });
 }
@@ -452,6 +453,17 @@ export class ScheduleManagerCardEditor extends LitElement {
           </p>
         </div>
         <div class="field-block">
+          <ha-formfield label=${msg(hass, 'editor.show_repeat_days_on_card_label')}>
+            <ha-switch
+              .checked=${this._config?.show_repeat_days_on_card !== false}
+              @change=${this._onShowRepeatDaysOnCardChange}
+            ></ha-switch>
+          </ha-formfield>
+          <p class="hint">
+            ${msg(hass, 'editor.show_repeat_days_on_card_hint')}
+          </p>
+        </div>
+        <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
             label=${msg(hass, 'editor.status_entity_label')}
@@ -551,6 +563,13 @@ export class ScheduleManagerCardEditor extends LitElement {
     const checked = haFormControlCheckedFromChangeEvent(ev);
     this._patchConfig({
       show_schedule_enable_toggle: checked ? undefined : false,
+    });
+  }
+
+  private _onShowRepeatDaysOnCardChange(ev: Event) {
+    const checked = haFormControlCheckedFromChangeEvent(ev);
+    this._patchConfig({
+      show_repeat_days_on_card: checked ? undefined : false,
     });
   }
 

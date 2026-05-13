@@ -251,6 +251,34 @@ const styles = i$4 `
     gap: 8px;
   }
 
+  .sm-schedule-repeat-days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin: 0 0 10px;
+  }
+
+  .sm-schedule-repeat-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+    border: 1px solid var(--divider-color);
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.12);
+    color: var(--primary-text-color);
+  }
+
+  .sm-schedule-repeat-pill--all {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
   .btn-danger {
     padding: 6px 10px;
     font-size: 0.85em;
@@ -673,7 +701,10 @@ const styles = i$4 `
   .sm-modal-sub span {
     display: block;
     margin-bottom: 8px;
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
   }
 
   .sm-repeat-days {
@@ -760,9 +791,10 @@ const styles = i$4 `
   .sm-color-field-title {
     display: block;
     margin-bottom: 10px;
-    font-size: 0.78em;
-    color: var(--secondary-text-color);
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--primary-text-color);
   }
 
   .sm-color-row {
@@ -2000,6 +2032,8 @@ const MESSAGES = {
         'card.handle_start_time': 'Drag to change start time',
         'card.modal_close': '×',
         'card.repeat_days': 'Repeat days',
+        'card.repeat_days_all_short': 'Every day',
+        'card.repeat_days_row_aria': 'Repeat days for this schedule',
         'card.no_slots_editor': 'No slots — use “+ Add slot” above.',
         'card.start_time_label': 'Start time (HH:MM)',
         'card.no_entity_selected': 'No entity selected',
@@ -2011,6 +2045,8 @@ const MESSAGES = {
         'editor.title_disabled_hint': 'Turn “Show title on card” back on to edit the label.',
         'editor.schedule_toggle_label': 'Per-schedule on/off switch',
         'editor.schedule_toggle_hint': 'Shows or hides the switch to the right of each schedule name (integration side).',
+        'editor.show_repeat_days_on_card_label': 'Show repeat days on the card',
+        'editor.show_repeat_days_on_card_hint': 'When enabled, each schedule shows which weekdays it runs (between the title row and “Configure time slots…”).',
         'editor.status_entity_label': 'Schedule Manager status entity',
         'editor.schedules_on_card_title': 'Schedules to show on the card',
         'editor.schedules_on_card_hint': 'All boxes checked = show every schedule. Uncheck to hide one (at least one stays visible).',
@@ -2114,6 +2150,8 @@ const MESSAGES = {
         'card.handle_start_time': 'Glisser pour modifier l’heure de début',
         'card.modal_close': '×',
         'card.repeat_days': 'Jours de répétition',
+        'card.repeat_days_all_short': 'Tous les jours',
+        'card.repeat_days_row_aria': 'Jours de répétition pour ce planning',
         'card.no_slots_editor': 'Aucune plage — utilisez « + Ajouter une plage » ci-dessus.',
         'card.start_time_label': 'Heure de début (HH:MM)',
         'card.no_entity_selected': 'Aucune entité sélectionnée',
@@ -2125,6 +2163,8 @@ const MESSAGES = {
         'editor.title_disabled_hint': 'Réactivez « Afficher le titre sur la carte » pour modifier le libellé.',
         'editor.schedule_toggle_label': 'Interrupteur actif / inactif par planning',
         'editor.schedule_toggle_hint': 'Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté intégration).',
+        'editor.show_repeat_days_on_card_label': 'Afficher les jours de répétition sur la carte',
+        'editor.show_repeat_days_on_card_hint': 'Si activé, chaque planning indique les jours de la semaine concernés (entre le titre et « Configurer les plages… »).',
         'editor.status_entity_label': 'Capteur d’état Schedule Manager',
         'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
         'editor.schedules_on_card_hint': 'Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un planning (au moins un reste visible).',
@@ -3029,6 +3069,7 @@ function editorConfigFingerprint(c) {
         header_title: c.header_title,
         show_header: c.show_header,
         show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+        show_repeat_days_on_card: c.show_repeat_days_on_card,
         schedule_ids: c.schedule_ids ?? null,
     });
 }
@@ -3327,6 +3368,17 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
           </p>
         </div>
         <div class="field-block">
+          <ha-formfield label=${msg(hass, 'editor.show_repeat_days_on_card_label')}>
+            <ha-switch
+              .checked=${this._config?.show_repeat_days_on_card !== false}
+              @change=${this._onShowRepeatDaysOnCardChange}
+            ></ha-switch>
+          </ha-formfield>
+          <p class="hint">
+            ${msg(hass, 'editor.show_repeat_days_on_card_hint')}
+          </p>
+        </div>
+        <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
             label=${msg(hass, 'editor.status_entity_label')}
@@ -3419,6 +3471,12 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         const checked = haFormControlCheckedFromChangeEvent(ev);
         this._patchConfig({
             show_schedule_enable_toggle: checked ? undefined : false,
+        });
+    }
+    _onShowRepeatDaysOnCardChange(ev) {
+        const checked = haFormControlCheckedFromChangeEvent(ev);
+        this._patchConfig({
+            show_repeat_days_on_card: checked ? undefined : false,
         });
     }
     _onHeaderTitleInput(ev) {
@@ -3687,6 +3745,7 @@ function scheduleManagerCardConfigChanged(next, prev) {
             header_title: c.header_title,
             show_header: c.show_header,
             show_schedule_enable_toggle: c.show_schedule_enable_toggle,
+            show_repeat_days_on_card: c.show_repeat_days_on_card,
             schedule_ids: c.schedule_ids ?? null,
         })
         : '';
@@ -3982,6 +4041,44 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         }
         return x `${list.map((s) => this.renderSchedule(s))}`;
     }
+    _showRepeatDaysOnCard() {
+        return this.config?.show_repeat_days_on_card !== false;
+    }
+    /** Jours affichés sur la carte : `all` si absent / complet sur la semaine. */
+    scheduleRepeatDaysDisplay(schedule) {
+        const raw = schedule.repeat_days;
+        if (!raw || raw.length === 0) {
+            return 'all';
+        }
+        const uniq = [
+            ...new Set(raw.filter((d) => typeof d === 'number' && d >= 0 && d <= 6)),
+        ].sort((a, b) => a - b);
+        if (uniq.length === 0) {
+            return 'all';
+        }
+        if (uniq.length === 7) {
+            return 'all';
+        }
+        return uniq;
+    }
+    renderScheduleRepeatDays(schedule) {
+        if (!this._showRepeatDaysOnCard()) {
+            return x ``;
+        }
+        const hass = this.hass;
+        const mode = this.scheduleRepeatDaysDisplay(schedule);
+        return x `
+      <div
+        class="sm-schedule-repeat-days"
+        role="group"
+        aria-label=${msg(hass, 'card.repeat_days_row_aria')}
+      >
+        ${mode === 'all'
+            ? x `<span class="sm-schedule-repeat-pill sm-schedule-repeat-pill--all">${msg(hass, 'card.repeat_days_all_short')}</span>`
+            : mode.map((d) => x `<span class="sm-schedule-repeat-pill">${weekdayShort(hass, d)}</span>`)}
+      </div>
+    `;
+    }
     /**
      * Barre d’heures sous la frise (même structure que scheduler-card : flex 18px de haut).
      */
@@ -4115,7 +4212,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
               `
             : x ``}
         </div>
-
+        ${this.renderScheduleRepeatDays(schedule)}
         <button
           type="button"
           class="btn-open-config"
