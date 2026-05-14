@@ -3110,14 +3110,16 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                 !Array.isArray(schedules));
         };
     }
+    /** Comme scheduler-card : `setConfig` remplace l’état local (pas de fusion avec l’ancien, pas d’écriture sur `this.config`). */
     setConfig(config) {
         if (!config || typeof config !== 'object') {
             return;
         }
-        const merged = this._mergeLovelaceShallow(this._config, config);
-        this._applyIncomingConfigRecord(merged);
-        // Référence distincte : évite que Lovelace et Lit partagent la même référence mutable.
-        this.config = { ...this._config };
+        const flat = this._configWithoutUndefinedKeys(config);
+        this._applyIncomingConfigRecord({
+            ...flat,
+            type: 'custom:schedule-manager-card',
+        });
         this.requestUpdate();
     }
     /**
@@ -3179,74 +3181,6 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             this._userClearedStatusEntity = false;
         }
     }
-    /** `hui-element-editor` vit dans le shadow parent ; HA peut ne pas rappeler `setConfig` si `deepEqual` est vrai. */
-    _editorParentHost() {
-        const root = this.getRootNode();
-        if (!(root instanceof ShadowRoot)) {
-            return null;
-        }
-        const host = root.host;
-        if (!(host instanceof HTMLElement) || !('value' in host)) {
-            return null;
-        }
-        return host;
-    }
-    /**
-     * Recharge l’état local depuis la valeur du conteneur Lovelace lorsqu’elle diffère de `_config`
-     * (réouverture de l’éditeur, rechargement du YAML, etc.).
-     *
-     * La prop `config` est la source de vérité une fois que Lovelace l’a injectée : `host.value` peut
-     * rester en retard ou contenir un ancien brouillon — l’utiliser en priorité écrasait la config
-     * réellement enregistrée (YAML correct sur la page config, autre chose en mode édition tableau).
-     */
-    _pullConfigFromEditorHostIfStale() {
-        let raw = null;
-        if (this.config && typeof this.config === 'object') {
-            raw = {
-                ...this._configWithoutUndefinedKeys(this.config),
-            };
-        }
-        else {
-            const host = this._editorParentHost();
-            if (!host) {
-                return;
-            }
-            const hostVal = host.value;
-            if (!hostVal || typeof hostVal !== 'object') {
-                return;
-            }
-            raw = { ...hostVal };
-        }
-        // Le parent n’expose parfois pas encore `schedule_ids` alors que la vue enregistrée le contient :
-        // ne pas écraser la liste explicite locale avec un objet incomplet.
-        if (!('schedule_ids' in raw) &&
-            this._config &&
-            Array.isArray(this._config.schedule_ids) &&
-            this._config.schedule_ids.length > 0) {
-            raw.schedule_ids = [...this._config.schedule_ids];
-        }
-        const remoteFp = editorConfigFingerprint(raw);
-        const localFp = editorConfigFingerprint(this._config);
-        if (remoteFp === localFp) {
-            return;
-        }
-        this.setConfig(raw);
-    }
-    connectedCallback() {
-        super.connectedCallback();
-        // Après la pile courante : laisse le temps à Lovelace d’appeler `setConfig` / d’assigner `config`.
-        window.setTimeout(() => this._pullConfigFromEditorHostIfStale(), 0);
-    }
-    firstUpdated(_changed) {
-        super.firstUpdated(_changed);
-        window.setTimeout(() => this._pullConfigFromEditorHostIfStale(), 0);
-    }
-    willUpdate(_changed) {
-        super.willUpdate(_changed);
-        if (!this._config && this.config && typeof this.config === 'object') {
-            this._applyIncomingConfigRecord(this._mergeLovelaceShallow(undefined, this.config));
-        }
-    }
     /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
     _configWithoutUndefinedKeys(c) {
         const out = {};
@@ -3262,13 +3196,13 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     }
     updated(changed) {
         super.updated(changed);
-        // Pas de _pull sur lovelace/context : host.value peut être obsolète et écraser l’édition locale.
-        // Lovelace met parfois à jour `config` sans rappeler `setConfig` (aperçu, réouverture).
-        if (changed.has('config') && this.config) {
+        /* Prop `config` seule (sans `setConfig`) : fusion superficielle puis application. */
+        if (changed.has('config') && this.config && typeof this.config === 'object') {
             const prev = changed.get('config');
             if (this.config !== prev) {
-                if (editorConfigFingerprint(this.config) !== editorConfigFingerprint(this._config)) {
-                    this._applyIncomingConfigRecord(this._mergeLovelaceShallow(this._config, this.config));
+                const merged = this._mergeLovelaceShallow(this._config, this.config);
+                if (editorConfigFingerprint(merged) !== editorConfigFingerprint(this._config)) {
+                    this._applyIncomingConfigRecord(merged);
                 }
             }
         }
@@ -3276,7 +3210,10 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             this._maybeApplyDefaultStatusEntity();
         }
     }
-    /** Présélectionne le capteur d’état standard si aucun n’est configuré et qu’il existe. */
+    /**
+     * Préremplit le capteur par défaut en mémoire locale uniquement — pas de `config-changed`
+     * à l’ouverture (sinon Lovelace écrase la config avant affichage, cf. scheduler-card).
+     */
     _maybeApplyDefaultStatusEntity() {
         if (this._userClearedStatusEntity || !this.hass) {
             return;
@@ -3284,10 +3221,17 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         if (!this.hass.states[SCHEDULE_MANAGER_STATUS_ENTITY_ID]) {
             return;
         }
-        if (this._config?.status_entity?.trim()) {
+        if (!this._config) {
             return;
         }
-        this._patchConfig({ status_entity: SCHEDULE_MANAGER_STATUS_ENTITY_ID });
+        if (this._config.status_entity?.trim()) {
+            return;
+        }
+        this._config = this._canonicalEditorConfig({
+            ...this._config,
+            type: 'custom:schedule-manager-card',
+        });
+        this.requestUpdate();
     }
     _resolvedStatusEntityId() {
         return this._config?.status_entity?.trim() || SCHEDULE_MANAGER_STATUS_ENTITY_ID;
@@ -3328,7 +3272,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     }
     /** Liste explicite de plannings affichés (défini = filtre actif). */
     _explicitScheduleIds() {
-        const raw = (this._config?.schedule_ids ?? this.config?.schedule_ids);
+        const raw = this._config?.schedule_ids;
         if (raw == null) {
             return undefined;
         }
@@ -3527,7 +3471,6 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         if (document.activeElement !== te) {
             this._headerTitleDraft = this._config.header_title ?? '';
         }
-        this.config = outgoing;
         this.dispatchEvent(new CustomEvent('config-changed', {
             bubbles: true,
             composed: true,

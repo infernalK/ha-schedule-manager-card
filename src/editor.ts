@@ -47,13 +47,12 @@ export class ScheduleManagerCardEditor extends LitElement {
   @property({ attribute: false }) public context?: unknown;
 
   /**
-   * Config telle que Lovelace la connaît (aperçu, YAML, etc.).
-   * Pas de `hasChanged` personnalisé : avec une empreinte métier, HA peut pousser une nouvelle
-   * référence d’objet sans déclencher de mise à jour, ce qui laissait l’éditeur et l’aperçu désynchronisés.
+   * Config poussée par Lovelace (certaines versions assignent la prop sans rappeler `setConfig`).
+   * On ne l’écrit jamais depuis l’éditeur — évite les boucles avec le parent (cf. scheduler-card).
    */
   @property({ attribute: false }) public config?: CardConfig;
 
-  /** Copie éditable ; @state pour que setConfig / _patchConfig déclenchent bien un re-render Lovelace. */
+  /** État local de l’éditeur — mis à jour par `setConfig` / la prop `config`, et par `_patchConfig`. */
   @state() private _config?: CardConfig;
 
   /** True si l’utilisateur a vidé le capteur — ne pas réappliquer le défaut automatiquement. */
@@ -142,14 +141,18 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
   `;
 
+  /** Comme scheduler-card : `setConfig` remplace l’état local (pas de fusion avec l’ancien, pas d’écriture sur `this.config`). */
   setConfig(config: CardConfig) {
     if (!config || typeof config !== 'object') {
       return;
     }
-    const merged = this._mergeLovelaceShallow(this._config, config);
-    this._applyIncomingConfigRecord(merged);
-    // Référence distincte : évite que Lovelace et Lit partagent la même référence mutable.
-    this.config = { ...(this._config as object) } as CardConfig;
+    const flat = this._configWithoutUndefinedKeys(
+      config as unknown as Record<string, unknown>
+    );
+    this._applyIncomingConfigRecord({
+      ...flat,
+      type: 'custom:schedule-manager-card',
+    } as CardConfig);
     this.requestUpdate();
   }
 
@@ -217,84 +220,6 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
   }
 
-  /** `hui-element-editor` vit dans le shadow parent ; HA peut ne pas rappeler `setConfig` si `deepEqual` est vrai. */
-  private _editorParentHost(): (HTMLElement & { value?: unknown }) | null {
-    const root = this.getRootNode();
-    if (!(root instanceof ShadowRoot)) {
-      return null;
-    }
-    const host = root.host;
-    if (!(host instanceof HTMLElement) || !('value' in host)) {
-      return null;
-    }
-    return host as HTMLElement & { value?: unknown };
-  }
-
-  /**
-   * Recharge l’état local depuis la valeur du conteneur Lovelace lorsqu’elle diffère de `_config`
-   * (réouverture de l’éditeur, rechargement du YAML, etc.).
-   *
-   * La prop `config` est la source de vérité une fois que Lovelace l’a injectée : `host.value` peut
-   * rester en retard ou contenir un ancien brouillon — l’utiliser en priorité écrasait la config
-   * réellement enregistrée (YAML correct sur la page config, autre chose en mode édition tableau).
-   */
-  private _pullConfigFromEditorHostIfStale() {
-    let raw: Record<string, unknown> | null = null;
-    if (this.config && typeof this.config === 'object') {
-      raw = {
-        ...this._configWithoutUndefinedKeys(
-          this.config as unknown as Record<string, unknown>
-        ),
-      };
-    } else {
-      const host = this._editorParentHost();
-      if (!host) {
-        return;
-      }
-      const hostVal = host.value;
-      if (!hostVal || typeof hostVal !== 'object') {
-        return;
-      }
-      raw = { ...(hostVal as object) } as Record<string, unknown>;
-    }
-    // Le parent n’expose parfois pas encore `schedule_ids` alors que la vue enregistrée le contient :
-    // ne pas écraser la liste explicite locale avec un objet incomplet.
-    if (
-      !('schedule_ids' in raw) &&
-      this._config &&
-      Array.isArray(this._config.schedule_ids) &&
-      this._config.schedule_ids.length > 0
-    ) {
-      raw.schedule_ids = [...this._config.schedule_ids];
-    }
-    const remoteFp = editorConfigFingerprint(raw as unknown as CardConfig);
-    const localFp = editorConfigFingerprint(this._config);
-    if (remoteFp === localFp) {
-      return;
-    }
-    this.setConfig(raw as unknown as CardConfig);
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    // Après la pile courante : laisse le temps à Lovelace d’appeler `setConfig` / d’assigner `config`.
-    window.setTimeout(() => this._pullConfigFromEditorHostIfStale(), 0);
-  }
-
-  protected firstUpdated(_changed: PropertyValues) {
-    super.firstUpdated(_changed);
-    window.setTimeout(() => this._pullConfigFromEditorHostIfStale(), 0);
-  }
-
-  protected willUpdate(_changed: PropertyValues) {
-    super.willUpdate(_changed);
-    if (!this._config && this.config && typeof this.config === 'object') {
-      this._applyIncomingConfigRecord(
-        this._mergeLovelaceShallow(undefined, this.config)
-      );
-    }
-  }
-
   /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
   private _configWithoutUndefinedKeys(
     c: CardConfig | Record<string, unknown> | undefined
@@ -313,15 +238,13 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   updated(changed: PropertyValues) {
     super.updated(changed);
-    // Pas de _pull sur lovelace/context : host.value peut être obsolète et écraser l’édition locale.
-    // Lovelace met parfois à jour `config` sans rappeler `setConfig` (aperçu, réouverture).
-    if (changed.has('config') && this.config) {
+    /* Prop `config` seule (sans `setConfig`) : fusion superficielle puis application. */
+    if (changed.has('config') && this.config && typeof this.config === 'object') {
       const prev = changed.get('config') as CardConfig | undefined;
       if (this.config !== prev) {
-        if (editorConfigFingerprint(this.config) !== editorConfigFingerprint(this._config)) {
-          this._applyIncomingConfigRecord(
-            this._mergeLovelaceShallow(this._config, this.config)
-          );
+        const merged = this._mergeLovelaceShallow(this._config, this.config);
+        if (editorConfigFingerprint(merged) !== editorConfigFingerprint(this._config)) {
+          this._applyIncomingConfigRecord(merged);
         }
       }
     }
@@ -330,7 +253,10 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
   }
 
-  /** Présélectionne le capteur d’état standard si aucun n’est configuré et qu’il existe. */
+  /**
+   * Préremplit le capteur par défaut en mémoire locale uniquement — pas de `config-changed`
+   * à l’ouverture (sinon Lovelace écrase la config avant affichage, cf. scheduler-card).
+   */
   private _maybeApplyDefaultStatusEntity() {
     if (this._userClearedStatusEntity || !this.hass) {
       return;
@@ -338,10 +264,17 @@ export class ScheduleManagerCardEditor extends LitElement {
     if (!this.hass.states[SCHEDULE_MANAGER_STATUS_ENTITY_ID]) {
       return;
     }
-    if (this._config?.status_entity?.trim()) {
+    if (!this._config) {
       return;
     }
-    this._patchConfig({ status_entity: SCHEDULE_MANAGER_STATUS_ENTITY_ID });
+    if (this._config.status_entity?.trim()) {
+      return;
+    }
+    this._config = this._canonicalEditorConfig({
+      ...(this._config as unknown as Record<string, unknown>),
+      type: 'custom:schedule-manager-card',
+    });
+    this.requestUpdate();
   }
 
   private _resolvedStatusEntityId(): string {
@@ -391,7 +324,7 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   /** Liste explicite de plannings affichés (défini = filtre actif). */
   private _explicitScheduleIds(): string[] | undefined {
-    const raw = (this._config?.schedule_ids ?? this.config?.schedule_ids) as unknown;
+    const raw = this._config?.schedule_ids as unknown;
     if (raw == null) {
       return undefined;
     }
@@ -625,7 +558,6 @@ export class ScheduleManagerCardEditor extends LitElement {
     if (document.activeElement !== te) {
       this._headerTitleDraft = this._config.header_title ?? '';
     }
-    this.config = outgoing;
     this.dispatchEvent(
       new CustomEvent('config-changed', {
         bubbles: true,
