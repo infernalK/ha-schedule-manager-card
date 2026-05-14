@@ -245,6 +245,7 @@ function scheduleManagerCardConfigChanged(
           show_schedule_enable_toggle: c.show_schedule_enable_toggle,
           show_repeat_days_on_card: c.show_repeat_days_on_card,
           show_slots_on_card: c.show_slots_on_card,
+          card_click_opens_editor: c.card_click_opens_editor,
           schedule_ids: c.schedule_ids ?? null,
         })
       : '';
@@ -579,12 +580,21 @@ export class ScheduleManagerCard extends LitElement {
     return this.config?.show_slots_on_card !== false;
   }
 
+  /** Clic sur la zone planning → éditeur (uniquement si le lien est masqué ; défaut: activé). */
+  private _cardClickOpensEditor(): boolean {
+    return this.config?.card_click_opens_editor !== false;
+  }
+
+  private _scheduleClickToOpenEditor(): boolean {
+    return !this._showSlotsOnCard() && this._cardClickOpensEditor();
+  }
+
   /**
-   * Sans le lien (`show_slots_on_card: false`), ouvre l’éditeur au clic sauf si le clic
-   * vise un contrôle (switch, bouton, champ, composant `ha-*`).
+   * Ouverture au clic : lien masqué et option clic activée ; ignore les contrôles
+   * (switch, bouton, champ, composant `ha-*`).
    */
   private _onScheduleShellPointerDown(ev: PointerEvent, schedule: Schedule) {
-    if (this._showSlotsOnCard()) {
+    if (!this._scheduleClickToOpenEditor()) {
       return;
     }
     if (ev.button !== 0) {
@@ -616,7 +626,7 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   private _onScheduleShellKeydown(ev: KeyboardEvent, schedule: Schedule) {
-    if (this._showSlotsOnCard()) {
+    if (!this._scheduleClickToOpenEditor()) {
       return;
     }
     if (ev.key !== 'Enter' && ev.key !== ' ') {
@@ -810,14 +820,21 @@ export class ScheduleManagerCard extends LitElement {
 
     const blocks = schedule.time_blocks || [];
     const showSlots = this._showSlotsOnCard();
-    const compactTap = !showSlots;
+    const clickToOpen = this._scheduleClickToOpenEditor();
+    const noEditorFromCard = !showSlots && !this._cardClickOpensEditor();
+
+    const emptySlotsMsgKey = showSlots
+      ? 'card.no_slots_hint'
+      : clickToOpen
+        ? 'card.compact_empty_hint'
+        : 'card.no_editor_entry_hint';
 
     return html`
       <div
-        class="schedule${compactTap ? ' schedule--tap-opens-editor' : ''}"
-        tabindex=${compactTap ? 0 : nothing}
-        role=${compactTap ? 'button' : nothing}
-        aria-label=${compactTap
+        class="schedule${clickToOpen ? ' schedule--tap-opens-editor' : ''}"
+        tabindex=${clickToOpen ? 0 : nothing}
+        role=${clickToOpen ? 'button' : nothing}
+        aria-label=${clickToOpen
           ? msg(this.hass, 'card.open_schedule_editor_aria', {
               name: schedule.name,
             })
@@ -845,13 +862,21 @@ export class ScheduleManagerCard extends LitElement {
         </div>
         ${this.renderScheduleRepeatDays(schedule)}
         ${blocks.length
-          ? html`${this.renderDayTimeline(blocks)}`
+          ? html`
+              ${this.renderDayTimeline(blocks)}
+              ${noEditorFromCard
+                ? html`
+                    <div class="empty-hint hint-card-readonly">
+                      ${msg(this.hass, 'card.no_editor_entry_hint')}
+                    </div>
+                  `
+                : html``}
+            `
           : html`
-              <div class="empty-hint ${compactTap ? 'compact-empty-hint' : ''}">
-                ${msg(
-                  this.hass,
-                  compactTap ? 'card.compact_empty_hint' : 'card.no_slots_hint'
-                )}
+              <div
+                class="empty-hint ${clickToOpen && !showSlots ? 'compact-empty-hint' : ''}"
+              >
+                ${msg(this.hass, emptySlotsMsgKey)}
               </div>
             `}
         ${showSlots

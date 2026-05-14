@@ -23,6 +23,7 @@ function editorConfigFingerprint(c?: CardConfig): string {
     show_schedule_enable_toggle: c.show_schedule_enable_toggle,
     show_repeat_days_on_card: c.show_repeat_days_on_card,
     show_slots_on_card: c.show_slots_on_card,
+    card_click_opens_editor: c.card_click_opens_editor,
     schedule_ids: c.schedule_ids ?? null,
   });
 }
@@ -186,6 +187,9 @@ export class ScheduleManagerCardEditor extends LitElement {
       show_repeat_days_on_card: showRepeat,
       show_slots_on_card: showSlotsOnCard,
     };
+    if (!showSlotsOnCard) {
+      out.card_click_opens_editor = r.card_click_opens_editor !== false;
+    }
     if (seTrim) {
       out.status_entity = seTrim;
     } else if (!this._userClearedStatusEntity) {
@@ -490,6 +494,19 @@ export class ScheduleManagerCardEditor extends LitElement {
           <p class="hint">
             ${msg(hass, 'editor.show_slots_on_card_hint')}
           </p>
+          ${this._config?.show_slots_on_card === false
+            ? html`
+                <ha-formfield label=${msg(hass, 'editor.card_click_opens_editor_label')}>
+                  <ha-switch
+                    .checked=${this._config?.card_click_opens_editor !== false}
+                    @change=${this._onCardClickOpensEditorChange}
+                  ></ha-switch>
+                </ha-formfield>
+                <p class="hint">
+                  ${msg(hass, 'editor.card_click_opens_editor_hint')}
+                </p>
+              `
+            : html``}
         </div>
         <div class="field-block">
           <ha-entity-picker
@@ -604,6 +621,13 @@ export class ScheduleManagerCardEditor extends LitElement {
     const checked = haFormControlCheckedFromChangeEvent(ev);
     this._patchConfig({
       show_slots_on_card: checked,
+    });
+  }
+
+  private _onCardClickOpensEditorChange(ev: Event) {
+    const checked = haFormControlCheckedFromChangeEvent(ev);
+    this._patchConfig({
+      card_click_opens_editor: checked,
     });
   }
 

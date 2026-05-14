@@ -69,9 +69,15 @@ export interface CardConfig {
   show_repeat_days_on_card?: boolean;
   /**
    * Si `false`, masque uniquement le lien « Configurer les plages » sous la frise.
-   * La frise 24 h reste affichée ; un clic sur la zone du planning ouvre l’éditeur.
+   * La frise 24 h reste affichée. Pour ouvrir l’éditeur sans ce lien, utilisez
+   * `card_click_opens_editor` (défaut : `true`).
    */
   show_slots_on_card?: boolean;
+  /**
+   * Si `false`, un clic sur la zone du planning n’ouvre pas l’éditeur (utile quand le lien est masqué).
+   * Ignoré tant que `show_slots_on_card` est `true` (défaut : `true`).
+   */
+  card_click_opens_editor?: boolean;
 }
 
 /** Titre affiché lorsque `header_title` est vide / absent. */

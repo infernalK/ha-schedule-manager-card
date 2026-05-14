@@ -63,6 +63,14 @@ export const styles = css`
     margin-bottom: 0;
   }
 
+  .hint-card-readonly {
+    font-size: 0.85em;
+    color: var(--secondary-text-color);
+    line-height: 1.4;
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+
   .schedule-header {
     display: flex;
     align-items: center;

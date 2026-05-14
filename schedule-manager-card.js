@@ -263,6 +263,14 @@ const styles = i$4 `
     margin-bottom: 0;
   }
 
+  .hint-card-readonly {
+    font-size: 0.85em;
+    color: var(--secondary-text-color);
+    line-height: 1.4;
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+
   .schedule-header {
     display: flex;
     align-items: center;
@@ -2000,6 +2008,7 @@ const MESSAGES = {
         'card.no_slots_hint': 'No time slots — use “Configure time slots…” to add some.',
         'card.open_schedule_editor_aria': 'Open editor for {name}',
         'card.compact_empty_hint': 'No time slots yet — click this area to add slots and configure block actions.',
+        'card.no_editor_entry_hint': 'The link and click-to-edit are off — turn one back on in the card options to edit this schedule.',
         'card.timeline_aria': 'Time slots over 24 hours',
         'card.default_header_title': 'Schedule Manager',
         'card.alert_select_day': 'Select at least one day.',
@@ -2078,7 +2087,9 @@ const MESSAGES = {
         'editor.show_repeat_days_on_card_label': 'Show repeat days on the card',
         'editor.show_repeat_days_on_card_hint': 'When enabled, each schedule shows which weekdays it runs (below the title, above the 24-hour bar).',
         'editor.show_slots_on_card_label': 'Show “Configure time slots” link under the timeline',
-        'editor.show_slots_on_card_hint': 'When off, only the link is hidden; the 24-hour bar stays visible. Click the schedule area to open the editor.',
+        'editor.show_slots_on_card_hint': 'When off, only the link is hidden; the 24-hour bar stays visible. Use the option below to allow opening the editor by clicking the schedule.',
+        'editor.card_click_opens_editor_label': 'Click on schedule opens editor',
+        'editor.card_click_opens_editor_hint': 'Only applies when the link above is off. When off, the card is view-only for editing slots (change options or use the link).',
         'editor.status_entity_label': 'Schedule Manager status entity',
         'editor.schedules_on_card_title': 'Schedules to show on the card',
         'editor.schedules_on_card_hint': 'All boxes checked = show every schedule. Uncheck to hide one (at least one stays visible).',
@@ -2122,6 +2133,7 @@ const MESSAGES = {
         'card.no_slots_hint': 'Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.',
         'card.open_schedule_editor_aria': 'Ouvrir l’éditeur pour {name}',
         'card.compact_empty_hint': 'Aucune plage pour l’instant — cliquez sur cette zone pour ajouter des créneaux et configurer les actions des blocs.',
+        'card.no_editor_entry_hint': 'Le lien et l’ouverture au clic sont désactivés — réactivez l’un ou l’autre dans les options de la carte pour modifier ce planning.',
         'card.timeline_aria': 'Plages sur 24 heures',
         'card.default_header_title': 'Schedule Manager',
         'card.alert_select_day': 'Sélectionnez au moins un jour.',
@@ -2200,7 +2212,9 @@ const MESSAGES = {
         'editor.show_repeat_days_on_card_label': 'Afficher les jours de répétition sur la carte',
         'editor.show_repeat_days_on_card_hint': 'Si activé, chaque planning indique les jours de la semaine concernés (sous le titre, au-dessus de la frise horaire).',
         'editor.show_slots_on_card_label': 'Afficher le lien « Configurer les plages » sous la frise',
-        'editor.show_slots_on_card_hint': 'Si désactivé, seul le lien est masqué ; la frise 24 h reste visible. Cliquez sur la zone du planning pour ouvrir l’éditeur.',
+        'editor.show_slots_on_card_hint': 'Si désactivé, seul le lien est masqué ; la frise 24 h reste visible. Utilisez l’option ci-dessous pour autoriser l’ouverture de l’éditeur au clic sur le planning.',
+        'editor.card_click_opens_editor_label': 'Clic sur le planning ouvre l’éditeur',
+        'editor.card_click_opens_editor_hint': 'Uniquement si le lien ci-dessus est désactivé. Si désactivé, la carte ne permet plus d’ouvrir l’éditeur (réactivez une des deux options).',
         'editor.status_entity_label': 'Capteur d’état Schedule Manager',
         'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
         'editor.schedules_on_card_hint': 'Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un planning (au moins un reste visible).',
@@ -3107,6 +3121,7 @@ function editorConfigFingerprint(c) {
         show_schedule_enable_toggle: c.show_schedule_enable_toggle,
         show_repeat_days_on_card: c.show_repeat_days_on_card,
         show_slots_on_card: c.show_slots_on_card,
+        card_click_opens_editor: c.card_click_opens_editor,
         schedule_ids: c.schedule_ids ?? null,
     });
 }
@@ -3186,6 +3201,9 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             show_repeat_days_on_card: showRepeat,
             show_slots_on_card: showSlotsOnCard,
         };
+        if (!showSlotsOnCard) {
+            out.card_click_opens_editor = r.card_click_opens_editor !== false;
+        }
         if (seTrim) {
             out.status_entity = seTrim;
         }
@@ -3442,6 +3460,19 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
           <p class="hint">
             ${msg(hass, 'editor.show_slots_on_card_hint')}
           </p>
+          ${this._config?.show_slots_on_card === false
+            ? x `
+                <ha-formfield label=${msg(hass, 'editor.card_click_opens_editor_label')}>
+                  <ha-switch
+                    .checked=${this._config?.card_click_opens_editor !== false}
+                    @change=${this._onCardClickOpensEditorChange}
+                  ></ha-switch>
+                </ha-formfield>
+                <p class="hint">
+                  ${msg(hass, 'editor.card_click_opens_editor_hint')}
+                </p>
+              `
+            : x ``}
         </div>
         <div class="field-block">
           <ha-entity-picker
@@ -3547,6 +3578,12 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         const checked = haFormControlCheckedFromChangeEvent(ev);
         this._patchConfig({
             show_slots_on_card: checked,
+        });
+    }
+    _onCardClickOpensEditorChange(ev) {
+        const checked = haFormControlCheckedFromChangeEvent(ev);
+        this._patchConfig({
+            card_click_opens_editor: checked,
         });
     }
     _onHeaderTitleInput(ev) {
@@ -3817,6 +3854,7 @@ function scheduleManagerCardConfigChanged(next, prev) {
             show_schedule_enable_toggle: c.show_schedule_enable_toggle,
             show_repeat_days_on_card: c.show_repeat_days_on_card,
             show_slots_on_card: c.show_slots_on_card,
+            card_click_opens_editor: c.card_click_opens_editor,
             schedule_ids: c.schedule_ids ?? null,
         })
         : '';
@@ -4125,12 +4163,19 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     _showSlotsOnCard() {
         return this.config?.show_slots_on_card !== false;
     }
+    /** Clic sur la zone planning → éditeur (uniquement si le lien est masqué ; défaut: activé). */
+    _cardClickOpensEditor() {
+        return this.config?.card_click_opens_editor !== false;
+    }
+    _scheduleClickToOpenEditor() {
+        return !this._showSlotsOnCard() && this._cardClickOpensEditor();
+    }
     /**
-     * Sans le lien (`show_slots_on_card: false`), ouvre l’éditeur au clic sauf si le clic
-     * vise un contrôle (switch, bouton, champ, composant `ha-*`).
+     * Ouverture au clic : lien masqué et option clic activée ; ignore les contrôles
+     * (switch, bouton, champ, composant `ha-*`).
      */
     _onScheduleShellPointerDown(ev, schedule) {
-        if (this._showSlotsOnCard()) {
+        if (!this._scheduleClickToOpenEditor()) {
             return;
         }
         if (ev.button !== 0) {
@@ -4159,7 +4204,7 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         this.openVisualEditor(schedule);
     }
     _onScheduleShellKeydown(ev, schedule) {
-        if (this._showSlotsOnCard()) {
+        if (!this._scheduleClickToOpenEditor()) {
             return;
         }
         if (ev.key !== 'Enter' && ev.key !== ' ') {
@@ -4322,13 +4367,19 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         }
         const blocks = schedule.time_blocks || [];
         const showSlots = this._showSlotsOnCard();
-        const compactTap = !showSlots;
+        const clickToOpen = this._scheduleClickToOpenEditor();
+        const noEditorFromCard = !showSlots && !this._cardClickOpensEditor();
+        const emptySlotsMsgKey = showSlots
+            ? 'card.no_slots_hint'
+            : clickToOpen
+                ? 'card.compact_empty_hint'
+                : 'card.no_editor_entry_hint';
         return x `
       <div
-        class="schedule${compactTap ? ' schedule--tap-opens-editor' : ''}"
-        tabindex=${compactTap ? 0 : A}
-        role=${compactTap ? 'button' : A}
-        aria-label=${compactTap
+        class="schedule${clickToOpen ? ' schedule--tap-opens-editor' : ''}"
+        tabindex=${clickToOpen ? 0 : A}
+        role=${clickToOpen ? 'button' : A}
+        aria-label=${clickToOpen
             ? msg(this.hass, 'card.open_schedule_editor_aria', {
                 name: schedule.name,
             })
@@ -4351,10 +4402,21 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         </div>
         ${this.renderScheduleRepeatDays(schedule)}
         ${blocks.length
-            ? x `${this.renderDayTimeline(blocks)}`
+            ? x `
+              ${this.renderDayTimeline(blocks)}
+              ${noEditorFromCard
+                ? x `
+                    <div class="empty-hint hint-card-readonly">
+                      ${msg(this.hass, 'card.no_editor_entry_hint')}
+                    </div>
+                  `
+                : x ``}
+            `
             : x `
-              <div class="empty-hint ${compactTap ? 'compact-empty-hint' : ''}">
-                ${msg(this.hass, compactTap ? 'card.compact_empty_hint' : 'card.no_slots_hint')}
+              <div
+                class="empty-hint ${clickToOpen && !showSlots ? 'compact-empty-hint' : ''}"
+              >
+                ${msg(this.hass, emptySlotsMsgKey)}
               </div>
             `}
         ${showSlots
