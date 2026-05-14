@@ -111,9 +111,3 @@ Pour des scénarios très avancés (plusieurs actions par plage, jours de répé
 | La carte est vide ou « capteur introuvable » | Vérifiez que l’**intégration** Schedule Manager est bien installée et qu’un **capteur** existe sous l’appareil Schedule Manager. Ajustez `status_entity` ou le sélecteur dans l’éditeur de carte. |
 | Erreur au chargement de la page | Vérifiez la **ressource** JavaScript (chemin, type **module**) et rechargez le navigateur sans cache. |
 | HACS refuse le dépôt (« structure non conforme ») | Le fichier `schedule-manager-card.js` doit être **présent à la racine** de la branche sur GitHub (voir le dépôt public). En clone local : `npm ci && npm run build`, puis commit du fichier généré. |
-
----
-
-## Notes pour les mainteneurs (métadonnées GitHub / HACS)
-
-Sur la page GitHub du dépôt : **About** → renseigner une **description** (ex. *Carte Lovelace pour l’intégration Schedule Manager*) et des **topics** (`home-assistant`, `hacs`, `lovelace`, `schedule-manager`, …) pour la validation HACS complète. Ensuite vous pouvez retirer `topics` et `description` de `ignore` dans `.github/workflows/ci.yml`.
