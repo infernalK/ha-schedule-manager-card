@@ -209,8 +209,6 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.open_schedule_editor_aria': 'Open editor for {name}',
     'card.compact_empty_hint':
       'No time slots yet — click this area to add slots and configure block actions.',
-    'card.no_editor_entry_hint':
-      'The link and click-to-edit are off — turn one back on in the card options to edit this schedule.',
     'card.timeline_aria': 'Time slots over 24 hours',
     'card.default_header_title': 'Schedule Manager',
     'card.alert_select_day': 'Select at least one day.',
@@ -354,8 +352,6 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.open_schedule_editor_aria': 'Ouvrir l’éditeur pour {name}',
     'card.compact_empty_hint':
       'Aucune plage pour l’instant — cliquez sur cette zone pour ajouter des créneaux et configurer les actions des blocs.',
-    'card.no_editor_entry_hint':
-      'Le lien et l’ouverture au clic sont désactivés — réactivez l’un ou l’autre dans les options de la carte pour modifier ce planning.',
     'card.timeline_aria': 'Plages sur 24 heures',
     'card.default_header_title': 'Schedule Manager',
     'card.alert_select_day': 'Sélectionnez au moins un jour.',

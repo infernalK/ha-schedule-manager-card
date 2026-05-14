@@ -263,14 +263,6 @@ const styles = i$4 `
     margin-bottom: 0;
   }
 
-  .hint-card-readonly {
-    font-size: 0.85em;
-    color: var(--secondary-text-color);
-    line-height: 1.4;
-    margin-top: 8px;
-    margin-bottom: 0;
-  }
-
   .schedule-header {
     display: flex;
     align-items: center;
@@ -2008,7 +2000,6 @@ const MESSAGES = {
         'card.no_slots_hint': 'No time slots — use “Configure time slots…” to add some.',
         'card.open_schedule_editor_aria': 'Open editor for {name}',
         'card.compact_empty_hint': 'No time slots yet — click this area to add slots and configure block actions.',
-        'card.no_editor_entry_hint': 'The link and click-to-edit are off — turn one back on in the card options to edit this schedule.',
         'card.timeline_aria': 'Time slots over 24 hours',
         'card.default_header_title': 'Schedule Manager',
         'card.alert_select_day': 'Select at least one day.',
@@ -2133,7 +2124,6 @@ const MESSAGES = {
         'card.no_slots_hint': 'Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.',
         'card.open_schedule_editor_aria': 'Ouvrir l’éditeur pour {name}',
         'card.compact_empty_hint': 'Aucune plage pour l’instant — cliquez sur cette zone pour ajouter des créneaux et configurer les actions des blocs.',
-        'card.no_editor_entry_hint': 'Le lien et l’ouverture au clic sont désactivés — réactivez l’un ou l’autre dans les options de la carte pour modifier ce planning.',
         'card.timeline_aria': 'Plages sur 24 heures',
         'card.default_header_title': 'Schedule Manager',
         'card.alert_select_day': 'Sélectionnez au moins un jour.',
@@ -4368,12 +4358,6 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         const blocks = schedule.time_blocks || [];
         const showSlots = this._showSlotsOnCard();
         const clickToOpen = this._scheduleClickToOpenEditor();
-        const noEditorFromCard = !showSlots && !this._cardClickOpensEditor();
-        const emptySlotsMsgKey = showSlots
-            ? 'card.no_slots_hint'
-            : clickToOpen
-                ? 'card.compact_empty_hint'
-                : 'card.no_editor_entry_hint';
         return x `
       <div
         class="schedule${clickToOpen ? ' schedule--tap-opens-editor' : ''}"
@@ -4402,23 +4386,20 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         </div>
         ${this.renderScheduleRepeatDays(schedule)}
         ${blocks.length
-            ? x `
-              ${this.renderDayTimeline(blocks)}
-              ${noEditorFromCard
+            ? x `${this.renderDayTimeline(blocks)}`
+            : showSlots
                 ? x `
-                    <div class="empty-hint hint-card-readonly">
-                      ${msg(this.hass, 'card.no_editor_entry_hint')}
-                    </div>
-                  `
-                : x ``}
-            `
-            : x `
-              <div
-                class="empty-hint ${clickToOpen && !showSlots ? 'compact-empty-hint' : ''}"
-              >
-                ${msg(this.hass, emptySlotsMsgKey)}
-              </div>
-            `}
+                <div class="empty-hint">
+                  ${msg(this.hass, 'card.no_slots_hint')}
+                </div>
+              `
+                : clickToOpen
+                    ? x `
+                  <div class="empty-hint compact-empty-hint">
+                    ${msg(this.hass, 'card.compact_empty_hint')}
+                  </div>
+                `
+                    : x ``}
         ${showSlots
             ? x `
               <button

@@ -821,13 +821,6 @@ export class ScheduleManagerCard extends LitElement {
     const blocks = schedule.time_blocks || [];
     const showSlots = this._showSlotsOnCard();
     const clickToOpen = this._scheduleClickToOpenEditor();
-    const noEditorFromCard = !showSlots && !this._cardClickOpensEditor();
-
-    const emptySlotsMsgKey = showSlots
-      ? 'card.no_slots_hint'
-      : clickToOpen
-        ? 'card.compact_empty_hint'
-        : 'card.no_editor_entry_hint';
 
     return html`
       <div
@@ -862,23 +855,20 @@ export class ScheduleManagerCard extends LitElement {
         </div>
         ${this.renderScheduleRepeatDays(schedule)}
         ${blocks.length
-          ? html`
-              ${this.renderDayTimeline(blocks)}
-              ${noEditorFromCard
-                ? html`
-                    <div class="empty-hint hint-card-readonly">
-                      ${msg(this.hass, 'card.no_editor_entry_hint')}
-                    </div>
-                  `
-                : html``}
-            `
-          : html`
-              <div
-                class="empty-hint ${clickToOpen && !showSlots ? 'compact-empty-hint' : ''}"
-              >
-                ${msg(this.hass, emptySlotsMsgKey)}
-              </div>
-            `}
+          ? html`${this.renderDayTimeline(blocks)}`
+          : showSlots
+            ? html`
+                <div class="empty-hint">
+                  ${msg(this.hass, 'card.no_slots_hint')}
+                </div>
+              `
+            : clickToOpen
+              ? html`
+                  <div class="empty-hint compact-empty-hint">
+                    ${msg(this.hass, 'card.compact_empty_hint')}
+                  </div>
+                `
+              : html``}
         ${showSlots
           ? html`
               <button
