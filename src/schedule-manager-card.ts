@@ -2671,7 +2671,8 @@ export class ScheduleManagerCard extends LitElement {
   }
 
   getCardSize() {
-    return 3;
+    /* 1 = hauteur suivant le contenu ; une valeur > 1 réserve des rangées vides sous la carte (sections / masonry). */
+    return 1;
   }
 }
 

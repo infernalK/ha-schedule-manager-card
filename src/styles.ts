@@ -9,7 +9,7 @@ export const styles = css`
   }
 
   .card {
-    padding: 16px;
+    padding: 16px 16px 12px;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -26,12 +26,14 @@ export const styles = css`
   }
 
   .schedule {
-    margin-bottom: 16px;
-    padding-bottom: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--divider-color);
   }
 
   .schedule:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
     border-bottom: none;
   }
 
@@ -144,9 +146,9 @@ export const styles = css`
     border-radius: 4px;
   }
 
-  /* Frise 24 h — pas de cadre : la barre de plages se suffit visuellement */
+  /* Frise 24 h — marge basse réduite (le dernier planning n’a pas besoin d’air sous le lien). */
   .timeline-frise {
-    margin: 0 0 16px;
+    margin: 0 0 8px;
     padding: 0;
     width: 100%;
     max-width: 100%;
@@ -403,7 +405,7 @@ export const styles = css`
     display: inline-block;
     width: auto;
     max-width: 100%;
-    margin: 0 0 12px;
+    margin: 4px 0 0;
     padding: 6px 2px;
     border: none;
     border-radius: 4px;
