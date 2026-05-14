@@ -30,7 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Même validateur que HACS.
+      # - topics, description : à remplir sur GitHub → About du dépôt ; retirer du ignore ensuite
       - name: Validation HACS (plugin / tableau de bord)
         uses: hacs/action@main
         with:
           category: plugin
+          ignore: topics description

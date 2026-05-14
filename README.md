@@ -2,7 +2,18 @@
 
 Carte Lovelace pour afficher et piloter les plannings de l’intégration **Schedule Manager**.
 
+![Aperçu de la carte Schedule Manager](images/card-preview.png)
+
 **Dépôt :** [github.com/infernalK/ha-schedule-manager-card](https://github.com/infernalK/ha-schedule-manager-card)
+
+## Métadonnées GitHub (HACS)
+
+Pour que la validation HACS complète réussisse **sans** ignorer de contrôles dans la CI, sur GitHub ouvrez **About** (roue à côté de la description du dépôt) et renseignez :
+
+- **Description** — par ex. *Carte Lovelace pour l’intégration Schedule Manager (plannings, plages, actions).*
+- **Topics** — au moins un topic valide parmi ceux attendus par HACS, par ex. `home-assistant`, `hacs`, `lovelace`, `schedule-manager`.
+
+Ensuite vous pouvez retirer `topics` et `description` de `ignore` dans `.github/workflows/ci.yml`.
 
 ## Prérequis
 
