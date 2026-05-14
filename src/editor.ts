@@ -8,7 +8,6 @@ import {
   SCHEDULE_MANAGER_STATUS_ENTITY_ID,
 } from './types';
 import { collatorLocale, msg } from './i18n';
-import { entityIdFromPickerFilterArgument } from './ha-entity-picker-helpers';
 
 /** Empreinte stable pour comparer la config affichée (alignée sur hasChanged de la carte). */
 function editorConfigFingerprint(c?: CardConfig): string {
@@ -57,9 +56,6 @@ export class ScheduleManagerCardEditor extends LitElement {
   /** État local de l’éditeur — mis à jour par `setConfig` / la prop `config`, et par `_patchConfig`. */
   @state() private _config?: CardConfig;
 
-  /** True si l’utilisateur a vidé le capteur — ne pas réappliquer le défaut automatiquement. */
-  @state() private _userClearedStatusEntity = false;
-
   /** Brouillon titre : évite que les re-renders / ha-textfield réinitialisent la frappe. */
   @state() private _headerTitleDraft = '';
 
@@ -71,10 +67,6 @@ export class ScheduleManagerCardEditor extends LitElement {
       flex-direction: column;
       gap: 16px;
       padding: 8px 0;
-    }
-    ha-entity-picker {
-      display: block;
-      width: 100%;
     }
     .field-block {
       display: flex;
@@ -192,7 +184,7 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
     if (seTrim) {
       out.status_entity = seTrim;
-    } else if (!this._userClearedStatusEntity) {
+    } else {
       out.status_entity = SCHEDULE_MANAGER_STATUS_ENTITY_ID;
     }
     const ht = typeof r.header_title === 'string' ? r.header_title.trim() : '';
@@ -221,9 +213,6 @@ export class ScheduleManagerCardEditor extends LitElement {
     const te = this._headerTitleRef.value;
     if (document.activeElement !== te) {
       this._headerTitleDraft = this._config.header_title ?? '';
-    }
-    if (this._config.status_entity?.trim()) {
-      this._userClearedStatusEntity = false;
     }
   }
 
@@ -265,7 +254,7 @@ export class ScheduleManagerCardEditor extends LitElement {
    * à l’ouverture (sinon Lovelace écrase la config avant affichage, cf. scheduler-card).
    */
   private _maybeApplyDefaultStatusEntity() {
-    if (this._userClearedStatusEntity || !this.hass) {
+    if (!this.hass) {
       return;
     }
     if (!this.hass.states[SCHEDULE_MANAGER_STATUS_ENTITY_ID]) {
@@ -286,18 +275,6 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   private _resolvedStatusEntityId(): string {
     return this._config?.status_entity?.trim() || SCHEDULE_MANAGER_STATUS_ENTITY_ID;
-  }
-
-  /** Valeur affichée dans le sélecteur (vide si l’utilisateur a explicitement retiré le capteur). */
-  private _statusEntityPickerValue(): string {
-    const v = this._config?.status_entity?.trim();
-    if (v) {
-      return v;
-    }
-    if (this._userClearedStatusEntity) {
-      return '';
-    }
-    return SCHEDULE_MANAGER_STATUS_ENTITY_ID;
   }
 
   private _schedulesRecord(): Record<string, { name?: string }> {
@@ -393,28 +370,6 @@ export class ScheduleManagerCardEditor extends LitElement {
     });
   }
 
-  /** Filtre le sélecteur du capteur d’état (entité avec attribut `schedules`). */
-  private _statusEntityFilter = (entity: unknown): boolean => {
-    const entityId = entityIdFromPickerFilterArgument(entity);
-    if (!entityId) {
-      return false;
-    }
-    if (entityId === SCHEDULE_MANAGER_STATUS_ENTITY_ID) {
-      return true;
-    }
-    if (entityId.includes('schedule_manager')) {
-      return true;
-    }
-    const st = this.hass?.states[entityId];
-    const attrs = st?.attributes as Record<string, unknown> | undefined;
-    const schedules = attrs?.schedules;
-    return (
-      schedules != null &&
-      typeof schedules === 'object' &&
-      !Array.isArray(schedules)
-    );
-  };
-
   render() {
     const hass = this.hass as HomeAssistant | undefined;
     if (!hass) {
@@ -508,28 +463,17 @@ export class ScheduleManagerCardEditor extends LitElement {
               `
             : html``}
         </div>
-        <div class="field-block">
-          <ha-entity-picker
-            .hass=${hass}
-            label=${msg(hass, 'editor.status_entity_label')}
-            .value=${this._statusEntityPickerValue()}
-            .includeDomains=${['sensor']}
-            .entityFilter=${this._statusEntityFilter}
-            .allowCustomEntity=${true}
-            @value-changed=${this._statusEntityChanged}
-          ></ha-entity-picker>
-          ${entityMissing
-            ? html`
+        ${entityMissing
+          ? html`
+              <div class="field-block">
                 <p class="hint">
-                  ${msg(hass, 'editor.entity_missing_before_first_code')}
-                  <code class="inline">${this._resolvedStatusEntityId()}</code>
-                  ${msg(hass, 'editor.entity_missing_between_codes')}
-                  <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>
-                  ${msg(hass, 'editor.entity_missing_after_second_code')}
+                  ${msg(hass, 'editor.entity_missing_no_picker', {
+                    id: this._resolvedStatusEntityId(),
+                  })}
                 </p>
-              `
-            : html``}
-        </div>
+              </div>
+            `
+          : html``}
         ${!entityMissing
           ? html`
               <div class="field-block">
@@ -639,17 +583,6 @@ export class ScheduleManagerCardEditor extends LitElement {
   private _onHeaderTitleBlur() {
     const v = this._headerTitleDraft.trim();
     this._patchConfig({ header_title: v ? v : undefined });
-  }
-
-  private _statusEntityChanged(ev: CustomEvent<{ value?: string }>) {
-    const value = String(ev.detail?.value ?? '').trim();
-    if (!value) {
-      this._userClearedStatusEntity = true;
-      this._patchConfig({ status_entity: undefined });
-      return;
-    }
-    this._userClearedStatusEntity = false;
-    this._patchConfig({ status_entity: value });
   }
 
 }

@@ -301,15 +301,12 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
       'When off, only the link is hidden; the 24-hour bar stays visible. Use the option below to allow opening the editor by clicking the schedule.',
     'editor.card_click_opens_editor_label': 'Click on schedule opens editor',
     'editor.card_click_opens_editor_hint':
-      'Only applies when the link above is off. When off, the card is view-only for editing slots (change options or use the link).',
-    'editor.status_entity_label': 'Schedule Manager status entity',
+      'Only when the link above is off. If this is off too, turn one of the two switches above back on to edit from the dashboard.',
+    'editor.entity_missing_no_picker':
+      'Sensor `{id}` was not found. Load the Schedule Manager integration or set `status_entity` in YAML.',
     'editor.schedules_on_card_title': 'Schedules to show on the card',
     'editor.schedules_on_card_hint':
       'All boxes checked = show every schedule. Uncheck to hide one (at least one stays visible).',
-    'editor.entity_missing_before_first_code': 'The entity ',
-    'editor.entity_missing_between_codes':
-      ' was not found. Ensure the Schedule Manager integration is loaded; the expected sensor is usually ',
-    'editor.entity_missing_after_second_code': '.',
     'editor.no_schedules_hint':
       'No schedules in the sensor attributes yet. Create one from the card or the {service} service.',
     'card.save_failed_prefix': 'Could not save:',
@@ -451,15 +448,12 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
       'Si désactivé, seul le lien est masqué ; la frise 24 h reste visible. Utilisez l’option ci-dessous pour autoriser l’ouverture de l’éditeur au clic sur le planning.',
     'editor.card_click_opens_editor_label': 'Clic sur le planning ouvre l’éditeur',
     'editor.card_click_opens_editor_hint':
-      'Uniquement si le lien ci-dessus est désactivé. Si désactivé, la carte ne permet plus d’ouvrir l’éditeur (réactivez une des deux options).',
-    'editor.status_entity_label': 'Capteur d’état Schedule Manager',
+      'Uniquement si le lien ci-dessus est désactivé. Si celui-ci est aussi désactivé, réactivez l’un des deux interrupteurs ci-dessus pour pouvoir modifier depuis le tableau de bord.',
+    'editor.entity_missing_no_picker':
+      'Capteur `{id}` introuvable. Chargez l’intégration Schedule Manager ou définissez `status_entity` dans le YAML.',
     'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
     'editor.schedules_on_card_hint':
       'Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un planning (au moins un reste visible).',
-    'editor.entity_missing_before_first_code': 'L’entité ',
-    'editor.entity_missing_between_codes':
-      ' est introuvable. Vérifiez que l’intégration Schedule Manager est installée et chargée ; le capteur attendu est en général ',
-    'editor.entity_missing_after_second_code': '.',
     'editor.no_schedules_hint':
       'Aucun planning dans les attributs du capteur pour l’instant. Créez un planning depuis la carte ou le service {service}.',
     'card.save_failed_prefix': 'Enregistrement impossible :',

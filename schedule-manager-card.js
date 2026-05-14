@@ -2080,13 +2080,10 @@ const MESSAGES = {
         'editor.show_slots_on_card_label': 'Show “Configure time slots” link under the timeline',
         'editor.show_slots_on_card_hint': 'When off, only the link is hidden; the 24-hour bar stays visible. Use the option below to allow opening the editor by clicking the schedule.',
         'editor.card_click_opens_editor_label': 'Click on schedule opens editor',
-        'editor.card_click_opens_editor_hint': 'Only applies when the link above is off. When off, the card is view-only for editing slots (change options or use the link).',
-        'editor.status_entity_label': 'Schedule Manager status entity',
+        'editor.card_click_opens_editor_hint': 'Only when the link above is off. If this is off too, turn one of the two switches above back on to edit from the dashboard.',
+        'editor.entity_missing_no_picker': 'Sensor `{id}` was not found. Load the Schedule Manager integration or set `status_entity` in YAML.',
         'editor.schedules_on_card_title': 'Schedules to show on the card',
         'editor.schedules_on_card_hint': 'All boxes checked = show every schedule. Uncheck to hide one (at least one stays visible).',
-        'editor.entity_missing_before_first_code': 'The entity ',
-        'editor.entity_missing_between_codes': ' was not found. Ensure the Schedule Manager integration is loaded; the expected sensor is usually ',
-        'editor.entity_missing_after_second_code': '.',
         'editor.no_schedules_hint': 'No schedules in the sensor attributes yet. Create one from the card or the {service} service.',
         'card.save_failed_prefix': 'Could not save:',
         'card.actions_during_slot': 'Actions during this time slot',
@@ -2204,13 +2201,10 @@ const MESSAGES = {
         'editor.show_slots_on_card_label': 'Afficher le lien « Configurer les plages » sous la frise',
         'editor.show_slots_on_card_hint': 'Si désactivé, seul le lien est masqué ; la frise 24 h reste visible. Utilisez l’option ci-dessous pour autoriser l’ouverture de l’éditeur au clic sur le planning.',
         'editor.card_click_opens_editor_label': 'Clic sur le planning ouvre l’éditeur',
-        'editor.card_click_opens_editor_hint': 'Uniquement si le lien ci-dessus est désactivé. Si désactivé, la carte ne permet plus d’ouvrir l’éditeur (réactivez une des deux options).',
-        'editor.status_entity_label': 'Capteur d’état Schedule Manager',
+        'editor.card_click_opens_editor_hint': 'Uniquement si le lien ci-dessus est désactivé. Si celui-ci est aussi désactivé, réactivez l’un des deux interrupteurs ci-dessus pour pouvoir modifier depuis le tableau de bord.',
+        'editor.entity_missing_no_picker': 'Capteur `{id}` introuvable. Chargez l’intégration Schedule Manager ou définissez `status_entity` dans le YAML.',
         'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
         'editor.schedules_on_card_hint': 'Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un planning (au moins un reste visible).',
-        'editor.entity_missing_before_first_code': 'L’entité ',
-        'editor.entity_missing_between_codes': ' est introuvable. Vérifiez que l’intégration Schedule Manager est installée et chargée ; le capteur attendu est en général ',
-        'editor.entity_missing_after_second_code': '.',
         'editor.no_schedules_hint': 'Aucun planning dans les attributs du capteur pour l’instant. Créez un planning depuis la carte ou le service {service}.',
         'card.save_failed_prefix': 'Enregistrement impossible :',
         'card.actions_during_slot': 'Actions pendant cette plage',
@@ -3081,23 +3075,6 @@ function timelineResizeHandlesForSelection(blocks, selectedIndex) {
  * SPDX-License-Identifier: BSD-3-Clause
  */const e=()=>new o;class o{}const h=new WeakMap,n=e$4(class extends c{render(t){return A}update(t,[s]){var e;const o=s!==this.G;return o&&void 0!==this.G&&this.ot(void 0),(o||this.rt!==this.lt)&&(this.G=s,this.dt=null===(e=t.options)||void 0===e?void 0:e.host,this.ot(this.lt=t.element)),A}ot(i){var t;if("function"==typeof this.G){const s=null!==(t=this.dt)&&void 0!==t?t:globalThis;let e=h.get(s);void 0===e&&(e=new WeakMap,h.set(s,e)),void 0!==e.get(this.G)&&this.G.call(this.dt,void 0),e.set(this.G,i),void 0!==i&&this.G.call(this.dt,i);}else this.G.value=i;}get rt(){var i,t,s;return "function"==typeof this.G?null===(t=h.get(null!==(i=this.dt)&&void 0!==i?i:globalThis))||void 0===t?void 0:t.get(this.G):null===(s=this.G)||void 0===s?void 0:s.value}disconnected(){this.rt===this.lt&&this.ot(void 0);}reconnected(){this.ot(this.lt);}});
 
-/**
- * HA ≥ 2024 : `ha-entity-picker.entityFilter` reçoit un `HassEntity` (objet avec `entity_id`),
- * pas uniquement une chaîne `entity_id`.
- */
-function entityIdFromPickerFilterArgument(raw) {
-    if (typeof raw === 'string' && raw.includes('.')) {
-        return raw;
-    }
-    if (raw && typeof raw === 'object' && 'entity_id' in raw) {
-        const id = raw.entity_id;
-        if (typeof id === 'string' && id.includes('.')) {
-            return id;
-        }
-    }
-    return '';
-}
-
 /** Empreinte stable pour comparer la config affichée (alignée sur hasChanged de la carte). */
 function editorConfigFingerprint(c) {
     if (!c) {
@@ -3127,30 +3104,9 @@ function haFormControlCheckedFromChangeEvent(ev) {
 let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     constructor() {
         super(...arguments);
-        /** True si l’utilisateur a vidé le capteur — ne pas réappliquer le défaut automatiquement. */
-        this._userClearedStatusEntity = false;
         /** Brouillon titre : évite que les re-renders / ha-textfield réinitialisent la frappe. */
         this._headerTitleDraft = '';
         this._headerTitleRef = e();
-        /** Filtre le sélecteur du capteur d’état (entité avec attribut `schedules`). */
-        this._statusEntityFilter = (entity) => {
-            const entityId = entityIdFromPickerFilterArgument(entity);
-            if (!entityId) {
-                return false;
-            }
-            if (entityId === SCHEDULE_MANAGER_STATUS_ENTITY_ID) {
-                return true;
-            }
-            if (entityId.includes('schedule_manager')) {
-                return true;
-            }
-            const st = this.hass?.states[entityId];
-            const attrs = st?.attributes;
-            const schedules = attrs?.schedules;
-            return (schedules != null &&
-                typeof schedules === 'object' &&
-                !Array.isArray(schedules));
-        };
     }
     /** Comme scheduler-card : `setConfig` remplace l’état local (pas de fusion avec l’ancien, pas d’écriture sur `this.config`). */
     setConfig(config) {
@@ -3197,7 +3153,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         if (seTrim) {
             out.status_entity = seTrim;
         }
-        else if (!this._userClearedStatusEntity) {
+        else {
             out.status_entity = SCHEDULE_MANAGER_STATUS_ENTITY_ID;
         }
         const ht = typeof r.header_title === 'string' ? r.header_title.trim() : '';
@@ -3223,9 +3179,6 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         const te = this._headerTitleRef.value;
         if (document.activeElement !== te) {
             this._headerTitleDraft = this._config.header_title ?? '';
-        }
-        if (this._config.status_entity?.trim()) {
-            this._userClearedStatusEntity = false;
         }
     }
     /** Retire les clés `undefined` : le spread les copierait et effacerait `schedule_ids` / `header_title`. */
@@ -3262,7 +3215,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
      * à l’ouverture (sinon Lovelace écrase la config avant affichage, cf. scheduler-card).
      */
     _maybeApplyDefaultStatusEntity() {
-        if (this._userClearedStatusEntity || !this.hass) {
+        if (!this.hass) {
             return;
         }
         if (!this.hass.states[SCHEDULE_MANAGER_STATUS_ENTITY_ID]) {
@@ -3282,17 +3235,6 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
     }
     _resolvedStatusEntityId() {
         return this._config?.status_entity?.trim() || SCHEDULE_MANAGER_STATUS_ENTITY_ID;
-    }
-    /** Valeur affichée dans le sélecteur (vide si l’utilisateur a explicitement retiré le capteur). */
-    _statusEntityPickerValue() {
-        const v = this._config?.status_entity?.trim();
-        if (v) {
-            return v;
-        }
-        if (this._userClearedStatusEntity) {
-            return '';
-        }
-        return SCHEDULE_MANAGER_STATUS_ENTITY_ID;
     }
     _schedulesRecord() {
         const st = this.hass?.states[this._resolvedStatusEntityId()];
@@ -3464,28 +3406,17 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
               `
             : x ``}
         </div>
-        <div class="field-block">
-          <ha-entity-picker
-            .hass=${hass}
-            label=${msg(hass, 'editor.status_entity_label')}
-            .value=${this._statusEntityPickerValue()}
-            .includeDomains=${['sensor']}
-            .entityFilter=${this._statusEntityFilter}
-            .allowCustomEntity=${true}
-            @value-changed=${this._statusEntityChanged}
-          ></ha-entity-picker>
-          ${entityMissing
+        ${entityMissing
             ? x `
+              <div class="field-block">
                 <p class="hint">
-                  ${msg(hass, 'editor.entity_missing_before_first_code')}
-                  <code class="inline">${this._resolvedStatusEntityId()}</code>
-                  ${msg(hass, 'editor.entity_missing_between_codes')}
-                  <code class="inline">${SCHEDULE_MANAGER_STATUS_ENTITY_ID}</code>
-                  ${msg(hass, 'editor.entity_missing_after_second_code')}
+                  ${msg(hass, 'editor.entity_missing_no_picker', {
+                id: this._resolvedStatusEntityId(),
+            })}
                 </p>
-              `
+              </div>
+            `
             : x ``}
-        </div>
         ${!entityMissing
             ? x `
               <div class="field-block">
@@ -3584,16 +3515,6 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         const v = this._headerTitleDraft.trim();
         this._patchConfig({ header_title: v ? v : undefined });
     }
-    _statusEntityChanged(ev) {
-        const value = String(ev.detail?.value ?? '').trim();
-        if (!value) {
-            this._userClearedStatusEntity = true;
-            this._patchConfig({ status_entity: undefined });
-            return;
-        }
-        this._userClearedStatusEntity = false;
-        this._patchConfig({ status_entity: value });
-    }
 };
 ScheduleManagerCardEditor.styles = i$4 `
     .card-config {
@@ -3601,10 +3522,6 @@ ScheduleManagerCardEditor.styles = i$4 `
       flex-direction: column;
       gap: 16px;
       padding: 8px 0;
-    }
-    ha-entity-picker {
-      display: block;
-      width: 100%;
     }
     .field-block {
       display: flex;
@@ -3687,9 +3604,6 @@ __decorate([
 __decorate([
     t()
 ], ScheduleManagerCardEditor.prototype, "_config", void 0);
-__decorate([
-    t()
-], ScheduleManagerCardEditor.prototype, "_userClearedStatusEntity", void 0);
 __decorate([
     t()
 ], ScheduleManagerCardEditor.prototype, "_headerTitleDraft", void 0);
