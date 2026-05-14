@@ -43,6 +43,26 @@ export const styles = css`
     border-bottom: none;
   }
 
+  /** Mode sans lien (show_slots_on_card désactivé) : zone planning cliquable sauf contrôles. */
+  .schedule--tap-opens-editor {
+    cursor: pointer;
+    border-radius: 10px;
+    outline: none;
+    transition: background 0.15s ease;
+  }
+
+  .schedule--tap-opens-editor:hover {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.06);
+  }
+
+  .schedule--tap-opens-editor:focus-visible {
+    box-shadow: 0 0 0 2px var(--primary-color);
+  }
+
+  .compact-empty-hint {
+    margin-bottom: 0;
+  }
+
   .schedule-header {
     display: flex;
     align-items: center;

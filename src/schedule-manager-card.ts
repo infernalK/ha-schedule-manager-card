@@ -1,4 +1,4 @@
-import { LitElement, html } from 'lit';
+import { LitElement, html, nothing } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { customElement, property, state } from 'lit/decorators.js';
 import { PropertyValues } from 'lit';
@@ -244,6 +244,7 @@ function scheduleManagerCardConfigChanged(
           show_header: c.show_header,
           show_schedule_enable_toggle: c.show_schedule_enable_toggle,
           show_repeat_days_on_card: c.show_repeat_days_on_card,
+          show_slots_on_card: c.show_slots_on_card,
           schedule_ids: c.schedule_ids ?? null,
         })
       : '';
@@ -573,6 +574,58 @@ export class ScheduleManagerCard extends LitElement {
     return this.config?.show_repeat_days_on_card !== false;
   }
 
+  /** Lien texte « Configurer les plages » sous la frise (défaut: affiché). La frise reste toujours visible. */
+  private _showSlotsOnCard(): boolean {
+    return this.config?.show_slots_on_card !== false;
+  }
+
+  /**
+   * Sans le lien (`show_slots_on_card: false`), ouvre l’éditeur au clic sauf si le clic
+   * vise un contrôle (switch, bouton, champ, composant `ha-*`).
+   */
+  private _onScheduleShellPointerDown(ev: PointerEvent, schedule: Schedule) {
+    if (this._showSlotsOnCard()) {
+      return;
+    }
+    if (ev.button !== 0) {
+      return;
+    }
+    const root = ev.currentTarget as HTMLElement;
+    for (const node of ev.composedPath()) {
+      if (node === root) {
+        break;
+      }
+      if (!(node instanceof Element)) {
+        continue;
+      }
+      const tag = node.tagName.toLowerCase();
+      if (
+        tag === 'button' ||
+        tag === 'a' ||
+        tag === 'input' ||
+        tag === 'select' ||
+        tag === 'textarea'
+      ) {
+        return;
+      }
+      if (tag.startsWith('ha-')) {
+        return;
+      }
+    }
+    this.openVisualEditor(schedule);
+  }
+
+  private _onScheduleShellKeydown(ev: KeyboardEvent, schedule: Schedule) {
+    if (this._showSlotsOnCard()) {
+      return;
+    }
+    if (ev.key !== 'Enter' && ev.key !== ' ') {
+      return;
+    }
+    ev.preventDefault();
+    this.openVisualEditor(schedule);
+  }
+
   /** Jours affichés sur la carte : `all` si absent / complet sur la semaine. */
   private scheduleRepeatDaysDisplay(schedule: Schedule): number[] | 'all' {
     const raw = schedule.repeat_days;
@@ -756,9 +809,23 @@ export class ScheduleManagerCard extends LitElement {
     }
 
     const blocks = schedule.time_blocks || [];
+    const showSlots = this._showSlotsOnCard();
+    const compactTap = !showSlots;
 
     return html`
-      <div class="schedule">
+      <div
+        class="schedule${compactTap ? ' schedule--tap-opens-editor' : ''}"
+        tabindex=${compactTap ? 0 : nothing}
+        role=${compactTap ? 'button' : nothing}
+        aria-label=${compactTap
+          ? msg(this.hass, 'card.open_schedule_editor_aria', {
+              name: schedule.name,
+            })
+          : nothing}
+        @pointerdown=${(e: PointerEvent) =>
+          this._onScheduleShellPointerDown(e, schedule)}
+        @keydown=${(e: KeyboardEvent) => this._onScheduleShellKeydown(e, schedule)}
+      >
         <div class="schedule-header">
           <span>${schedule.name}</span>
           ${this._showScheduleEnableToggle()
@@ -780,17 +847,24 @@ export class ScheduleManagerCard extends LitElement {
         ${blocks.length
           ? html`${this.renderDayTimeline(blocks)}`
           : html`
-              <div class="empty-hint">
-                ${msg(this.hass, 'card.no_slots_hint')}
+              <div class="empty-hint ${compactTap ? 'compact-empty-hint' : ''}">
+                ${msg(
+                  this.hass,
+                  compactTap ? 'card.compact_empty_hint' : 'card.no_slots_hint'
+                )}
               </div>
             `}
-        <button
-          type="button"
-          class="btn-open-config"
-          @click=${() => this.openVisualEditor(schedule)}
-        >
-          ${msg(this.hass, 'card.configure_slots')}
-        </button>
+        ${showSlots
+          ? html`
+              <button
+                type="button"
+                class="btn-open-config"
+                @click=${() => this.openVisualEditor(schedule)}
+              >
+                ${msg(this.hass, 'card.configure_slots')}
+              </button>
+            `
+          : html``}
       </div>
     `;
   }

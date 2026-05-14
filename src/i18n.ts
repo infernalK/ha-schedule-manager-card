@@ -206,6 +206,9 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.empty_list': 'Nothing to display.',
     'card.configure_slots': 'Configure time slots…',
     'card.no_slots_hint': 'No time slots — use “Configure time slots…” to add some.',
+    'card.open_schedule_editor_aria': 'Open editor for {name}',
+    'card.compact_empty_hint':
+      'No time slots yet — click this area to add slots and configure block actions.',
     'card.timeline_aria': 'Time slots over 24 hours',
     'card.default_header_title': 'Schedule Manager',
     'card.alert_select_day': 'Select at least one day.',
@@ -293,6 +296,9 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'editor.show_repeat_days_on_card_label': 'Show repeat days on the card',
     'editor.show_repeat_days_on_card_hint':
       'When enabled, each schedule shows which weekdays it runs (below the title, above the 24-hour bar).',
+    'editor.show_slots_on_card_label': 'Show “Configure time slots” link under the timeline',
+    'editor.show_slots_on_card_hint':
+      'When off, only the link is hidden; the 24-hour bar stays visible. Click the schedule area to open the editor.',
     'editor.status_entity_label': 'Schedule Manager status entity',
     'editor.schedules_on_card_title': 'Schedules to show on the card',
     'editor.schedules_on_card_hint':
@@ -340,6 +346,9 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'card.configure_slots': 'Configurer les plages…',
     'card.no_slots_hint':
       'Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.',
+    'card.open_schedule_editor_aria': 'Ouvrir l’éditeur pour {name}',
+    'card.compact_empty_hint':
+      'Aucune plage pour l’instant — cliquez sur cette zone pour ajouter des créneaux et configurer les actions des blocs.',
     'card.timeline_aria': 'Plages sur 24 heures',
     'card.default_header_title': 'Schedule Manager',
     'card.alert_select_day': 'Sélectionnez au moins un jour.',
@@ -433,6 +442,10 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'editor.show_repeat_days_on_card_label': 'Afficher les jours de répétition sur la carte',
     'editor.show_repeat_days_on_card_hint':
       'Si activé, chaque planning indique les jours de la semaine concernés (sous le titre, au-dessus de la frise horaire).',
+    'editor.show_slots_on_card_label':
+      'Afficher le lien « Configurer les plages » sous la frise',
+    'editor.show_slots_on_card_hint':
+      'Si désactivé, seul le lien est masqué ; la frise 24 h reste visible. Cliquez sur la zone du planning pour ouvrir l’éditeur.',
     'editor.status_entity_label': 'Capteur d’état Schedule Manager',
     'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
     'editor.schedules_on_card_hint':

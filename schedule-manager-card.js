@@ -243,6 +243,26 @@ const styles = i$4 `
     border-bottom: none;
   }
 
+  /** Mode sans lien (show_slots_on_card désactivé) : zone planning cliquable sauf contrôles. */
+  .schedule--tap-opens-editor {
+    cursor: pointer;
+    border-radius: 10px;
+    outline: none;
+    transition: background 0.15s ease;
+  }
+
+  .schedule--tap-opens-editor:hover {
+    background: rgba(var(--rgb-primary-color, 33, 150, 243), 0.06);
+  }
+
+  .schedule--tap-opens-editor:focus-visible {
+    box-shadow: 0 0 0 2px var(--primary-color);
+  }
+
+  .compact-empty-hint {
+    margin-bottom: 0;
+  }
+
   .schedule-header {
     display: flex;
     align-items: center;
@@ -1978,6 +1998,8 @@ const MESSAGES = {
         'card.empty_list': 'Nothing to display.',
         'card.configure_slots': 'Configure time slots…',
         'card.no_slots_hint': 'No time slots — use “Configure time slots…” to add some.',
+        'card.open_schedule_editor_aria': 'Open editor for {name}',
+        'card.compact_empty_hint': 'No time slots yet — click this area to add slots and configure block actions.',
         'card.timeline_aria': 'Time slots over 24 hours',
         'card.default_header_title': 'Schedule Manager',
         'card.alert_select_day': 'Select at least one day.',
@@ -2055,6 +2077,8 @@ const MESSAGES = {
         'editor.schedule_toggle_hint': 'Shows or hides the switch to the right of each schedule name (integration side).',
         'editor.show_repeat_days_on_card_label': 'Show repeat days on the card',
         'editor.show_repeat_days_on_card_hint': 'When enabled, each schedule shows which weekdays it runs (below the title, above the 24-hour bar).',
+        'editor.show_slots_on_card_label': 'Show “Configure time slots” link under the timeline',
+        'editor.show_slots_on_card_hint': 'When off, only the link is hidden; the 24-hour bar stays visible. Click the schedule area to open the editor.',
         'editor.status_entity_label': 'Schedule Manager status entity',
         'editor.schedules_on_card_title': 'Schedules to show on the card',
         'editor.schedules_on_card_hint': 'All boxes checked = show every schedule. Uncheck to hide one (at least one stays visible).',
@@ -2096,6 +2120,8 @@ const MESSAGES = {
         'card.empty_list': 'Aucun élément à afficher.',
         'card.configure_slots': 'Configurer les plages…',
         'card.no_slots_hint': 'Aucune plage — utilisez « Configurer les plages… » pour définir des créneaux.',
+        'card.open_schedule_editor_aria': 'Ouvrir l’éditeur pour {name}',
+        'card.compact_empty_hint': 'Aucune plage pour l’instant — cliquez sur cette zone pour ajouter des créneaux et configurer les actions des blocs.',
         'card.timeline_aria': 'Plages sur 24 heures',
         'card.default_header_title': 'Schedule Manager',
         'card.alert_select_day': 'Sélectionnez au moins un jour.',
@@ -2173,6 +2199,8 @@ const MESSAGES = {
         'editor.schedule_toggle_hint': 'Affiche ou masque le commutateur à droite du nom de chaque planning (activation côté intégration).',
         'editor.show_repeat_days_on_card_label': 'Afficher les jours de répétition sur la carte',
         'editor.show_repeat_days_on_card_hint': 'Si activé, chaque planning indique les jours de la semaine concernés (sous le titre, au-dessus de la frise horaire).',
+        'editor.show_slots_on_card_label': 'Afficher le lien « Configurer les plages » sous la frise',
+        'editor.show_slots_on_card_hint': 'Si désactivé, seul le lien est masqué ; la frise 24 h reste visible. Cliquez sur la zone du planning pour ouvrir l’éditeur.',
         'editor.status_entity_label': 'Capteur d’état Schedule Manager',
         'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
         'editor.schedules_on_card_hint': 'Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un planning (au moins un reste visible).',
@@ -3078,6 +3106,7 @@ function editorConfigFingerprint(c) {
         show_header: c.show_header,
         show_schedule_enable_toggle: c.show_schedule_enable_toggle,
         show_repeat_days_on_card: c.show_repeat_days_on_card,
+        show_slots_on_card: c.show_slots_on_card,
         schedule_ids: c.schedule_ids ?? null,
     });
 }
@@ -3147,6 +3176,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         const showHeader = r.show_header !== false;
         const showToggle = r.show_schedule_enable_toggle !== false;
         const showRepeat = r.show_repeat_days_on_card !== false;
+        const showSlotsOnCard = r.show_slots_on_card !== false;
         const seRaw = r.status_entity;
         const seTrim = typeof seRaw === 'string' && seRaw.trim() ? seRaw.trim() : '';
         const out = {
@@ -3154,6 +3184,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             show_header: showHeader,
             show_schedule_enable_toggle: showToggle,
             show_repeat_days_on_card: showRepeat,
+            show_slots_on_card: showSlotsOnCard,
         };
         if (seTrim) {
             out.status_entity = seTrim;
@@ -3402,6 +3433,17 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
           </p>
         </div>
         <div class="field-block">
+          <ha-formfield label=${msg(hass, 'editor.show_slots_on_card_label')}>
+            <ha-switch
+              .checked=${this._config?.show_slots_on_card !== false}
+              @change=${this._onShowSlotsOnCardChange}
+            ></ha-switch>
+          </ha-formfield>
+          <p class="hint">
+            ${msg(hass, 'editor.show_slots_on_card_hint')}
+          </p>
+        </div>
+        <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
             label=${msg(hass, 'editor.status_entity_label')}
@@ -3499,6 +3541,12 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         const checked = haFormControlCheckedFromChangeEvent(ev);
         this._patchConfig({
             show_repeat_days_on_card: checked,
+        });
+    }
+    _onShowSlotsOnCardChange(ev) {
+        const checked = haFormControlCheckedFromChangeEvent(ev);
+        this._patchConfig({
+            show_slots_on_card: checked,
         });
     }
     _onHeaderTitleInput(ev) {
@@ -3768,6 +3816,7 @@ function scheduleManagerCardConfigChanged(next, prev) {
             show_header: c.show_header,
             show_schedule_enable_toggle: c.show_schedule_enable_toggle,
             show_repeat_days_on_card: c.show_repeat_days_on_card,
+            show_slots_on_card: c.show_slots_on_card,
             schedule_ids: c.schedule_ids ?? null,
         })
         : '';
@@ -4072,6 +4121,53 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     _showRepeatDaysOnCard() {
         return this.config?.show_repeat_days_on_card !== false;
     }
+    /** Lien texte « Configurer les plages » sous la frise (défaut: affiché). La frise reste toujours visible. */
+    _showSlotsOnCard() {
+        return this.config?.show_slots_on_card !== false;
+    }
+    /**
+     * Sans le lien (`show_slots_on_card: false`), ouvre l’éditeur au clic sauf si le clic
+     * vise un contrôle (switch, bouton, champ, composant `ha-*`).
+     */
+    _onScheduleShellPointerDown(ev, schedule) {
+        if (this._showSlotsOnCard()) {
+            return;
+        }
+        if (ev.button !== 0) {
+            return;
+        }
+        const root = ev.currentTarget;
+        for (const node of ev.composedPath()) {
+            if (node === root) {
+                break;
+            }
+            if (!(node instanceof Element)) {
+                continue;
+            }
+            const tag = node.tagName.toLowerCase();
+            if (tag === 'button' ||
+                tag === 'a' ||
+                tag === 'input' ||
+                tag === 'select' ||
+                tag === 'textarea') {
+                return;
+            }
+            if (tag.startsWith('ha-')) {
+                return;
+            }
+        }
+        this.openVisualEditor(schedule);
+    }
+    _onScheduleShellKeydown(ev, schedule) {
+        if (this._showSlotsOnCard()) {
+            return;
+        }
+        if (ev.key !== 'Enter' && ev.key !== ' ') {
+            return;
+        }
+        ev.preventDefault();
+        this.openVisualEditor(schedule);
+    }
     /** Jours affichés sur la carte : `all` si absent / complet sur la semaine. */
     scheduleRepeatDaysDisplay(schedule) {
         const raw = schedule.repeat_days;
@@ -4225,8 +4321,21 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
             return x ``;
         }
         const blocks = schedule.time_blocks || [];
+        const showSlots = this._showSlotsOnCard();
+        const compactTap = !showSlots;
         return x `
-      <div class="schedule">
+      <div
+        class="schedule${compactTap ? ' schedule--tap-opens-editor' : ''}"
+        tabindex=${compactTap ? 0 : A}
+        role=${compactTap ? 'button' : A}
+        aria-label=${compactTap
+            ? msg(this.hass, 'card.open_schedule_editor_aria', {
+                name: schedule.name,
+            })
+            : A}
+        @pointerdown=${(e) => this._onScheduleShellPointerDown(e, schedule)}
+        @keydown=${(e) => this._onScheduleShellKeydown(e, schedule)}
+      >
         <div class="schedule-header">
           <span>${schedule.name}</span>
           ${this._showScheduleEnableToggle()
@@ -4244,17 +4353,21 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
         ${blocks.length
             ? x `${this.renderDayTimeline(blocks)}`
             : x `
-              <div class="empty-hint">
-                ${msg(this.hass, 'card.no_slots_hint')}
+              <div class="empty-hint ${compactTap ? 'compact-empty-hint' : ''}">
+                ${msg(this.hass, compactTap ? 'card.compact_empty_hint' : 'card.no_slots_hint')}
               </div>
             `}
-        <button
-          type="button"
-          class="btn-open-config"
-          @click=${() => this.openVisualEditor(schedule)}
-        >
-          ${msg(this.hass, 'card.configure_slots')}
-        </button>
+        ${showSlots
+            ? x `
+              <button
+                type="button"
+                class="btn-open-config"
+                @click=${() => this.openVisualEditor(schedule)}
+              >
+                ${msg(this.hass, 'card.configure_slots')}
+              </button>
+            `
+            : x ``}
       </div>
     `;
     }

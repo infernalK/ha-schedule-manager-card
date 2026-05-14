@@ -22,6 +22,7 @@ function editorConfigFingerprint(c?: CardConfig): string {
     show_header: c.show_header,
     show_schedule_enable_toggle: c.show_schedule_enable_toggle,
     show_repeat_days_on_card: c.show_repeat_days_on_card,
+    show_slots_on_card: c.show_slots_on_card,
     schedule_ids: c.schedule_ids ?? null,
   });
 }
@@ -174,6 +175,7 @@ export class ScheduleManagerCardEditor extends LitElement {
     const showHeader = r.show_header !== false;
     const showToggle = r.show_schedule_enable_toggle !== false;
     const showRepeat = r.show_repeat_days_on_card !== false;
+    const showSlotsOnCard = r.show_slots_on_card !== false;
     const seRaw = r.status_entity;
     const seTrim =
       typeof seRaw === 'string' && seRaw.trim() ? seRaw.trim() : '';
@@ -182,6 +184,7 @@ export class ScheduleManagerCardEditor extends LitElement {
       show_header: showHeader,
       show_schedule_enable_toggle: showToggle,
       show_repeat_days_on_card: showRepeat,
+      show_slots_on_card: showSlotsOnCard,
     };
     if (seTrim) {
       out.status_entity = seTrim;
@@ -478,6 +481,17 @@ export class ScheduleManagerCardEditor extends LitElement {
           </p>
         </div>
         <div class="field-block">
+          <ha-formfield label=${msg(hass, 'editor.show_slots_on_card_label')}>
+            <ha-switch
+              .checked=${this._config?.show_slots_on_card !== false}
+              @change=${this._onShowSlotsOnCardChange}
+            ></ha-switch>
+          </ha-formfield>
+          <p class="hint">
+            ${msg(hass, 'editor.show_slots_on_card_hint')}
+          </p>
+        </div>
+        <div class="field-block">
           <ha-entity-picker
             .hass=${hass}
             label=${msg(hass, 'editor.status_entity_label')}
@@ -583,6 +597,13 @@ export class ScheduleManagerCardEditor extends LitElement {
     const checked = haFormControlCheckedFromChangeEvent(ev);
     this._patchConfig({
       show_repeat_days_on_card: checked,
+    });
+  }
+
+  private _onShowSlotsOnCardChange(ev: Event) {
+    const checked = haFormControlCheckedFromChangeEvent(ev);
+    this._patchConfig({
+      show_slots_on_card: checked,
     });
   }
 

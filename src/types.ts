@@ -67,6 +67,11 @@ export interface CardConfig {
   show_schedule_enable_toggle?: boolean;
   /** Si `false`, masque la ligne des jours de répétition sous chaque planning (défaut: affichée). */
   show_repeat_days_on_card?: boolean;
+  /**
+   * Si `false`, masque uniquement le lien « Configurer les plages » sous la frise.
+   * La frise 24 h reste affichée ; un clic sur la zone du planning ouvre l’éditeur.
+   */
+  show_slots_on_card?: boolean;
 }
 
 /** Titre affiché lorsque `header_title` est vide / absent. */
