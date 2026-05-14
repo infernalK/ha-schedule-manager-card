@@ -206,6 +206,10 @@ const styles = i$4 `
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
+    /* Sections / grille : ne pas s'étirer sur la hauteur de la ligne (évite le grand vide sous le contenu). */
+    align-self: start;
+    height: fit-content;
+    min-height: 0;
   }
 
   .card {
@@ -213,6 +217,8 @@ const styles = i$4 `
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
+    height: fit-content;
+    min-height: 0;
   }
 
   /** Titre de la carte (sous ha-card) : taille réduite par rapport au défaut Lovelace. */
@@ -5883,6 +5889,9 @@ let ScheduleManagerCard = class ScheduleManagerCard extends s$2 {
     getCardSize() {
         /* 1 = hauteur suivant le contenu ; une valeur > 1 réserve des rangées vides sous la carte (sections / masonry). */
         return 1;
+    }
+    getGridOptions() {
+        return { rows: 'auto' };
     }
 };
 __decorate([

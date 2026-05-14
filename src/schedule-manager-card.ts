@@ -2674,6 +2674,10 @@ export class ScheduleManagerCard extends LitElement {
     /* 1 = hauteur suivant le contenu ; une valeur > 1 réserve des rangées vides sous la carte (sections / masonry). */
     return 1;
   }
+
+  getGridOptions() {
+    return { rows: 'auto' as const };
+  }
 }
 
 declare global {
