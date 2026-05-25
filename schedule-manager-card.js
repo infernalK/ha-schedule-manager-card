@@ -3107,6 +3107,8 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         /** Brouillon titre : évite que les re-renders / ha-textfield réinitialisent la frappe. */
         this._headerTitleDraft = '';
         this._headerTitleRef = e();
+        /** Empreinte des plannings sur le capteur — détecte un renommage sans changement de ref. `hass`. */
+        this._schedulesSnap = '';
     }
     /** Comme scheduler-card : `setConfig` remplace l’état local (pas de fusion avec l’ancien, pas d’écriture sur `this.config`). */
     setConfig(config) {
@@ -3204,6 +3206,16 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                 if (editorConfigFingerprint(merged) !== editorConfigFingerprint(this._config)) {
                     this._applyIncomingConfigRecord(merged);
                 }
+            }
+        }
+        if (this.hass) {
+            const snap = JSON.stringify(this._schedulesRecord());
+            const schedulesChanged = snap !== this._schedulesSnap;
+            if (schedulesChanged) {
+                this._schedulesSnap = snap;
+            }
+            if (changed.has('hass') || schedulesChanged) {
+                this.requestUpdate();
             }
         }
         if (changed.has('hass') || changed.has('config') || changed.has('_config')) {

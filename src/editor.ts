@@ -61,6 +61,9 @@ export class ScheduleManagerCardEditor extends LitElement {
 
   private _headerTitleRef = createRef<HTMLInputElement>();
 
+  /** Empreinte des plannings sur le capteur — détecte un renommage sans changement de ref. `hass`. */
+  private _schedulesSnap = '';
+
   static styles = css`
     .card-config {
       display: flex;
@@ -242,6 +245,16 @@ export class ScheduleManagerCardEditor extends LitElement {
         if (editorConfigFingerprint(merged) !== editorConfigFingerprint(this._config)) {
           this._applyIncomingConfigRecord(merged);
         }
+      }
+    }
+    if (this.hass) {
+      const snap = JSON.stringify(this._schedulesRecord());
+      const schedulesChanged = snap !== this._schedulesSnap;
+      if (schedulesChanged) {
+        this._schedulesSnap = snap;
+      }
+      if (changed.has('hass') || schedulesChanged) {
+        this.requestUpdate();
       }
     }
     if (changed.has('hass') || changed.has('config') || changed.has('_config')) {
