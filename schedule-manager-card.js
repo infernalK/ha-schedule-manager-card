@@ -2476,13 +2476,16 @@ function listEntityIdsForAction(hass, actionType) {
     return out;
 }
 
-/** Identifiants visibles + ordre d’affichage (filtre `schedule_ids` + `schedule_order`). */
-function resolveOrderedScheduleIds(config, availableIds, compareIds) {
+/** Ordre d’affichage ; sur la carte, filtre aussi par `schedule_ids` si défini. */
+function resolveOrderedScheduleIds(config, availableIds, compareIds, options = {}) {
+    const applyVisibilityFilter = options.applyVisibilityFilter !== false;
     const available = new Set(availableIds);
     const filter = (config.schedule_ids ?? [])
         .map((id) => String(id).trim())
         .filter((id) => id && available.has(id));
-    const pool = filter.length > 0 ? filter : availableIds.filter((id) => available.has(id));
+    const pool = applyVisibilityFilter && filter.length > 0
+        ? filter
+        : availableIds.filter((id) => available.has(id));
     const explicitOrder = (config.schedule_order ?? [])
         .map((id) => String(id).trim())
         .filter((id) => pool.includes(id));
@@ -3137,6 +3140,8 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         this._headerTitleRef = e();
         /** Empreinte des plannings sur le capteur — détecte un renommage sans changement de ref. `hass`. */
         this._schedulesSnap = '';
+        /** Dernière config émise via `config-changed` — évite qu’un echo Lovelace stale écrase l’état local. */
+        this._pendingConfigFingerprint = '';
     }
     /** Comme scheduler-card : `setConfig` remplace l’état local (pas de fusion avec l’ancien, pas d’écriture sur `this.config`). */
     setConfig(config) {
@@ -3238,7 +3243,26 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             const prev = changed.get('config');
             if (this.config !== prev) {
                 const merged = this._mergeLovelaceShallow(this._config, this.config);
-                if (editorConfigFingerprint(merged) !== editorConfigFingerprint(this._config)) {
+                // Ne pas écraser filtre / ordre locaux si Lovelace renvoie une config partielle sans ces clés.
+                const local = this._config;
+                const mergedRec = merged;
+                if (local?.schedule_ids !== undefined && mergedRec.schedule_ids === undefined) {
+                    mergedRec.schedule_ids = local.schedule_ids;
+                }
+                if (local?.schedule_order !== undefined && mergedRec.schedule_order === undefined) {
+                    mergedRec.schedule_order = local.schedule_order;
+                }
+                const mergedFp = editorConfigFingerprint(merged);
+                const localFp = editorConfigFingerprint(this._config);
+                if (this._pendingConfigFingerprint &&
+                    localFp === this._pendingConfigFingerprint &&
+                    mergedFp !== this._pendingConfigFingerprint) {
+                    return;
+                }
+                if (mergedFp === this._pendingConfigFingerprint) {
+                    this._pendingConfigFingerprint = '';
+                }
+                if (mergedFp !== localFp) {
                     this._applyIncomingConfigRecord(merged);
                 }
             }
@@ -3309,7 +3333,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             const na = typeof rec[a]?.name === 'string' && rec[a].name.trim() ? rec[a].name.trim() : a;
             const nb = typeof rec[b]?.name === 'string' && rec[b].name.trim() ? rec[b].name.trim() : b;
             return na.localeCompare(nb, collator, { sensitivity: 'base' });
-        });
+        }, { applyVisibilityFilter: false });
         return ids.map((id) => ({
             id,
             name: typeof rec[id]?.name === 'string' && rec[id].name.trim() ? rec[id].name.trim() : id,
@@ -3352,9 +3376,13 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         const needle = this._normScheduleId(scheduleId);
         return explicit.some((id) => this._normScheduleId(String(id)) === needle);
     }
-    _onScheduleCheck(ev, scheduleId) {
-        const t = ev.currentTarget;
-        const checked = haFormControlCheckedFromChangeEvent(ev);
+    _onScheduleCheck(ev) {
+        const checkbox = ev.target;
+        const scheduleId = String(checkbox.value ?? '').trim();
+        if (!scheduleId) {
+            return;
+        }
+        const checked = typeof checkbox.checked === 'boolean' ? checkbox.checked : false;
         const allIds = this._allScheduleIds();
         if (allIds.length === 0) {
             return;
@@ -3366,18 +3394,22 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         }
         else {
             if (selected.size <= 1) {
-                t.checked = true;
+                checkbox.checked = true;
                 return;
             }
             selected.delete(scheduleId);
         }
-        const arr = Array.from(selected).sort();
-        const allOn = arr.length === allIds.length && allIds.every((id) => selected.has(id));
+        const allOn = selected.size === allIds.length && allIds.every((id) => selected.has(id));
+        const arr = this._orderedAllEntries()
+            .map((e) => e.id)
+            .filter((id) => selected.has(id));
         this._patchConfig({
             schedule_ids: allOn ? undefined : arr,
         });
     }
-    _moveScheduleOrder(scheduleId, delta) {
+    _moveScheduleOrder(scheduleId, delta, ev) {
+        ev?.stopPropagation();
+        ev?.preventDefault();
         const entries = this._orderedAllEntries();
         const idx = entries.findIndex((e) => e.id === scheduleId);
         if (idx < 0) {
@@ -3515,12 +3547,13 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                       <div class="schedule-list">
                         ${entries.map((row, index) => x `
                             <div class="schedule-row">
-                              <ha-formfield label=${row.name}>
-                                <ha-checkbox
-                                  .checked=${this._isScheduleChecked(row.id)}
-                                  @change=${(e) => this._onScheduleCheck(e, row.id)}
-                                ></ha-checkbox>
-                              </ha-formfield>
+                              <ha-checkbox
+                                .checked=${this._isScheduleChecked(row.id)}
+                                .value=${row.id}
+                                @change=${this._onScheduleCheck}
+                              >
+                                ${row.name}
+                              </ha-checkbox>
                               <div class="schedule-row-order">
                                 <button
                                   type="button"
@@ -3531,7 +3564,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                                   title=${msg(hass, 'editor.move_schedule_up_aria', {
                     name: row.name,
                 })}
-                                  @click=${() => this._moveScheduleOrder(row.id, -1)}
+                                  @click=${(e) => this._moveScheduleOrder(row.id, -1, e)}
                                 >
                                   ↑
                                 </button>
@@ -3544,7 +3577,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
                                   title=${msg(hass, 'editor.move_schedule_down_aria', {
                     name: row.name,
                 })}
-                                  @click=${() => this._moveScheduleOrder(row.id, 1)}
+                                  @click=${(e) => this._moveScheduleOrder(row.id, 1, e)}
                                 >
                                   ↓
                                 </button>
@@ -3578,6 +3611,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         /** Objet canonique : clés explicites pour le YAML Lovelace. */
         const outgoing = this._canonicalEditorConfig(merged);
         this._config = outgoing;
+        this._pendingConfigFingerprint = editorConfigFingerprint(outgoing);
         const te = this._headerTitleRef.value;
         if (document.activeElement !== te) {
             this._headerTitleDraft = this._config.header_title ?? '';
@@ -3675,9 +3709,11 @@ ScheduleManagerCardEditor.styles = i$4 `
       gap: 8px;
       padding: 2px 0;
     }
-    .schedule-row ha-formfield {
+    .schedule-row ha-checkbox {
       flex: 1;
       min-width: 0;
+      display: flex;
+      min-height: 40px;
     }
     .schedule-row-order {
       display: flex;

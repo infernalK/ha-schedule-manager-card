@@ -66,6 +66,9 @@ export class ScheduleManagerCardEditor extends LitElement {
   /** Empreinte des plannings sur le capteur — détecte un renommage sans changement de ref. `hass`. */
   private _schedulesSnap = '';
 
+  /** Dernière config émise via `config-changed` — évite qu’un echo Lovelace stale écrase l’état local. */
+  private _pendingConfigFingerprint = '';
+
   static styles = css`
     .card-config {
       display: flex;
@@ -116,9 +119,11 @@ export class ScheduleManagerCardEditor extends LitElement {
       gap: 8px;
       padding: 2px 0;
     }
-    .schedule-row ha-formfield {
+    .schedule-row ha-checkbox {
       flex: 1;
       min-width: 0;
+      display: flex;
+      min-height: 40px;
     }
     .schedule-row-order {
       display: flex;
@@ -282,7 +287,28 @@ export class ScheduleManagerCardEditor extends LitElement {
       const prev = changed.get('config') as CardConfig | undefined;
       if (this.config !== prev) {
         const merged = this._mergeLovelaceShallow(this._config, this.config);
-        if (editorConfigFingerprint(merged) !== editorConfigFingerprint(this._config)) {
+        // Ne pas écraser filtre / ordre locaux si Lovelace renvoie une config partielle sans ces clés.
+        const local = this._config as unknown as Record<string, unknown> | undefined;
+        const mergedRec = merged as unknown as Record<string, unknown>;
+        if (local?.schedule_ids !== undefined && mergedRec.schedule_ids === undefined) {
+          mergedRec.schedule_ids = local.schedule_ids;
+        }
+        if (local?.schedule_order !== undefined && mergedRec.schedule_order === undefined) {
+          mergedRec.schedule_order = local.schedule_order;
+        }
+        const mergedFp = editorConfigFingerprint(merged);
+        const localFp = editorConfigFingerprint(this._config);
+        if (
+          this._pendingConfigFingerprint &&
+          localFp === this._pendingConfigFingerprint &&
+          mergedFp !== this._pendingConfigFingerprint
+        ) {
+          return;
+        }
+        if (mergedFp === this._pendingConfigFingerprint) {
+          this._pendingConfigFingerprint = '';
+        }
+        if (mergedFp !== localFp) {
           this._applyIncomingConfigRecord(merged);
         }
       }
@@ -365,7 +391,8 @@ export class ScheduleManagerCardEditor extends LitElement {
         const nb =
           typeof rec[b]?.name === 'string' && rec[b].name!.trim() ? rec[b].name!.trim() : b;
         return na.localeCompare(nb, collator, { sensitivity: 'base' });
-      }
+      },
+      { applyVisibilityFilter: false }
     );
     return ids.map((id) => ({
       id,
@@ -415,9 +442,13 @@ export class ScheduleManagerCardEditor extends LitElement {
     return explicit.some((id) => this._normScheduleId(String(id)) === needle);
   }
 
-  private _onScheduleCheck(ev: Event, scheduleId: string) {
-    const t = ev.currentTarget as unknown as { checked: boolean };
-    const checked = haFormControlCheckedFromChangeEvent(ev);
+  private _onScheduleCheck(ev: Event) {
+    const checkbox = ev.target as HTMLElement & { checked?: boolean; value?: string | null };
+    const scheduleId = String(checkbox.value ?? '').trim();
+    if (!scheduleId) {
+      return;
+    }
+    const checked = typeof checkbox.checked === 'boolean' ? checkbox.checked : false;
     const allIds = this._allScheduleIds();
     if (allIds.length === 0) {
       return;
@@ -432,21 +463,25 @@ export class ScheduleManagerCardEditor extends LitElement {
       selected.add(scheduleId);
     } else {
       if (selected.size <= 1) {
-        t.checked = true;
+        checkbox.checked = true;
         return;
       }
       selected.delete(scheduleId);
     }
 
-    const arr = Array.from(selected).sort();
     const allOn =
-      arr.length === allIds.length && allIds.every((id) => selected.has(id));
+      selected.size === allIds.length && allIds.every((id) => selected.has(id));
+    const arr = this._orderedAllEntries()
+      .map((e) => e.id)
+      .filter((id) => selected.has(id));
     this._patchConfig({
       schedule_ids: allOn ? undefined : arr,
     });
   }
 
-  private _moveScheduleOrder(scheduleId: string, delta: number) {
+  private _moveScheduleOrder(scheduleId: string, delta: number, ev?: Event) {
+    ev?.stopPropagation();
+    ev?.preventDefault();
     const entries = this._orderedAllEntries();
     const idx = entries.findIndex((e) => e.id === scheduleId);
     if (idx < 0) {
@@ -588,12 +623,13 @@ export class ScheduleManagerCardEditor extends LitElement {
                         ${entries.map(
                           (row, index) => html`
                             <div class="schedule-row">
-                              <ha-formfield label=${row.name}>
-                                <ha-checkbox
-                                  .checked=${this._isScheduleChecked(row.id)}
-                                  @change=${(e: Event) => this._onScheduleCheck(e, row.id)}
-                                ></ha-checkbox>
-                              </ha-formfield>
+                              <ha-checkbox
+                                .checked=${this._isScheduleChecked(row.id)}
+                                .value=${row.id}
+                                @change=${this._onScheduleCheck}
+                              >
+                                ${row.name}
+                              </ha-checkbox>
                               <div class="schedule-row-order">
                                 <button
                                   type="button"
@@ -604,7 +640,7 @@ export class ScheduleManagerCardEditor extends LitElement {
                                   title=${msg(hass, 'editor.move_schedule_up_aria', {
                                     name: row.name,
                                   })}
-                                  @click=${() => this._moveScheduleOrder(row.id, -1)}
+                                  @click=${(e: Event) => this._moveScheduleOrder(row.id, -1, e)}
                                 >
                                   ↑
                                 </button>
@@ -617,7 +653,7 @@ export class ScheduleManagerCardEditor extends LitElement {
                                   title=${msg(hass, 'editor.move_schedule_down_aria', {
                                     name: row.name,
                                   })}
-                                  @click=${() => this._moveScheduleOrder(row.id, 1)}
+                                  @click=${(e: Event) => this._moveScheduleOrder(row.id, 1, e)}
                                 >
                                   ↓
                                 </button>
@@ -653,6 +689,7 @@ export class ScheduleManagerCardEditor extends LitElement {
     /** Objet canonique : clés explicites pour le YAML Lovelace. */
     const outgoing = this._canonicalEditorConfig(merged);
     this._config = outgoing;
+    this._pendingConfigFingerprint = editorConfigFingerprint(outgoing);
     const te = this._headerTitleRef.value;
     if (document.activeElement !== te) {
       this._headerTitleDraft = this._config.header_title ?? '';
