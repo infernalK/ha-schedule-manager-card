@@ -3300,8 +3300,8 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         }))
             .sort((a, b) => a.name.localeCompare(b.name, collatorLocale(this.hass), { sensitivity: 'base' }));
     }
-    /** Plannings visibles sur la carte, dans l’ordre d’affichage configuré. */
-    _orderedVisibleEntries() {
+    /** Tous les plannings du capteur, triés selon `schedule_order` (liste éditeur). */
+    _orderedAllEntries() {
         const rec = this._schedulesRecord();
         const availableIds = Object.keys(rec);
         const collator = collatorLocale(this.hass);
@@ -3310,11 +3310,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
             const nb = typeof rec[b]?.name === 'string' && rec[b].name.trim() ? rec[b].name.trim() : b;
             return na.localeCompare(nb, collator, { sensitivity: 'base' });
         });
-        const explicit = this._explicitScheduleIds();
-        const visibleIds = explicit && explicit.length > 0
-            ? ids.filter((id) => explicit.some((x) => this._normScheduleId(String(x)) === this._normScheduleId(id)))
-            : ids;
-        return visibleIds.map((id) => ({
+        return ids.map((id) => ({
             id,
             name: typeof rec[id]?.name === 'string' && rec[id].name.trim() ? rec[id].name.trim() : id,
         }));
@@ -3377,18 +3373,12 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         }
         const arr = Array.from(selected).sort();
         const allOn = arr.length === allIds.length && allIds.every((id) => selected.has(id));
-        const prevOrder = this._orderedVisibleEntries().map((e) => e.id);
-        let nextOrder = prevOrder.filter((id) => selected.has(id));
-        if (checked && !nextOrder.includes(scheduleId)) {
-            nextOrder = [...nextOrder, scheduleId];
-        }
         this._patchConfig({
             schedule_ids: allOn ? undefined : arr,
-            schedule_order: nextOrder.length > 0 ? nextOrder : undefined,
         });
     }
     _moveScheduleOrder(scheduleId, delta) {
-        const entries = this._orderedVisibleEntries();
+        const entries = this._orderedAllEntries();
         const idx = entries.findIndex((e) => e.id === scheduleId);
         if (idx < 0) {
             return;
@@ -3406,7 +3396,7 @@ let ScheduleManagerCardEditor = class ScheduleManagerCardEditor extends s$2 {
         if (!hass) {
             return x `<div class="card-config">${msg(undefined, 'editor.loading')}</div>`;
         }
-        const entries = this._orderedVisibleEntries();
+        const entries = this._orderedAllEntries();
         const entityMissing = !hass.states[this._resolvedStatusEntityId()];
         return x `
       <div class="card-config">

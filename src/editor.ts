@@ -351,8 +351,8 @@ export class ScheduleManagerCardEditor extends LitElement {
       );
   }
 
-  /** Plannings visibles sur la carte, dans l’ordre d’affichage configuré. */
-  private _orderedVisibleEntries(): { id: string; name: string }[] {
+  /** Tous les plannings du capteur, triés selon `schedule_order` (liste éditeur). */
+  private _orderedAllEntries(): { id: string; name: string }[] {
     const rec = this._schedulesRecord();
     const availableIds = Object.keys(rec);
     const collator = collatorLocale(this.hass);
@@ -367,14 +367,7 @@ export class ScheduleManagerCardEditor extends LitElement {
         return na.localeCompare(nb, collator, { sensitivity: 'base' });
       }
     );
-    const explicit = this._explicitScheduleIds();
-    const visibleIds =
-      explicit && explicit.length > 0
-        ? ids.filter((id) =>
-            explicit.some((x) => this._normScheduleId(String(x)) === this._normScheduleId(id))
-          )
-        : ids;
-    return visibleIds.map((id) => ({
+    return ids.map((id) => ({
       id,
       name:
         typeof rec[id]?.name === 'string' && rec[id].name!.trim() ? rec[id].name!.trim() : id,
@@ -448,19 +441,13 @@ export class ScheduleManagerCardEditor extends LitElement {
     const arr = Array.from(selected).sort();
     const allOn =
       arr.length === allIds.length && allIds.every((id) => selected.has(id));
-    const prevOrder = this._orderedVisibleEntries().map((e) => e.id);
-    let nextOrder = prevOrder.filter((id) => selected.has(id));
-    if (checked && !nextOrder.includes(scheduleId)) {
-      nextOrder = [...nextOrder, scheduleId];
-    }
     this._patchConfig({
       schedule_ids: allOn ? undefined : arr,
-      schedule_order: nextOrder.length > 0 ? nextOrder : undefined,
     });
   }
 
   private _moveScheduleOrder(scheduleId: string, delta: number) {
-    const entries = this._orderedVisibleEntries();
+    const entries = this._orderedAllEntries();
     const idx = entries.findIndex((e) => e.id === scheduleId);
     if (idx < 0) {
       return;
@@ -480,7 +467,7 @@ export class ScheduleManagerCardEditor extends LitElement {
       return html`<div class="card-config">${msg(undefined, 'editor.loading')}</div>`;
     }
 
-    const entries = this._orderedVisibleEntries();
+    const entries = this._orderedAllEntries();
     const entityMissing = !hass.states[this._resolvedStatusEntityId()];
 
     return html`
