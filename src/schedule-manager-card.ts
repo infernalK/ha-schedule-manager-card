@@ -287,6 +287,8 @@ export class ScheduleManagerCard extends LitElement {
   } | null = null;
   /** Filtre texte pour la liste manuelle d’entités (remplace ha-entity-picker dans le modal). */
   @state() private _entityManualListSearch = '';
+  /** Empreinte des plannings lus sur le capteur — détecte un renommage même si `hass` garde la même référence. */
+  private _schedulesSnap = '';
   /** Réglé à l’ouverture de l’assistant : action à mettre à jour (évite décalage avec selectedActionIndex). */
   private _actionWizardTargetActionIndex = 0;
   /** Largeur du bandeau éditeur pour graduations adaptatives (pattern scheduler-card). */
@@ -405,8 +407,15 @@ export class ScheduleManagerCard extends LitElement {
 
   protected updated(changed: PropertyValues) {
     super.updated(changed);
-    if (changed.has('hass') && this.hass) {
-      void this.requestUpdate();
+    if (this.hass) {
+      const snap = JSON.stringify(this.getSchedulesRecord());
+      const schedulesChanged = snap !== this._schedulesSnap;
+      if (schedulesChanged) {
+        this._schedulesSnap = snap;
+      }
+      if (changed.has('hass') || schedulesChanged) {
+        void this.requestUpdate();
+      }
     }
     if (changed.has('_visualEdit')) {
       if (this._visualEdit) {
