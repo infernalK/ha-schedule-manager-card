@@ -34,7 +34,8 @@ import {
   listSelectableDomains,
   serviceSecondaryHint,
 } from './action-wizard-i18n';
-import { domainLabel, msg, servicePrimaryLabel, weekdayShort } from './i18n';
+import { domainLabel, msg, servicePrimaryLabel, weekdayShort, collatorLocale } from './i18n';
+import { resolveOrderedScheduleIds } from './schedule-display-order';
 import { climatePresetModesList, entityCompatibleWithAction } from './entity-domains';
 import {
   blockTimelineFill,
@@ -247,6 +248,7 @@ function scheduleManagerCardConfigChanged(
           show_slots_on_card: c.show_slots_on_card,
           card_click_opens_editor: c.card_click_opens_editor,
           schedule_ids: c.schedule_ids ?? null,
+          schedule_order: c.schedule_order ?? null,
         })
       : '';
   return snap(next) !== snap(prev);
@@ -523,17 +525,19 @@ export class ScheduleManagerCard extends LitElement {
       return html``;
     }
     const totalCount = Object.keys(schedulesMap).length;
-    const list: Schedule[] =
-      scheduleIds.length > 0
-        ? scheduleIds
-            .map((id) => {
-              const sch = schedulesMap[id];
-              return sch ? this.withCanonicalId(id, sch) : undefined;
-            })
-            .filter((s): s is Schedule => Boolean(s))
-        : Object.entries(schedulesMap).map(([id, sch]) =>
-            this.withCanonicalId(id, sch)
-          );
+    const collator = collatorLocale(hass);
+    const compareIds = (a: string, b: string) => {
+      const na = schedulesMap[a]?.name?.trim() || a;
+      const nb = schedulesMap[b]?.name?.trim() || b;
+      return na.localeCompare(nb, collator, { sensitivity: 'base' });
+    };
+    const orderedIds = resolveOrderedScheduleIds(this.config, Object.keys(schedulesMap), compareIds);
+    const list: Schedule[] = orderedIds
+      .map((id) => {
+        const sch = schedulesMap[id];
+        return sch ? this.withCanonicalId(id, sch) : undefined;
+      })
+      .filter((s): s is Schedule => Boolean(s));
 
     if (!list.length) {
       if (scheduleIds.length > 0 && totalCount > 0) {

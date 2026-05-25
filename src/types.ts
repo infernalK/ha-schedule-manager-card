@@ -57,6 +57,8 @@ export const SCHEDULE_MANAGER_STATUS_ENTITY_ID = 'sensor.schedule_manager_status
 export interface CardConfig {
   type: string;
   schedule_ids?: string[];
+  /** Ordre d’affichage des plannings sur la carte (UUID). Les absents du capteur sont ignorés. */
+  schedule_order?: string[];
   /** Capteur Schedule Manager exposant l’attribut `schedules` (défaut: sensor.schedule_manager_status ; réglable uniquement en YAML). */
   status_entity?: string;
   /** Si `false`, la barre de titre au-dessus du contenu est masquée (défaut: affichée). */

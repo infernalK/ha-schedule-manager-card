@@ -8,6 +8,7 @@ import {
   SCHEDULE_MANAGER_STATUS_ENTITY_ID,
 } from './types';
 import { collatorLocale, msg } from './i18n';
+import { resolveOrderedScheduleIds } from './schedule-display-order';
 
 /** Empreinte stable pour comparer la config affichée (alignée sur hasChanged de la carte). */
 function editorConfigFingerprint(c?: CardConfig): string {
@@ -24,6 +25,7 @@ function editorConfigFingerprint(c?: CardConfig): string {
     show_slots_on_card: c.show_slots_on_card,
     card_click_opens_editor: c.card_click_opens_editor,
     schedule_ids: c.schedule_ids ?? null,
+    schedule_order: c.schedule_order ?? null,
   });
 }
 
@@ -107,6 +109,37 @@ export class ScheduleManagerCardEditor extends LitElement {
     }
     ha-formfield {
       --mdc-theme-text-primary-on-background: var(--primary-text-color);
+    }
+    .schedule-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 0;
+    }
+    .schedule-row ha-formfield {
+      flex: 1;
+      min-width: 0;
+    }
+    .schedule-row-order {
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      gap: 2px;
+    }
+    .schedule-row-order button {
+      margin: 0;
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      line-height: 1.1;
+      border-radius: 4px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color, var(--ha-card-background, #fff));
+      color: var(--primary-text-color);
+      cursor: pointer;
+    }
+    .schedule-row-order button:disabled {
+      opacity: 0.35;
+      cursor: default;
     }
     ha-textfield {
       display: block;
@@ -199,6 +232,13 @@ export class ScheduleManagerCardEditor extends LitElement {
       const ids = sid.map((x) => String(x).trim()).filter(Boolean);
       if (ids.length > 0) {
         out.schedule_ids = ids;
+      }
+    }
+    const ord = r.schedule_order;
+    if (Array.isArray(ord)) {
+      const ids = ord.map((x) => String(x).trim()).filter(Boolean);
+      if (ids.length > 0) {
+        out.schedule_order = ids;
       }
     }
     return out;
@@ -311,6 +351,36 @@ export class ScheduleManagerCardEditor extends LitElement {
       );
   }
 
+  /** Plannings visibles sur la carte, dans l’ordre d’affichage configuré. */
+  private _orderedVisibleEntries(): { id: string; name: string }[] {
+    const rec = this._schedulesRecord();
+    const availableIds = Object.keys(rec);
+    const collator = collatorLocale(this.hass);
+    const ids = resolveOrderedScheduleIds(
+      this._config ?? { type: 'custom:schedule-manager-card' },
+      availableIds,
+      (a, b) => {
+        const na =
+          typeof rec[a]?.name === 'string' && rec[a].name!.trim() ? rec[a].name!.trim() : a;
+        const nb =
+          typeof rec[b]?.name === 'string' && rec[b].name!.trim() ? rec[b].name!.trim() : b;
+        return na.localeCompare(nb, collator, { sensitivity: 'base' });
+      }
+    );
+    const explicit = this._explicitScheduleIds();
+    const visibleIds =
+      explicit && explicit.length > 0
+        ? ids.filter((id) =>
+            explicit.some((x) => this._normScheduleId(String(x)) === this._normScheduleId(id))
+          )
+        : ids;
+    return visibleIds.map((id) => ({
+      id,
+      name:
+        typeof rec[id]?.name === 'string' && rec[id].name!.trim() ? rec[id].name!.trim() : id,
+    }));
+  }
+
   private _allScheduleIds(): string[] {
     return this._scheduleEntries().map((e) => e.id);
   }
@@ -378,9 +448,30 @@ export class ScheduleManagerCardEditor extends LitElement {
     const arr = Array.from(selected).sort();
     const allOn =
       arr.length === allIds.length && allIds.every((id) => selected.has(id));
+    const prevOrder = this._orderedVisibleEntries().map((e) => e.id);
+    let nextOrder = prevOrder.filter((id) => selected.has(id));
+    if (checked && !nextOrder.includes(scheduleId)) {
+      nextOrder = [...nextOrder, scheduleId];
+    }
     this._patchConfig({
       schedule_ids: allOn ? undefined : arr,
+      schedule_order: nextOrder.length > 0 ? nextOrder : undefined,
     });
+  }
+
+  private _moveScheduleOrder(scheduleId: string, delta: number) {
+    const entries = this._orderedVisibleEntries();
+    const idx = entries.findIndex((e) => e.id === scheduleId);
+    if (idx < 0) {
+      return;
+    }
+    const target = idx + delta;
+    if (target < 0 || target >= entries.length) {
+      return;
+    }
+    const ids = entries.map((e) => e.id);
+    [ids[idx], ids[target]] = [ids[target], ids[idx]];
+    this._patchConfig({ schedule_order: ids });
   }
 
   render() {
@@ -389,7 +480,7 @@ export class ScheduleManagerCardEditor extends LitElement {
       return html`<div class="card-config">${msg(undefined, 'editor.loading')}</div>`;
     }
 
-    const entries = this._scheduleEntries();
+    const entries = this._orderedVisibleEntries();
     const entityMissing = !hass.states[this._resolvedStatusEntityId()];
 
     return html`
@@ -503,15 +594,48 @@ export class ScheduleManagerCardEditor extends LitElement {
                       <p class="hint">
                         ${msg(hass, 'editor.schedules_on_card_hint')}
                       </p>
+                      <p class="hint">
+                        ${msg(hass, 'editor.schedules_order_hint')}
+                      </p>
                       <div class="schedule-list">
                         ${entries.map(
-                          (row) => html`
-                            <ha-formfield label=${row.name}>
-                              <ha-checkbox
-                                .checked=${this._isScheduleChecked(row.id)}
-                                @change=${(e: Event) => this._onScheduleCheck(e, row.id)}
-                              ></ha-checkbox>
-                            </ha-formfield>
+                          (row, index) => html`
+                            <div class="schedule-row">
+                              <ha-formfield label=${row.name}>
+                                <ha-checkbox
+                                  .checked=${this._isScheduleChecked(row.id)}
+                                  @change=${(e: Event) => this._onScheduleCheck(e, row.id)}
+                                ></ha-checkbox>
+                              </ha-formfield>
+                              <div class="schedule-row-order">
+                                <button
+                                  type="button"
+                                  ?disabled=${index === 0}
+                                  aria-label=${msg(hass, 'editor.move_schedule_up_aria', {
+                                    name: row.name,
+                                  })}
+                                  title=${msg(hass, 'editor.move_schedule_up_aria', {
+                                    name: row.name,
+                                  })}
+                                  @click=${() => this._moveScheduleOrder(row.id, -1)}
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  ?disabled=${index >= entries.length - 1}
+                                  aria-label=${msg(hass, 'editor.move_schedule_down_aria', {
+                                    name: row.name,
+                                  })}
+                                  title=${msg(hass, 'editor.move_schedule_down_aria', {
+                                    name: row.name,
+                                  })}
+                                  @click=${() => this._moveScheduleOrder(row.id, 1)}
+                                >
+                                  ↓
+                                </button>
+                              </div>
+                            </div>
                           `
                         )}
                       </div>

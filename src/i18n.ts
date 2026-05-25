@@ -307,6 +307,10 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'editor.schedules_on_card_title': 'Schedules to show on the card',
     'editor.schedules_on_card_hint':
       'All boxes checked = show every schedule. Uncheck to hide one (at least one stays visible).',
+    'editor.schedules_order_hint':
+      'Use ↑ ↓ to set the display order on the dashboard card.',
+    'editor.move_schedule_up_aria': 'Move {name} up',
+    'editor.move_schedule_down_aria': 'Move {name} down',
     'editor.no_schedules_hint':
       'No schedules in the sensor attributes yet. Create one from the card or the {service} service.',
     'card.save_failed_prefix': 'Could not save:',
@@ -454,6 +458,10 @@ const MESSAGES: Record<'en' | 'fr', Record<string, string>> = {
     'editor.schedules_on_card_title': 'Plannings à afficher sur la carte',
     'editor.schedules_on_card_hint':
       'Toutes les cases cochées = afficher tous les plannings. Décochez pour masquer un planning (au moins un reste visible).',
+    'editor.schedules_order_hint':
+      'Utilisez ↑ ↓ pour définir l’ordre d’affichage sur la carte du tableau de bord.',
+    'editor.move_schedule_up_aria': 'Monter {name}',
+    'editor.move_schedule_down_aria': 'Descendre {name}',
     'editor.no_schedules_hint':
       'Aucun planning dans les attributs du capteur pour l’instant. Créez un planning depuis la carte ou le service {service}.',
     'card.save_failed_prefix': 'Enregistrement impossible :',
