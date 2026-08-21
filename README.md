@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/logo.png" alt="Logo Schedule Manager Card" width="128" height="128">
+</p>
+
 # Schedule Manager Card — carte pour le tableau de bord
 
 Cette **carte** s’affiche sur votre **tableau de bord** Home Assistant (écran d’accueil ou vue que vous consultez souvent). Elle sert à **voir** vos plannings et à **les modifier** sans passer par des fichiers de configuration complexes.
