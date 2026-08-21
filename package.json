@@ -1,6 +1,6 @@
 {
   "name": "ha-schedule-manager-card",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "Lovelace card for Schedule Manager",
   "main": "schedule-manager-card.js",
