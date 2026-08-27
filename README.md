@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/logo.png" alt="Logo Schedule Manager Card" width="128" height="128">
+  <img src="logo.png" alt="Logo Schedule Manager Card" width="128" height="128">
 </p>
 
 # Schedule Manager Card — carte pour le tableau de bord
