@@ -2,6 +2,10 @@
   <img src="logo.png" alt="Logo Schedule Manager Card" width="128" height="128">
 </p>
 
+> **⚠️ Dépôt archivé.** Conformément à la politique HACS sur les cartes couplées 1:1 à une intégration du même auteur, cette carte est désormais **fournie avec l'intégration** et n'est plus distribuée séparément. Le code source vit dans [`card/`](https://github.com/infernalK/ha-schedule-manager/tree/main/card) du dépôt **[ha-schedule-manager](https://github.com/infernalK/ha-schedule-manager)**, et le fichier compilé y est enregistré automatiquement comme ressource Lovelace au démarrage — plus rien à installer séparément. Ce dépôt n'est plus maintenu ; ouvrez vos tickets et PR sur `ha-schedule-manager`.
+
+---
+
 # Schedule Manager Card — carte pour le tableau de bord
 
 Cette **carte** s’affiche sur votre **tableau de bord** Home Assistant (écran d’accueil ou vue que vous consultez souvent). Elle sert à **voir** vos plannings et à **les modifier** sans passer par des fichiers de configuration complexes.
